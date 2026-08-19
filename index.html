@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#0b1020" />
+    <title>That Fake Ad Game</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game"></canvas>
+
+      <div id="hud" class="hidden">
+        <div class="hud-top">
+          <div class="hud-chip" id="hud-stage">Fase 1</div>
+          <div class="hud-chip" id="hud-wave">Onda 1/3</div>
+          <div class="hud-chip gold" id="hud-coins">0</div>
+          <div class="hud-chip" id="hud-reserve">Arquivo 0</div>
+          <div class="vol-wrap" id="vol-hud">
+            <button id="btn-mute" type="button" aria-label="Som">Som</button>
+            <input id="vol-slider" type="range" min="0" max="100" step="1" value="80" aria-label="Volume" />
+          </div>
+          <button id="btn-pause" type="button">Pausa</button>
+        </div>
+        <div class="hp-wrap">
+          <div class="hp-label">Esquadrão</div>
+          <div class="hp-bar"><div id="hp-fill"></div></div>
+        </div>
+        <div id="boss-hud" class="hidden">
+          <p id="boss-name">MARECHAL DUSK</p>
+          <p id="boss-title">O Carrasco da Linha</p>
+          <div class="souls-track">
+            <div id="souls-delay"></div>
+            <div id="souls-fill"></div>
+          </div>
+        </div>
+        <div id="active-bar"></div>
+      </div>
+
+      <div id="overlay">
+        <section id="screen-menu" class="screen">
+          <p class="kicker">o anúncio sempre foi mentira. o jogo é esse.</p>
+          <h1>That Fake Ad Game</h1>
+          <p class="tagline">De um soldado para uma força da natureza.</p>
+          <div id="slot-row" class="slot-row"></div>
+          <button id="btn-play" class="btn primary" type="button">Jogar</button>
+          <button id="btn-shop" class="btn" type="button">Upgrades permanentes</button>
+          <button id="btn-codex" class="btn" type="button">Compêndio</button>
+          <button id="btn-how" class="btn" type="button">Como jogar</button>
+          <p id="menu-stats" class="stats"></p>
+          <label class="vol-line">
+            <span>Volume</span>
+            <input id="vol-slider-menu" type="range" min="0" max="100" step="1" value="80" aria-label="Volume" />
+            <span id="vol-pct-menu">80%</span>
+          </label>
+        </section>
+
+        <section id="screen-how" class="screen hidden">
+          <h2>Como jogar</h2>
+          <p class="tagline">Você mexe o esquadrão inteiro de uma vez. O resto é mira e timing.</p>
+          <ul class="howto">
+            <li><strong>Andar</strong> é WASD ou as setas. <strong>Shift</strong> dá um ímpeto curto — só pra sair da frente, não é skill de classe.</li>
+            <li><strong>Mouse</strong> aponta. Segura o <strong>esquerdo</strong> pra atirar. Soltou, parou.</li>
+            <li>A <strong>passiva</strong> já vem ligada: é o jeito da unidade atirar ou o efeito que ela faz sozinha. A <strong>ativa</strong> fica na barra. <strong>1 a 9</strong> escolhe, <strong>direito</strong> usa na mira.</li>
+            <li>Dois iguais se juntam. Arrasta um no outro e escolhe em que vira — sempre três caminhos.</li>
+            <li>O <strong>comandante</strong> não ocupa vaga. O laser marca quem você aponta. Com Arquivo de guerra na barra, direito num reforço caído guarda o dossiê.</li>
+            <li>Dois arquivos viram <strong>informação confidencial</strong> e sobem unidade fraca. Duas confidenciais viram <strong>segurança máxima</strong> e sobem o nível 2.</li>
+            <li>Cabe <strong>5</strong> soldados no começo. Upgrade permanente sobe isso até 10.</li>
+            <li><strong>Esc</strong> pausa. Na pausa, passa o mouse em alguém pra ler o que ele faz.</li>
+            <li>O <strong>compêndio</strong> anota aliado quando você faz merge e inimigo no primeiro abate.</li>
+            <li>São 3 perfis. Se o esquadrão cair, as moedas da run vão pro cofre.</li>
+          </ul>
+          <button id="btn-how-back" class="btn primary" type="button">Voltar</button>
+        </section>
+
+        <section id="screen-shop" class="screen hidden">
+          <h2>Upgrades permanentes</h2>
+          <p class="tagline" id="shop-vault">Cofre: 0</p>
+          <div id="shop-list" class="shop-list"></div>
+          <button id="btn-refund" class="btn" type="button">Reembolsar build</button>
+          <button id="btn-shop-back" class="btn" type="button">Voltar</button>
+        </section>
+
+        <section id="screen-cards" class="screen hidden">
+          <h2>Fase concluída</h2>
+          <p class="tagline">Escolhe 1 upgrade pra próxima fase.</p>
+          <div id="card-row" class="card-row"></div>
+          <div class="card-tools">
+            <button id="btn-reroll" class="btn" type="button">Trocar cartas</button>
+            <button id="btn-undo" class="btn" type="button">Desfazer último upgrade</button>
+          </div>
+        </section>
+
+        <section id="screen-codex" class="screen hidden wide">
+          <h2>Compêndio</h2>
+          <p class="tagline" id="codex-stats"></p>
+          <div class="codex-tabs">
+            <button id="codex-ally" class="btn" type="button">Aliados</button>
+            <button id="codex-enemy" class="btn" type="button">Inimigos</button>
+          </div>
+          <div id="codex-grid" class="codex-grid"></div>
+          <button id="btn-codex-back" class="btn primary" type="button">Voltar</button>
+        </section>
+
+        <section id="screen-over" class="screen hidden">
+          <p class="kicker">missão encerrada</p>
+          <h2>Esquadrão abatido</h2>
+          <p class="tagline" id="over-text"></p>
+          <ul id="over-stats" class="over-stats"></ul>
+          <button id="btn-over-menu" class="btn primary" type="button">Menu</button>
+        </section>
+
+        <section id="screen-win" class="screen hidden">
+          <h2>Exército invencível</h2>
+          <p class="tagline" id="win-text"></p>
+          <button id="btn-win-menu" class="btn primary" type="button">Menu</button>
+        </section>
+      </div>
+
+      <div id="merge-modal" class="hidden">
+        <div class="merge-panel">
+          <p class="kicker">pirâmide</p>
+          <h2>Dois <span id="merge-from">Fuzileiros</span></h2>
+          <p class="tagline">Escolhe o caminho da pirâmide. Passe o mouse na carta pra ver o dossiê.</p>
+          <div class="merge-body">
+            <div id="merge-options" class="merge-picks"></div>
+            <aside id="merge-preview" class="merge-preview empty">
+              <div class="merge-preview-art">
+                <canvas id="merge-preview-art" width="112" height="112"></canvas>
+              </div>
+              <div class="merge-preview-info">
+                <p class="kicker" id="merge-preview-kicker">dossiê</p>
+                <h3 id="merge-preview-name">Passe o mouse numa carta</h3>
+                <p id="merge-preview-blurb" class="codex-blurb">Passiva, ativa e stats aparecem aqui antes de você escolher.</p>
+                <ul id="merge-preview-stats" class="codex-stats-list"></ul>
+              </div>
+              <div id="merge-preview-skills" class="merge-preview-skills"></div>
+            </aside>
+          </div>
+          <button id="btn-merge-cancel" class="btn" type="button">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="pause-modal" class="hidden">
+        <div class="merge-panel pause-panel">
+          <p class="kicker">tática</p>
+          <h2>Pausado</h2>
+          <p class="tagline">WASD anda, esquerdo atira. 1 a 9 pega a skill, direito usa. Esc volta.</p>
+          <label class="vol-line">
+            <span>Volume</span>
+            <input id="vol-slider-pause" type="range" min="0" max="100" step="1" value="80" aria-label="Volume" />
+            <span id="vol-pct-pause">80%</span>
+          </label>
+          <button id="btn-resume" class="btn primary" type="button">Continuar</button>
+          <button id="btn-pause-menu" class="btn" type="button">Sair pro menu</button>
+        </div>
+      </div>
+
+      <div id="inspect-tip" class="hidden">
+        <p class="kicker" id="inspect-kicker">unidade</p>
+        <h3 id="inspect-name">Nome</h3>
+        <div id="inspect-body"></div>
+      </div>
+
+      <div id="codex-modal" class="hidden">
+        <div class="codex-sheet">
+          <div class="codex-sheet-body">
+            <div class="codex-art">
+              <canvas id="codex-art" width="200" height="220"></canvas>
+              <p id="codex-sticker" class="codex-sticker"></p>
+            </div>
+            <div class="codex-info">
+              <p class="kicker" id="codex-kicker">arquivo</p>
+              <h2 id="codex-name">Unidade</h2>
+              <p id="codex-blurb" class="codex-blurb"></p>
+              <ul id="codex-stats-list" class="codex-stats-list"></ul>
+              <div id="codex-passives" class="codex-active hidden">
+                <p class="kicker" id="codex-passives-kicker">Passiva</p>
+                <div id="codex-passives-list"></div>
+              </div>
+              <div id="codex-actives" class="codex-active hidden">
+                <p class="kicker" id="codex-actives-kicker">Ativa</p>
+                <div id="codex-actives-list"></div>
+              </div>
+            </div>
+          </div>
+          <button id="btn-codex-close" class="btn primary" type="button">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/save.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/units.js"></script>
+    <script src="js/entities.js"></script>
+    <script src="js/combat.js"></script>
+    <script src="js/tactics.js"></script>
+    <script src="js/merge.js"></script>
+    <script src="js/upgrades.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/codex.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
