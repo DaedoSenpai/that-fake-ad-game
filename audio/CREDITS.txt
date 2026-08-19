@@ -1,0 +1,44 @@
+Soundtrack credits
+==================
+
+All looping tracks by Eric Matyas — https://soundimage.org
+License: CC BY 4.0 (attribution required). Music by Eric Matyas, www.soundimage.org
+
+Stage 1  Campo aberto          Sci-Fi Open (loop)
+         audio/stage-01.ogg    https://soundimage.org/sci-fi-2/
+
+Stage 2  Linha de frente       Enemy Infiltration
+         audio/stage-02.ogg    https://soundimage.org/sci-fi-7/
+
+Stage 3  Ruínas da cidade      Restricted Zone (loop)
+         audio/stage-03.ogg    https://soundimage.org/sci-fi-2/
+
+Stage 4  Avenida sitiada       Dark Techno City (loop)
+         audio/stage-04.ogg    https://soundimage.org/sci-fi/
+
+Stage 5  Deserto               Trouble on Mercury (loop)
+         audio/stage-05.ogg    https://soundimage.org/sci-fi/
+
+Stage 6  Dunas escaldantes     Factory On Mercury (loop)
+         audio/stage-06.ogg    https://soundimage.org/sci-fi/
+
+Stage 7  Base noturna          Night Winds (loop) — atmospheric, not a banger
+         audio/stage-07.ogg    https://soundimage.org/sci-fi/
+
+Stage 8  Núcleo inimigo        The Darkness Below (loop) — alien / unease
+         audio/stage-08.ogg    https://soundimage.org/sci-fi/
+
+Boss     Marechal Casca        Techno Gameplay (loop)
+         audio/boss-dusk.ogg   https://soundimage.org/action/
+
+Boss     Beemote-07            Machine Madness (loop)
+         audio/boss-beemote.ogg  https://soundimage.org/sci-fi-2/
+
+Boss     Colmeia Andarilha     Fortress of Doom
+         audio/boss-cidadela.ogg https://soundimage.org/horror/
+
+Boss     Mariposa-Véu          Eerie Cyber World (loop)
+         audio/boss-veu.ogg    https://soundimage.org/sci-fi/
+
+Boss     Núcleo da Enxame      They're Here (loop)
+         audio/boss-nucleo.ogg https://soundimage.org/sci-fi/
