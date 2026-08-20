@@ -195,10 +195,10 @@
     }),
     tesla: u({
       kind: "tesla", name: "Tesla", short: "TSL", gen: 3,
-      hp: 130, dmg: 26, range: 170, fire: 0.9, speed: 124, size: 16,
+      hp: 130, dmg: 26, range: 300, fire: 0.9, speed: 124, size: 16,
       color: "#a8f6ff", accent: "#ffffff", projectile: "tesla", role: "tesla",
-      blurb: "Quanto mais rapido o feixe se move mais poderoso é a descarga eletrica",
-      active: { id: "coil", name: "Bobina", cd: 8, desc: "Planta uma torre de bobina na mira. Máximo 2. Se já tiver duas, a última muda de lugar." },
+      blurb: "Raio de 300 de alcance até a mira. Dano constante no feixe. Bobinas no alcance energizam e se ligam em cadeia, com campo elétrico em área.",
+      active: { id: "coil", name: "Bobina", cd: 8, desc: "Planta uma bobina na mira, até 300 de alcance. O feixe da Tesla continua na mira; se você atirar no alcance, a bobina energiza. Duas bobinas se ligam em cadeia. Campo elétrico em área. Máximo 2; ao replantar, a mais velha muda de lugar." },
       merge: []
     }),
     assassino: u({
@@ -221,8 +221,8 @@
       kind: "helicoptero", name: "Helicóptero", short: "HEL", gen: 3,
       hp: 175, dmg: 17, range: 230, fire: 1.75, speed: 195, size: 22,
       color: "#3ef0ff", accent: "#e8ffff", projectile: "bullet", flying: true, role: "heli",
-      blurb: "Suporte aereo especial, possui bastante dano mas a precisão deixa a desejar: atinge onde a mira estava há meio segundo.",
-      active: { id: "strafe", name: "Passagem rasa", cd: 12, desc: "Explosão em anel embaixo da aeronave." },
+      blurb: "Dois drones pequenos orbitam a mira e atiram de lá.",
+      active: { id: "strafe", name: "Passagem rasa", cd: 12, desc: "Explosão em anel embaixo de cada drone pequeno perto do cursor." },
       merge: ["gunship"]
     }),
     designado: u({
@@ -314,15 +314,15 @@
       kind: "bombardeiro", name: "Bombardeiro", short: "BMB", gen: 3,
       hp: 155, dmg: 28, range: 210, fire: 0.55, speed: 168, size: 20,
       color: "#5ad0c8", accent: "#d8ffff", projectile: "grenade", flying: true, role: "heli",
-      blurb: "Aeronave de bombardeio.",
-      active: { id: "airstrike", name: "Bombardeio", cd: 10, desc: "Uma linha de explosões no chão, um segundo depois." },
+      blurb: "Um drone gordinho orbita a mira e dispara de lá.",
+      active: { id: "airstrike", name: "Bombardeio", cd: 10, desc: "Cinco bombas caem em inimigos aleatórios no mapa." },
       merge: []
     }),
     recon: u({
       kind: "recon", name: "Reconhecimento", short: "RCN", gen: 3,
       hp: 78, dmg: 12, range: 220, fire: 1.4, speed: 186, size: 14,
       color: "#8af0d8", accent: "#f0ffff", projectile: "bullet", flying: true, role: "drone",
-      blurb: "Recon aéreo. seus tiros marcam o alvo com balas tracejantes que fazem com que tomem mais dano.",
+      blurb: "Recon aéreo. O drone atira balas tracejantes que marcam o alvo: marcados tomam mais dano.",
       merge: []
     }),
     inferno: u({
@@ -428,9 +428,9 @@
     bless: { icon: "✝", color: "#ffe9a0", detail: "Âncora na mira por 9s. Perto dela o esquadrão toma 35% menos dano." },
     carpet: { icon: "⚠", color: "#f0c422", detail: "Minas em anel na mira, ou em linha no chão." },
     storm: { icon: "⚡", color: "#a8f6ff", detail: "Choque em volta da Tesla." },
-    coil: { icon: "⚡", color: "#a8f6ff", detail: "Planta uma torre de bobina na mira. Máximo 2. Se já tiver duas, a última muda de lugar." },
+    coil: { icon: "⚡", color: "#a8f6ff", detail: "Planta uma bobina na mira (alcance 300). O feixe fica na mira; atirar no alcance energiza a bobina. Duas bobinas se ligam em cadeia. Ao replantar, a mais velha muda de lugar. Máximo 2." },
     pulse: { icon: "💥", color: "#7af7ff", detail: "Onda de choque em volta do Colosso. Empurra e fere." },
-    strafe: { icon: "✈", color: "#3ef0ff", detail: "Explosão em anel embaixo da aeronave." },
+    strafe: { icon: "✈", color: "#3ef0ff", detail: "Explosão em anel embaixo de cada drone pequeno perto do cursor." },
     salvo: { icon: "🚀", color: "#c46bff", detail: "Seis mísseis teleguiados na mira." },
     firemode: { icon: "🔄", color: "#9ad4ff", detail: "Alterna o modo de tiro do tanque." },
     fan: { icon: "🔫", color: "#ff8a4a", detail: "Fere todo inimigo perto da unidade." },
@@ -447,7 +447,7 @@
     detonate: { icon: "💥", color: "#ff6b6b", detail: "Detona todos os explosivos grudados nos inimigos." },
     magnet: { icon: "🚩", color: "#e8d080", detail: "Finca um estandarte na mira por 15s. +40% de dano, cadência e velocidade. Loot dentro é coletado sozinho. O cooldown só começa quando ele cai." },
     standard: { icon: "🚩", color: "#e8d080", detail: "Finca um estandarte na mira por 15s. +40% de dano, cadência e velocidade. Loot dentro é coletado sozinho. O cooldown só começa quando ele cai." },
-    airstrike: { icon: "💣", color: "#5ad0c8", detail: "Uma linha de explosões no chão, um segundo depois." },
+    airstrike: { icon: "💣", color: "#5ad0c8", detail: "Cinco bombas caem em inimigos aleatórios no mapa." },
     carpetbomb: { icon: "✈", color: "#2ad8ff", detail: "Bombas caem sem parar sob a mira." },
     archive: { icon: "⭐", color: "#ffd24a", detail: "Mira num reforço caído pra transformar em arquivo de guerra." },
     guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito e abre um menu radial no clique. Cima: aura em volta do comandante — cura 1% da vida máxima por segundo durante 5s (15s de recarga). Direita: airstrike com fogo no chão (20s). Esquerda: recruta — máx. 5 por fase (30s). Solta na fatia pra disparar no centro do menu; volta pro centro pra cancelar." }
@@ -541,10 +541,10 @@
     capelao: { id: "sidearm", name: "Tiro abençoado", desc: "Pistola de apoio. Cada acerto pode curar uma unidade do grupo." },
     fora_da_lei: { id: "spread", name: "Cano aberto", desc: "Escopeta bem aberta. Só rende colado no alvo." },
     mineiro: { id: "fieldmine", name: "Campo minado", desc: "Especialista em minas. Prepara o campo." },
-    tesla: { id: "saber", name: "Jolt", desc: "Raio até a mira. Eletrocuta tudo perto do feixe. Não apaga bala inimiga." },
+    tesla: { id: "saber", name: "Jolt", desc: "Raio até a mira, no máximo 300 de alcance, com dano constante. Eletrocuta o alvo e quem estiver em volta. Bobinas no alcance energizam e se ligam em cadeia." },
     assassino: { id: "silence", name: "Tiro silenciador", desc: "Acerto impede inimigos que atiram de atirar. Chefes só sofrem 5 vezes, depois 1 min de imunidade." },
     radio: { id: "crateshot", name: "Caixote", desc: "Arremessa caixotes que explodem no impacto." },
-    helicoptero: { id: "delay", name: "Mira atrasada", desc: "A metralhadora atinge o ponto onde a mira estava há meio segundo." },
+    helicoptero: { id: "delay", name: "Par de drones", desc: "Dois drones pequenos orbitam a mira e atiram a partir dela." },
     inferno: { id: "scorch", name: "Terra queimada", desc: "Enquanto atira, o rastro da mira deixa o chão em chamas por 5s." },
     missil: { id: "swarm", name: "Saraivada", desc: "Cinco mísseis na mira. Mira parada no chefe: orbitam. Mira em movimento: espalham e estouram." },
     tanque: { id: "heavycannon", name: "Couraça pesada", desc: "Escudo duas vezes mais forte. Três modos de tiro, incluindo barragem na tela." },
@@ -562,8 +562,8 @@
     fantasma: { id: "fearshot", name: "Susto", desc: "Tiro causa medo por 0,5s. No mesmo alvo de novo, ele fica imune por 1 min." },
     oficial: { id: "sidearm", name: "Pistola de comando", desc: "Tiro de comando na mira." },
     bandeira: { id: "bannerblade", name: "Espada e pistola", desc: "Pistola na mira. Espada de alto dano com 150 de alcance." },
-    bombardeiro: { id: "linebomb", name: "Aeronave", desc: "Aeronave pesada de bombardeio." },
-    recon: { id: "graze", name: "Miolo visível", desc: "Acende em neon o centro das balas inimigas." }
+    bombardeiro: { id: "linebomb", name: "Drone gordinho", desc: "Um drone pesado orbita a mira. A ativa solta cinco bombas em inimigos aleatórios." },
+    recon: { id: "graze", name: "Tracejante", desc: "Balas tracejantes marcam o alvo. Marcados tomam mais dano." }
   };
   Object.keys(UNIT_PASSIVES).forEach(function (k) {
     if (G.UNIT_DEFS[k]) G.UNIT_DEFS[k].passive = UNIT_PASSIVES[k];

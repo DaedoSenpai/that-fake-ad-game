@@ -202,6 +202,7 @@
       }
     }
     unit.hp -= amount;
+    if (unit.team === "enemy" && amount > 0) unit.revealT = 1.8;
     if (!(trueDmg && amount < 2)) {
       unit.flash = 0.12;
       if (unit.team === "player") state.shake = Math.max(state.shake, 6);
@@ -261,6 +262,7 @@
       var veu = G.game.spawnAt(state, "chefe_espectro", unit.x - 70, unit.y, { helperOf: unit.id, noLink: true });
       unit.helperId = veu.id;
       unit.skillT = 6;
+      veilBlink(state, veu, null, false);
     } else if (unit.bossPhase === 3) {
       state.banner = { text: "O campo se abre", t: 2.4 };
       state.camZoomTo = 0.68;
@@ -268,6 +270,11 @@
       unit.coreHealT = 8;
       unit.coreRayT = 2;
       unit.coreSummonT = 70;
+      unit.coreAct = "wait";
+      unit.coreActT = 1.2;
+      unit.coreLastAct = "";
+      unit.coreActDid = false;
+      unit.burstLeft = 0;
       for (var i = 0; i < state.enemies.length; i++) {
         var h = state.enemies[i];
         if (h.helperOf === unit.id || (h.type === "veu_clone" && h.ownerId === unit.helperId)) {
@@ -572,7 +579,7 @@
     }
   }
 
-  function veilBehindPoint(state, e, extraAng) {
+  function veilBehindPoint(state, e, extraAng, extraGap) {
     var sx = state.squad.x;
     var sy = state.squad.y;
     var vx = state.squad.vx || 0;
@@ -596,7 +603,7 @@
       if (state.units[u].hp > 0 && !state.units[u].commander && !state.units[u].stowed) sold++;
     }
     var gap = 62 + ((e.def && e.def.size) || 30) + Math.max(0, sold - 3) * 6;
-    gap += Math.min(42, spin * 0.09);
+    gap += Math.min(42, spin * 0.09) + (extraGap || 0);
     var b = G.playfield(state);
     var m = (e.def && e.def.size) || 30;
     var tries = [0, 0.42, -0.42, 0.85, -0.85, 1.3, -1.3, Math.PI];
@@ -616,7 +623,8 @@
 
   function veilBlink(state, e, target, withBoom) {
     var slotOff = e.fake ? ((e.cloneSlot | 0) * 0.72 - 0.36) : 0;
-    var p = veilBehindPoint(state, e, slotOff);
+    var helperGap = e.helperOf ? 118 : 0;
+    var p = veilBehindPoint(state, e, slotOff, helperGap);
     e.x = p.x;
     e.y = p.y;
     G.clampPlay(e, state);
@@ -629,8 +637,9 @@
     }
     var core = findEnemy(state, e.helperOf);
     if (core && core.bossPhase === 2) {
-      core.x = e.x + 36;
-      core.y = e.y;
+      var p2 = veilBehindPoint(state, core, slotOff, 132);
+      core.x = p2.x;
+      core.y = p2.y;
       core.stealth = 0.7;
       G.clampPlay(core, state);
     }
@@ -648,6 +657,52 @@
     });
     G.burst(state, c.x, c.y, "#c8a0ff", 14, 80);
     return c;
+  }
+
+  function beginCoreAct(e, act, dur) {
+    e.coreAct = act;
+    e.coreActT = dur;
+    e.coreActDid = false;
+    if (act === "burst") {
+      e.burstLeft = 5;
+      e.burstCd = 0.06;
+    }
+  }
+
+  function pickCoreAct(state, e, d) {
+    if (d < 96) {
+      e.coreLastAct = "tp";
+      beginCoreAct(e, "tp", 0.7);
+      return;
+    }
+    if ((e.coreSummonT || 0) <= 0 && state.enemies.length < 36) {
+      e.coreLastAct = "summon";
+      beginCoreAct(e, "summon", 0.95);
+      return;
+    }
+    var pool = ["ray", "burst", "boom", "tp"];
+    var last = e.coreLastAct;
+    var opts = [];
+    for (var i = 0; i < pool.length; i++) {
+      if (pool[i] !== last) opts.push(pool[i]);
+    }
+    var next = opts[(Math.random() * opts.length) | 0] || "burst";
+    e.coreLastAct = next;
+    if (next === "ray") beginCoreAct(e, "ray", 0.95);
+    else if (next === "burst") beginCoreAct(e, "burst", 1.2);
+    else if (next === "boom") beginCoreAct(e, "boom", 1.4);
+    else beginCoreAct(e, "tp", 0.7);
+  }
+
+  function coreSummonLegion(state, e) {
+    e.coreSummonT = 60 + Math.random() * 60;
+    var bossPick = G.BOSS_POOL[(Math.random() * G.BOSS_POOL.length) | 0];
+    G.game.spawnAt(state, bossPick, e.x + 50, e.y, { noLink: true });
+    for (var tr = 0; tr < 3; tr++) {
+      var trash = G.ENEMY_POOL[(Math.random() * G.ENEMY_POOL.length) | 0];
+      G.game.spawnAt(state, trash, e.x + (Math.random() - 0.5) * 80, e.y + (Math.random() - 0.5) * 80);
+    }
+    state.floaters.push(G.createFloater(e.x, e.y - 28, "legião", "#fff36a"));
   }
 
   function face(u, tx, ty, dt) {
@@ -1059,6 +1114,7 @@
       e.burstCd -= dt;
       e.contactCd -= dt;
       e.lastHitT = (e.lastHitT || 0) + dt;
+      if (e.revealT > 0) e.revealT = Math.max(0, e.revealT - dt);
       if (e.slowT > 0) e.slowT -= dt;
       if (e.freezeT > 0) e.freezeT -= dt;
       if (e.silenceT > 0) {
@@ -1536,70 +1592,83 @@
       } else if (kind === "boss_final") {
         var phase = e.bossPhase || 1;
         if (phase === 2) e.stealth = Math.max(0.2, (e.stealth || 0) - dt * 0.15);
-        var coreSpd = phase === 1 ? 16 : phase === 2 ? 26 : 46;
+        var coreSpd = phase === 1 ? 16 : phase === 2 ? 26 : 38;
         if (phase < 3) {
           moveTowards(e, state.squad.x, state.squad.y, coreSpd, dt);
-        } else {
-          if (d < 90 || (e.skillT || 0) <= 0) {
-            var b3 = G.playfield(state);
-            e.x = b3.x0 + 40 + Math.random() * (b3.x1 - b3.x0 - 80);
-            e.y = b3.y0 + 40 + Math.random() * (b3.y1 - b3.y0 - 80);
-            e.skillT = 6.5;
-            G.burst(state, e.x, e.y, "#fff36a", 28, 150);
-            if (G.boomFx) G.boomFx(state, e.x, e.y, 110, "#fff36a");
-          } else {
-            e.skillT = (e.skillT || 6) - dt;
-            moveTowards(e, state.squad.x, state.squad.y, coreSpd, dt);
+          if (e.cooldown <= 0) {
+            e.burstLeft = 4;
+            e.cooldown = 1.4;
           }
+          if (e.burstLeft > 0 && e.burstCd <= 0) {
+            enemyFire(state, e, target, "bullet", { r: 5, dmg: e.def.dmg, speed: 280 });
+            e.burstLeft--;
+            e.burstCd = 0.1;
+          }
+        } else {
           e.coreHealT -= dt;
           if (e.coreHealT <= 0) {
             e.coreHealT = 9;
             e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.04);
             G.burst(state, e.x, e.y, "#7cffb0", 10, 50);
           }
-          e.coreRayT -= dt;
-          if (e.coreRayT <= 0 && target) {
-            e.coreRayT = 2.4;
-            var base = Math.atan2(target.y - e.y, target.x - e.x);
-            for (var rv = -2; rv <= 2; rv++) {
-              enemyFireAng(state, e, base + rv * 0.28, "laser", { speed: 560, dmg: 26, r: 9, life: 1.35 });
-            }
-          }
           e.coreSummonT -= dt;
-          if (e.coreSummonT <= 0 && state.enemies.length < 36) {
-            e.coreSummonT = 60 + Math.random() * 60;
-            var bossPick = G.BOSS_POOL[(Math.random() * G.BOSS_POOL.length) | 0];
-            G.game.spawnAt(state, bossPick, e.x + 50, e.y, { noLink: true });
-            for (var tr = 0; tr < 3; tr++) {
-              var trash = G.ENEMY_POOL[(Math.random() * G.ENEMY_POOL.length) | 0];
-              G.game.spawnAt(state, trash, e.x + (Math.random() - 0.5) * 80, e.y + (Math.random() - 0.5) * 80);
+          e.coreActT = (e.coreActT || 0) - dt;
+          var act = e.coreAct || "wait";
+          if (act === "wait") {
+            moveTowards(e, state.squad.x, state.squad.y, coreSpd, dt);
+            if (e.coreActT <= 0 || d < 90) pickCoreAct(state, e, d);
+          } else if (act === "tp") {
+            if (!e.coreActDid) {
+              e.coreActDid = true;
+              var b3 = G.playfield(state);
+              e.x = b3.x0 + 40 + Math.random() * (b3.x1 - b3.x0 - 80);
+              e.y = b3.y0 + 40 + Math.random() * (b3.y1 - b3.y0 - 80);
+              G.burst(state, e.x, e.y, "#fff36a", 28, 150);
+              if (G.boomFx) G.boomFx(state, e.x, e.y, 110, "#fff36a");
             }
-            state.floaters.push(G.createFloater(e.x, e.y - 28, "legião", "#fff36a"));
-          }
-        }
-        if (e.cooldown <= 0) {
-          e.burstLeft = phase === 3 ? 8 : 4;
-          e.cooldown = phase === 3 ? 1.05 : 1.4;
-        }
-        if (e.burstLeft > 0 && e.burstCd <= 0) {
-          enemyFire(state, e, target, "bullet", { r: phase === 3 ? 11 : 5, dmg: phase === 3 ? Math.round(e.def.dmg * 1.2) : e.def.dmg, speed: phase === 3 ? 340 : 280 });
-          e.burstLeft--;
-          e.burstCd = phase === 3 ? 0.12 : 0.1;
-        }
-        if (phase === 3 && e.contactCd <= 0) {
-          e.contactCd = 2.8;
-          state.warnings.push({ x: state.squad.x, y: state.squad.y, t: 1.05, max: 1.05, r: 168, dmg: 62 });
-          var spread = 118;
-          for (var wa = 0; wa < 3; wa++) {
-            var wang = (Math.PI * 2 * wa) / 3 + e.phase;
-            state.warnings.push({
-              x: state.squad.x + Math.cos(wang) * spread,
-              y: state.squad.y + Math.sin(wang) * spread,
-              t: 1.15,
-              max: 1.15,
-              r: 96,
-              dmg: 44
-            });
+            if (e.coreActT <= 0) beginCoreAct(e, "wait", 0.95);
+          } else if (act === "ray") {
+            if (!e.coreActDid && target) {
+              e.coreActDid = true;
+              var base = Math.atan2(target.y - e.y, target.x - e.x);
+              enemyFireAng(state, e, base - 0.2, "laser", { speed: 500, dmg: 26, r: 8, life: 1.35 });
+              enemyFireAng(state, e, base + 0.2, "laser", { speed: 500, dmg: 26, r: 8, life: 1.35 });
+            }
+            if (e.coreActT <= 0) beginCoreAct(e, "wait", 0.8);
+          } else if (act === "burst") {
+            moveTowards(e, state.squad.x, state.squad.y, coreSpd * 0.45, dt);
+            if (e.burstLeft > 0 && e.burstCd <= 0) {
+              enemyFire(state, e, target, "bullet", { r: 10, dmg: Math.round(e.def.dmg * 1.15), speed: 320 });
+              e.burstLeft--;
+              e.burstCd = 0.16;
+            }
+            if (e.coreActT <= 0) beginCoreAct(e, "wait", 0.75);
+          } else if (act === "boom") {
+            if (!e.coreActDid) {
+              e.coreActDid = true;
+              state.warnings.push({ x: state.squad.x, y: state.squad.y, t: 1.1, max: 1.1, r: 132, dmg: 58 });
+              var spread = 128;
+              for (var wa = 0; wa < 2; wa++) {
+                var wang = (Math.PI * 2 * wa) / 2 + e.phase;
+                state.warnings.push({
+                  x: state.squad.x + Math.cos(wang) * spread,
+                  y: state.squad.y + Math.sin(wang) * spread,
+                  t: 1.2,
+                  max: 1.2,
+                  r: 86,
+                  dmg: 40
+                });
+              }
+            }
+            if (e.coreActT <= 0) beginCoreAct(e, "wait", 0.55);
+          } else if (act === "summon") {
+            if (!e.coreActDid) {
+              e.coreActDid = true;
+              coreSummonLegion(state, e);
+            }
+            if (e.coreActT <= 0) beginCoreAct(e, "wait", 0.85);
+          } else {
+            beginCoreAct(e, "wait", 0.6);
           }
         }
       }
@@ -1759,7 +1828,7 @@
       w.t -= dt;
       if (w.t <= 0) {
         if (w.kind !== "mark") {
-          explode(state, w.x, w.y, w.r, w.dmg, "enemy");
+          explode(state, w.x, w.y, w.r, w.dmg, w.team || "enemy", w.color);
           G.audio.explosion();
         }
         state.warnings.splice(i, 1);
@@ -1897,6 +1966,48 @@
     return list;
   }
 
+  function skillNoticePos(state) {
+    var sx = state.squad.x;
+    var sy = state.squad.y;
+    var top = sy;
+    var bot = sy;
+    for (var i = 0; i < state.units.length; i++) {
+      var un = state.units[i];
+      if (un.hp <= 0 || un.stowed) continue;
+      var s = (un.def && un.def.size) || 12;
+      var uy = un.y - s - 10;
+      var ly = un.y + s + 16;
+      if (uy < top) top = uy;
+      if (ly > bot) bot = ly;
+    }
+    var y = top - 40;
+    var b = G.playfield(state);
+    if (b) {
+      if (y < b.y0 + 22) y = Math.min(b.y1 - 22, bot + 26);
+      else y = Math.max(b.y0 + 22, Math.min(b.y1 - 22, y));
+      sx = Math.max(b.x0 + 48, Math.min(b.x1 - 48, sx));
+    }
+    return { x: sx, y: y };
+  }
+
+  function pushSkillNotice(state, id, title, color) {
+    var pos = skillNoticePos(state);
+    state.vfx = state.vfx || [];
+    for (var i = state.vfx.length - 1; i >= 0; i--) {
+      if (state.vfx[i].notice) state.vfx.splice(i, 1);
+    }
+    state.vfx.push({
+      id: id,
+      title: title,
+      x: pos.x,
+      y: pos.y,
+      t: 1.25,
+      max: 1.25,
+      color: color || "#ffd24a",
+      notice: true
+    });
+  }
+
   function useActive(state, index) {
     var list = activesOf(state);
     var u = list[index];
@@ -1910,59 +2021,59 @@
       pack[gj].activeFlash = 0.45;
     }
     var meta = G.activeMeta(id);
-    state.vfx = state.vfx || [];
-    state.vfx.push({ id: id, x: u.x, y: u.y, t: 0.55, max: 0.55, color: meta.color });
     var tgt = aimTarget(state, u) || aimGhost(state);
-    if (G.tactics && G.tactics.useActive && G.tactics.useActive(state, id, u)) {
-      G.audio.wave();
-      var stackTxt0 = pack.length > 1 ? " ×" + pack.length : "";
-      state.floaters.push(G.createFloater(u.x, u.y - 22, u.def.active.name + stackTxt0, "#ffd24a"));
-      return true;
-    }
-    if (id === "mark") {
-      u.marked = 4 * sm;
-    } else if (id === "napalm") {
-      var hold = u.def.range;
-      var rMul = u.kind === "lanca_chamas" ? 2 * sm : 1.85 * sm;
-      u.def.range = hold * rMul;
-      flameAt(state, u, tgt, { burnMul: u.kind === "lanca_chamas" ? 2 * sm : 1 });
-      u.def.range = hold;
-    } else if (id === "carpet") {
-      var nMines = Math.max(6, Math.round(6 * sm));
-      for (var m = 0; m < nMines; m++) {
-        var ra = (Math.PI * 2 * m) / nMines;
+    var handled = G.tactics && G.tactics.useActive && G.tactics.useActive(state, id, u);
+    if (!handled) {
+      if (id === "mark") {
+        u.marked = 4 * sm;
+      } else if (id === "napalm") {
+        var hold = u.def.range;
+        var rMul = u.kind === "lanca_chamas" ? 2 * sm : 1.85 * sm;
+        u.def.range = hold * rMul;
+        flameAt(state, u, tgt, { burnMul: u.kind === "lanca_chamas" ? 2 * sm : 1 });
+        u.def.range = hold;
+      } else if (id === "carpet") {
+        var nMines = Math.max(6, Math.round(6 * sm));
+        for (var m = 0; m < nMines; m++) {
+          var ra = (Math.PI * 2 * m) / nMines;
+          state.mines = state.mines || [];
+          state.mines.push({ x: u.x + Math.cos(ra) * 36, y: u.y + Math.sin(ra) * 36, arm: 0.35, life: 11, r: Math.round(34 * sm), dmg: Math.round(u.def.dmg * dmgMul(state) * sm), team: "player" });
+        }
+      } else if (id === "storm" || id === "pulse") {
+        explode(state, u.x, u.y, Math.round(90 * sm), Math.round((id === "pulse" ? 55 : 32) * dmgMul(state) * sm), "player");
+      } else if (id === "strafe") {
+        explode(state, u.x, u.y, Math.round(70 * sm), Math.round(28 * dmgMul(state) * sm), "player");
+      } else if (id === "fan") {
+        for (var f = 0; f < state.enemies.length; f++) {
+          var en = state.enemies[f];
+          if (en.hp > 0 && dist(u, en) < 130 * sm) hurt(state, en, Math.round(u.def.dmg * dmgMul(state) * sm), u.x, u.y, true);
+        }
+      } else if (id === "doubletap") {
+        for (var dtap = 0; dtap < pack.length; dtap++) pack[dtap].doubleShotT = 10 * sm;
+      } else if (id === "supercharge") {
         state.mines = state.mines || [];
-        state.mines.push({ x: u.x + Math.cos(ra) * 36, y: u.y + Math.sin(ra) * 36, arm: 0.35, life: 11, r: Math.round(34 * sm), dmg: Math.round(u.def.dmg * dmgMul(state) * sm), team: "player" });
+        var charged = 0;
+        var chMul = 1.4 * sm;
+        for (var sc = 0; sc < state.mines.length; sc++) {
+          var mine = state.mines[sc];
+          if (mine.team !== "player" || mine.charged) continue;
+          mine.charged = true;
+          mine.r = (mine.r || 36) * chMul;
+          mine.dmg = Math.round((mine.dmg || 20) * chMul);
+          charged++;
+          G.burst(state, mine.x, mine.y, "#fff3b0", 8, 40);
+        }
+        if (!charged) state.floaters.push(G.createFloater(u.x, u.y - 10, "sem minas", "#d4c46a"));
       }
-    } else if (id === "storm" || id === "pulse") {
-      explode(state, u.x, u.y, Math.round(90 * sm), Math.round((id === "pulse" ? 55 : 32) * dmgMul(state) * sm), "player");
-    } else if (id === "strafe") {
-      explode(state, u.x, u.y, Math.round(70 * sm), Math.round(28 * dmgMul(state) * sm), "player");
-    } else if (id === "fan") {
-      for (var f = 0; f < state.enemies.length; f++) {
-        var en = state.enemies[f];
-        if (en.hp > 0 && dist(u, en) < 130 * sm) hurt(state, en, Math.round(u.def.dmg * dmgMul(state) * sm), u.x, u.y, true);
-      }
-    } else if (id === "doubletap") {
-      for (var dtap = 0; dtap < pack.length; dtap++) pack[dtap].doubleShotT = 10 * sm;
-    } else if (id === "supercharge") {
-      state.mines = state.mines || [];
-      var charged = 0;
-      var chMul = 1.4 * sm;
-      for (var sc = 0; sc < state.mines.length; sc++) {
-        var mine = state.mines[sc];
-        if (mine.team !== "player" || mine.charged) continue;
-        mine.charged = true;
-        mine.r = (mine.r || 36) * chMul;
-        mine.dmg = Math.round((mine.dmg || 20) * chMul);
-        charged++;
-        G.burst(state, mine.x, mine.y, "#fff3b0", 8, 40);
-      }
-      if (!charged) state.floaters.push(G.createFloater(u.x, u.y - 10, "sem minas", "#d4c46a"));
     }
     G.audio.wave();
     var stackTxt = pack.length > 1 ? " ×" + pack.length : "";
-    state.floaters.push(G.createFloater(u.x, u.y - 22, u.def.active.name + stackTxt, "#ffd24a"));
+    var title = u.def.active.name + stackTxt;
+    if (id === "firemode") {
+      var modes = ["Fuzil", "Granada", "Barragem"];
+      title = "Modo de tiro · " + (modes[state.tankFireMode || 0] || "Fuzil");
+    }
+    pushSkillNotice(state, id, title, meta.color);
     return true;
   }
 

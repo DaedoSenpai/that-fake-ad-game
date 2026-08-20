@@ -27,7 +27,7 @@
     criomante: { name: "Gafanhoto-gelo", hp: 44, dmg: 14, range: 170, fire: 0.7, speed: 48, size: 13, color: "#7ad8ff", kind: "cryo", prefer: 150, blurb: "Tiro gelado. Atrasa o passo do esquadrão." },
     chefe_comandante: {
       name: "Marechal Casca",
-      title: "O enxame não recua",
+      title: "A ponta de lança do enxame",
       hp: 930, dmg: 28, range: 210, fire: 0.9, speed: 48, size: 32, color: "#d4a024", kind: "boss_burst", boss: true,
       blurb: "Chefe da linha. Escudos orbitam e ele gira atirando pra todos os lados."
     },
@@ -45,12 +45,12 @@
     },
     chefe_espectro: {
       name: "Mariposa-Véu",
-      title: "Some entre os tiros",
+      title: "A Dama Da Noite",
       hp: 1470, dmg: 26, range: 200, fire: 0.8, speed: 70, size: 30, color: "#c8a0ff", kind: "boss_veil", boss: true, flying: true,
       blurb: "Furtiva. O que ela invoca é isca: atrapalha, não mata."
     },
     chefe_final: {
-      name: "Núcleo da Enxame",
+      name: "Núcleo do Enxame",
       title: "O cérebro da legião",
       hp: 1900, dmg: 34, range: 230, fire: 0.85, speed: 40, size: 48, color: "#fff36a", kind: "boss_final", boss: true,
       blurb: "O cérebro da legião. Três camadas: Colmeia, Mariposa, núcleo nu."
@@ -67,7 +67,7 @@
     },
     veu_clone: {
       name: "Mariposa-Véu",
-      title: "Some entre os tiros",
+      title: "A Dama Da Noite",
       hp: 420, dmg: 0, range: 200, fire: 0.8, speed: 70, size: 30, color: "#c8a0ff", kind: "boss_veil", boss: true, fake: true, flying: true, codexHide: true,
       blurb: "Cópia vazia da Mariposa. Atrasa, não mata."
     }
@@ -144,7 +144,7 @@
     E.chefe_final.skills = [
       { type: "active", name: "Casca da colmeia", desc: "Enquanto a Colmeia viver, o núcleo não toma dano.", icon: "🏕" },
       { type: "active", name: "Véu do núcleo", desc: "Na segunda fase, a Mariposa-Véu ajuda ele a sumir enquanto a rajada continua.", icon: "🌫" },
-      { type: "active", name: "Núcleo exposto", desc: "Raios, projéteis, cura, teleporte e invocação de tudo — inclusive chefes a cada 1–2 min.", icon: "👁" },
+      { type: "active", name: "Núcleo exposto", desc: "No último estágio ataca uma coisa de cada vez: raios, rajada, artilharia ou teleporte. Cura sozinho e invoca reforços — inclusive chefes a cada 1–2 min.", icon: "👁" },
       { type: "active", name: "Zoom tático", desc: "Na última fase o campo abre e o mapa cresce.", icon: "☄" }
     ];
     E.mini_beemote.passive = { name: "Ferrão", desc: "Tiro envenena. 5% da vida máxima em 5s, dano verdadeiro." };
@@ -273,6 +273,7 @@
       helperOf: 0,
       bossPhase: type === "chefe_final" ? 1 : 0,
       lastHitT: 0,
+      revealT: 0,
       parked: false,
       spinMode: 0,
       spinT: 0,
@@ -299,6 +300,10 @@
       coreHealT: 6,
       coreRayT: 2.4,
       coreSummonT: 75,
+      coreAct: "wait",
+      coreActT: 1.1,
+      coreLastAct: "",
+      coreActDid: false,
       def: def
     };
   };
@@ -416,6 +421,7 @@
 
   function hpBar(ctx, e) {
     if (e.def.boss) return;
+    if ((e.stealth || 0) > 0.2 && (e.revealT || 0) <= 0) return;
     var glow = e.healGlow || 0;
     if (e.hp >= e.maxHp * 0.98 && glow <= 0) return;
     var w = Math.max(16, e.def.size * 2);
@@ -1115,12 +1121,14 @@
     ctx.save();
     ctx.translate(e.x, e.y);
     if (e.flash > 0) ctx.globalAlpha = 0.6;
-    if (e.stealth > 0.2) ctx.globalAlpha *= 0.28;
+    if (e.stealth > 0.2) ctx.globalAlpha *= (e.revealT || 0) > 0 ? 0.55 : 0.28;
     var fly = !!(e.def && e.def.flying);
-    ctx.fillStyle = "rgba(0,0,0,0.32)";
-    ctx.beginPath();
-    ctx.ellipse(fly ? 5 : 0, s * (fly ? 1.35 : 0.85), s * (fly ? 0.62 : 0.85), s * (fly ? 0.18 : 0.3), 0, 0, Math.PI * 2);
-    ctx.fill();
+    if (!((e.stealth || 0) > 0.2)) {
+      ctx.fillStyle = "rgba(0,0,0,0.32)";
+      ctx.beginPath();
+      ctx.ellipse(fly ? 5 : 0, s * (fly ? 1.35 : 0.85), s * (fly ? 0.62 : 0.85), s * (fly ? 0.18 : 0.3), 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if ((e.chargeWindup || 0) > 0) {
       var glow = 0.25 + (1 - e.chargeWindup / (e.chargeWindupMax || 0.9)) * 0.45;
       ctx.strokeStyle = e.chargeRico ? "rgba(255, 80, 40, " + glow + ")" : "rgba(255, 210, 70, " + glow + ")";
@@ -1492,7 +1500,7 @@
       oval(ctx, 0, 0, s, s, e.def.color);
     }
     ctx.restore();
-    if (!e.preview && e.type !== "chefe_espectro" && e.type !== "veu_clone") drawEnemyMark(ctx, e);
+    if (!e.preview) drawEnemyMark(ctx, e);
     if (e.parked) {
       ctx.save();
       ctx.strokeStyle = "rgba(224, 92, 255, 0.55)";
@@ -1508,16 +1516,20 @@
   function drawEnemyMark(ctx, e) {
     var s = e.def.size;
     var stealth = (e.stealth || 0) > 0.2;
+    var revealed = (e.revealT || 0) > 0;
+    if (stealth && !revealed) return;
     var pulse = 0.62 + Math.sin((e.phase || 0) * 5.5) * 0.22;
     var decoy = !!(e.decoy || e.fake);
     var col = decoy ? "#d8b0ff" : (e.def.boss ? "#ffe08a" : "#ff6a5a");
     ctx.save();
-    ctx.globalAlpha = (stealth ? 0.42 : 0.28) * pulse;
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.ellipse(e.x, e.y + s * 0.92, s * 1.05, s * 0.34, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = stealth ? 0.9 : 0.62;
+    if (!stealth) {
+      ctx.globalAlpha = 0.28 * pulse;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y + s * 0.92, s * 1.05, s * 0.34, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = stealth ? 0.95 : (decoy ? 0.9 : 0.62);
     ctx.strokeStyle = col;
     ctx.lineWidth = stealth || decoy ? 2.2 : 1.7;
     ctx.beginPath();
@@ -1536,9 +1548,39 @@
     ctx.restore();
   }
 
+  function isDarkShotColor(col) {
+    if (!col || col.charAt(0) !== "#") return false;
+    var p = hexParts(col);
+    return p[0] * 0.299 + p[1] * 0.587 + p[2] * 0.114 < 110;
+  }
+
+  function drawDarkShotGlow(ctx, p) {
+    if (!isDarkShotColor(p.color)) return;
+    var r = Math.max(3.6, (p.r || 3) + 1);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r + 9);
+    g.addColorStop(0, "rgba(230, 242, 255, 0.9)");
+    g.addColorStop(0.4, "rgba(150, 200, 255, 0.5)");
+    g.addColorStop(1, "rgba(120, 180, 255, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r + 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = "rgba(240, 248, 255, 0.95)";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r + 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   G.drawProjectile = function (ctx, p) {
     ctx.save();
     if (p.z) ctx.translate(0, -p.z);
+    drawDarkShotGlow(ctx, p);
     if (p.kind === "flame") {
       ctx.fillStyle = p.team === "player" ? "rgba(255,140,40,0.7)" : "#ff8a8a";
       ctx.beginPath();
@@ -1615,6 +1657,20 @@
       ctx.fill();
       ctx.restore();
     } else {
+      if (p.tracer) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(Math.atan2(p.vy, p.vx));
+        ctx.strokeStyle = "rgba(138, 240, 216, 0.85)";
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-16, 0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
       ctx.fillStyle = p.color || (p.team === "player" ? "#fff4b0" : (p.fake ? "rgba(255, 138, 138, 0.4)" : "#ff8a8a"));
       if (!p.color && p.kind === "grenade") ctx.fillStyle = "#9cff7a";
       if (!p.color && p.kind === "cannon") ctx.fillStyle = "#ffd24a";

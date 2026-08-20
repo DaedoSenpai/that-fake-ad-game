@@ -38,6 +38,14 @@
     return Math.sqrt(x * x + y * y);
   }
 
+  function clampAim(from, to, range) {
+    var dx = to.x - from.x;
+    var dy = to.y - from.y;
+    var d = hypot(dx, dy);
+    if (d <= range || d < 0.001) return { x: to.x, y: to.y };
+    return { x: from.x + (dx / d) * range, y: from.y + (dy / d) * range };
+  }
+
   function distToSeg(px, py, ax, ay, bx, by) {
     var dx = bx - ax;
     var dy = by - ay;
@@ -137,6 +145,7 @@
     });
     p.ownerKind = u.kind;
     p.fromId = u.id;
+    p.tracer = !!extra.tracer;
     p.wallBounce = extra.wallBounce || 0;
     p.bounceMul = extra.bounceMul || 3;
     p.eraseShots = !!extra.eraseShots;
@@ -540,11 +549,6 @@
       state.mineDraw = { last: { x: aim(state).x, y: aim(state).y }, spent: 0 };
       return;
     }
-    if (id === "airstrike") {
-      var q = aim(state);
-      state.bombLine = { x0: q.x, y0: q.y, x1: q.x, y1: q.y, t: 0 };
-      return;
-    }
     if (id === "carpetbomb") {
       state.gunBombs = true;
       putSelectedOnCd(state);
@@ -558,12 +562,6 @@
     state.gunBombs = false;
     if (state.guerrillaMenu) {
       guerrillaCloseMenu(state);
-    }
-    if (state.bombLine && selectedId(state) === "airstrike") {
-      state.bombLine.t = 1;
-      state.bombPending = state.bombLine;
-      state.bombLine = null;
-      putSelectedOnCd(state);
     }
     if (state.mineDraw && state.mineDraw.spent === 0) C().useActive(state, state.skillSlot | 0);
     state.mineDraw = null;
@@ -631,11 +629,12 @@
   }
 
   function placeCoilTower(state, u) {
-    var p = aim(state);
+    var p = clampAim(u, aim(state), u.def.range || 300);
     var coils = [];
     for (var i = 0; i < state.deploys.length; i++) {
       if (state.deploys[i].kind === "coil_tower") coils.push(state.deploys[i]);
     }
+    var fieldR = 128;
     if (coils.length < 2) {
       state.coilSeq = (state.coilSeq || 0) + 1;
       state.deploys.push({
@@ -644,24 +643,31 @@
         y: p.y,
         hp: 70,
         maxHp: 70,
-        cooldown: 0.15,
-        fire: 2.2,
+        cooldown: 0,
+        fire: 1,
         dmg: u.def.dmg,
-        range: 108,
+        range: fieldR,
+        fieldR: fieldR,
         t: 9999,
         size: 13,
-        seq: state.coilSeq
+        seq: state.coilSeq,
+        fed: false,
+        zaps: []
       });
       state.floaters.push(G.createFloater(p.x, p.y - 16, "bobina", "#a8f6ff"));
     } else {
-      var last = coils[0];
+      var oldest = coils[0];
       for (var c = 1; c < coils.length; c++) {
-        if ((coils[c].seq || 0) > (last.seq || 0)) last = coils[c];
+        if ((coils[c].seq || 0) < (oldest.seq || 0)) oldest = coils[c];
       }
-      last.x = p.x;
-      last.y = p.y;
-      last.seq = ++state.coilSeq;
-      last.t = 9999;
+      oldest.x = p.x;
+      oldest.y = p.y;
+      oldest.seq = ++state.coilSeq;
+      oldest.t = 9999;
+      oldest.dmg = u.def.dmg;
+      oldest.range = fieldR;
+      oldest.fieldR = fieldR;
+      oldest.zaps = [];
       state.floaters.push(G.createFloater(p.x, p.y - 16, "recoloca", "#a8f6ff"));
     }
     G.burst(state, p.x, p.y, "#a8f6ff", 14, 90);
@@ -1102,30 +1108,79 @@
     }
   }
 
-  function updateDrones(state, dt) {
-    var want = nKind(state, "droneiro");
-    while (state.drones.length < want) {
-      var u = lead(state, "droneiro");
-      state.drones.push({ x: u ? u.x : state.squad.x, y: u ? u.y : state.squad.y, ang: Math.random() * 6.28, cd: 0 });
+  function droneSpec(kind) {
+    if (kind === "helicoptero") return { n: 2, orbit: 34, size: 5.5, color: "#3ef0ff", shootR: 100, spin: 3.1 };
+    if (kind === "bombardeiro") return { n: 1, orbit: 20, size: 12, color: "#5ad0c8", shootR: 112, spin: 1.6, fat: true };
+    if (kind === "recon") return { n: 1, orbit: 28, size: 5.5, color: "#8af0d8", shootR: 100, spin: 2.8, tracer: true };
+    return { n: 1, orbit: 28, size: 5, color: "#7af0ff", shootR: 90, spin: 2.6 };
+  }
+
+  function droneWantList(state) {
+    var kinds = ["droneiro", "helicoptero", "bombardeiro", "recon"];
+    var list = [];
+    for (var k = 0; k < kinds.length; k++) {
+      var kind = kinds[k];
+      var spec = droneSpec(kind);
+      var nU = nKind(state, kind);
+      for (var u = 0; u < nU; u++) {
+        for (var s = 0; s < spec.n; s++) {
+          list.push({ from: kind, slot: u * spec.n + s, spec: spec });
+        }
+      }
     }
-    while (state.drones.length > want) state.drones.pop();
+    return list;
+  }
+
+  function dronesOf(state, kind) {
+    var out = [];
+    for (var i = 0; i < state.drones.length; i++) {
+      if (state.drones[i].from === kind) out.push(state.drones[i]);
+    }
+    return out;
+  }
+
+  function updateDrones(state, dt) {
+    var want = droneWantList(state);
+    while (state.drones.length < want.length) {
+      var w0 = want[state.drones.length];
+      state.drones.push({
+        x: state.squad.x,
+        y: state.squad.y,
+        ang: Math.random() * 6.28,
+        cd: 0,
+        from: w0.from,
+        slot: w0.slot
+      });
+    }
+    while (state.drones.length > want.length) state.drones.pop();
     var p = aim(state);
-    var host = lead(state, "droneiro");
     for (var i = 0; i < state.drones.length; i++) {
       var d = state.drones[i];
-      d.ang += dt * 2.6;
-      var tx = p.x + Math.cos(d.ang + i) * 28;
-      var ty = p.y + Math.sin(d.ang + i) * 28;
+      var spec = want[i] ? want[i].spec : droneSpec(d.from);
+      d.from = want[i] ? want[i].from : d.from;
+      d.slot = want[i] ? want[i].slot : d.slot;
+      d.spec = spec;
+      var host = lead(state, d.from);
+      d.ang += dt * (spec.spin || 2.6);
+      var spread = spec.orbit || 28;
+      var tx = p.x + Math.cos(d.ang + d.slot) * spread;
+      var ty = p.y + Math.sin(d.ang + d.slot) * spread;
       d.x += (tx - d.x) * Math.min(1, dt * 8);
       d.y += (ty - d.y) * Math.min(1, dt * 8);
       d.cd -= dt;
       if (d.cd > 0 || !host) continue;
       if (!(state.pointer && state.pointer.fireHold)) continue;
       var tgt = C().nearest(state.enemies, p.x, p.y);
-      if (!tgt || hypot(tgt.x - p.x, tgt.y - p.y) > 90) continue;
-      d.cd = 1 / Math.max(0.4, host.def.fire);
+      var shootR = spec.shootR || 90;
+      if (!tgt || hypot(tgt.x - p.x, tgt.y - p.y) > shootR) continue;
+      d.cd = 1 / Math.max(0.35, host.def.fire * C().fireMul(state));
       var fake = { x: d.x, y: d.y, def: host.def, kind: host.kind, marked: 0, id: host.id };
-      bolt(state, fake, angTo(d, tgt), { speed: 440, r: 3, kind: "bullet" });
+      var shot = { speed: spec.fat ? 360 : 440, r: spec.fat ? 5 : 3, kind: "bullet" };
+      if (spec.tracer) {
+        shot.color = "#8af0d8";
+        shot.tracer = true;
+      }
+      bolt(state, fake, angTo(d, tgt), shot);
     }
   }
 
@@ -1276,16 +1331,31 @@
           state.deploys.splice(i, 1);
           continue;
         }
-        t.zap = null;
-        t.cooldown -= dt;
-        if (t.cooldown <= 0) {
-          t.cooldown = 1 / Math.max(0.4, t.fire || 2);
-          var near = C().nearest(state.enemies, t.x, t.y);
-          if (near && hypot(near.x - t.x, near.y - t.y) <= (t.range || 108) + (near.def.size || 10)) {
-            applyJolt(state, near, Math.round((t.dmg || 26) * C().dmgMul(state) * 0.55), t.x, t.y);
-            t.zap = { x: near.x, y: near.y };
-          }
+        var fed = !!t.fed;
+        t.fed = false;
+        t.linked = false;
+        t.zaps = [];
+        var fieldR = t.fieldR || t.range || 128;
+        var teslaN = nKind(state, "tesla");
+        var dps = (t.dmg || 26) * C().dmgMul(state) * 0.8;
+        dps *= 1 + 0.22 * Math.max(0, teslaN - 1);
+        if (fed) dps *= 1.3;
+        var tick = dps * dt;
+        var sparks = [];
+        var fieldHit = {};
+        for (var ei = 0; ei < state.enemies.length; ei++) {
+          var en = state.enemies[ei];
+          if (en.hp <= 0) continue;
+          var ed = hypot(en.x - t.x, en.y - t.y);
+          if (ed > fieldR + (en.def.size || 10)) continue;
+          applyJolt(state, en, tick, t.x, t.y);
+          fieldHit[en.id] = 1;
+          sparks.push({ x: en.x, y: en.y, d: ed });
         }
+        t.fieldHit = fieldHit;
+        t.fieldTick = tick;
+        sparks.sort(function (a, b) { return a.d - b.d; });
+        t.zaps = sparks.slice(0, 2);
         continue;
       }
       t.t -= dt;
@@ -1348,13 +1418,83 @@
     e.flash = Math.max(e.flash || 0, 0.1);
   }
 
+  function listCoils(state) {
+    var list = [];
+    for (var i = 0; i < state.deploys.length; i++) {
+      if (state.deploys[i].kind === "coil_tower") list.push(state.deploys[i]);
+    }
+    return list;
+  }
+
+  function joltAlongSeg(state, x0, y0, x1, y1, tick, hitMap) {
+    var joltR = 42;
+    hitMap = hitMap || {};
+    for (var i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (e.hp <= 0 || hitMap[e.id]) continue;
+      if (distToSeg(e.x, e.y, x0, y0, x1, y1) > joltR + (e.def.size || 10)) continue;
+      applyJolt(state, e, tick, x0, y0);
+      hitMap[e.id] = 1;
+    }
+    return hitMap;
+  }
+
+  function shockSplash(state, hitMap, dmg) {
+    if (!hitMap || dmg <= 0) return hitMap;
+    var splashR = 72;
+    var origins = {};
+    for (var k in hitMap) origins[k] = 1;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var o = state.enemies[i];
+      if (o.hp <= 0 || hitMap[o.id]) continue;
+      var from = null;
+      var best = splashR + (o.def.size || 10);
+      for (var j = 0; j < state.enemies.length; j++) {
+        var src = state.enemies[j];
+        if (!origins[src.id] || src.hp <= 0) continue;
+        var d = hypot(o.x - src.x, o.y - src.y);
+        if (d < best) {
+          best = d;
+          from = src;
+        }
+      }
+      if (!from) continue;
+      applyJolt(state, o, dmg * 0.55, from.x, from.y);
+      state.beams.push(makeTeslaBolt(from.x, from.y, o.x, o.y, (state.time || 0) * 5 + i, 0.48));
+      hitMap[o.id] = 1;
+    }
+    return hitMap;
+  }
+
   function updateBeams(state, dt) {
     state.beams = [];
+    var tesla = lead(state, "tesla");
+    var chainTick = tesla ? tesla.def.dmg * C().dmgMul(state) * 0.75 * dt : 0;
+    var chainHit = {};
+    var coils = listCoils(state);
+    var chainR = 300;
+    for (var a = 0; a < coils.length; a++) {
+      for (var b = a + 1; b < coils.length; b++) {
+        var ca = coils[a];
+        var cb = coils[b];
+        if (hypot(ca.x - cb.x, ca.y - cb.y) > chainR) continue;
+        ca.linked = true;
+        cb.linked = true;
+        state.beams.push(makeTeslaBolt(ca.x, ca.y - 16, cb.x, cb.y - 16, (state.time || 0) * 7 + a, 0.85));
+        if (chainTick > 0) joltAlongSeg(state, ca.x, ca.y, cb.x, cb.y, chainTick, chainHit);
+      }
+    }
     for (var ci = 0; ci < state.deploys.length; ci++) {
       var coil = state.deploys[ci];
-      if (coil.kind !== "coil_tower" || !coil.zap) continue;
-      state.beams.push(makeTeslaBolt(coil.x, coil.y - 18, coil.zap.x, coil.zap.y, (state.time || 0) * 8 + ci, 0.7));
+      if (coil.kind !== "coil_tower") continue;
+      if (coil.fieldHit && coil.fieldTick) shockSplash(state, coil.fieldHit, coil.fieldTick);
+      if (!coil.zaps || !coil.zaps.length) continue;
+      for (var zi = 0; zi < coil.zaps.length; zi++) {
+        var zap = coil.zaps[zi];
+        state.beams.push(makeTeslaBolt(coil.x, coil.y - 18, zap.x, zap.y, (state.time || 0) * 8 + ci + zi, 0.55));
+      }
     }
+    if (Object.keys(chainHit).length) shockSplash(state, chainHit, chainTick);
     if (state.pointer && state.pointer.fireHold) beamUnit(state, "tesla", dt, 9, false);
     if (state.pointer && state.pointer.fireHold) beamUnit(state, "colosso", dt, 16, true, false, true);
     if ((has(state, "lanca_chamas") || has(state, "inferno")) && state.pointer && state.pointer.fireHold) meltCone(state);
@@ -1383,42 +1523,39 @@
   }
 
   function teslaJoltBeam(state, u, p, dt) {
-    var swing = Math.min(2.4, 0.55 + (state.mouseSpd || 0) / 900);
-    var dps = u.def.dmg * C().dmgMul(state) * swing;
+    var range = u.def.range || 300;
+    var chainR = 300;
+    var dps = u.def.dmg * C().dmgMul(state);
     var tick = dps * dt;
-    var joltR = 42;
-    state.beams.push(makeTeslaBolt(u.x, u.y, p.x, p.y, (state.time || 0) * 9.1, 1));
     var hit = {};
-    for (var i = 0; i < state.enemies.length; i++) {
-      var e = state.enemies[i];
-      if (e.hp <= 0) continue;
-      if (distToSeg(e.x, e.y, u.x, u.y, p.x, p.y) > joltR + (e.def.size || 10)) continue;
-      applyJolt(state, e, tick, u.x, u.y);
-      hit[e.id] = 1;
+    var end = clampAim(u, p, range);
+    state.beams.push(makeTeslaBolt(u.x, u.y, end.x, end.y, (state.time || 0) * 9.1, 1));
+    joltAlongSeg(state, u.x, u.y, end.x, end.y, tick, hit);
+    shockSplash(state, hit, tick);
+
+    var coils = listCoils(state);
+    var frontier = [];
+    var seen = {};
+    for (var d = 0; d < coils.length; d++) {
+      var coil = coils[d];
+      var nearTesla = hypot(coil.x - u.x, coil.y - u.y) <= range + 12;
+      var nearBeam = distToSeg(coil.x, coil.y, u.x, u.y, end.x, end.y) <= (coil.fieldR || 128);
+      if (!nearTesla && !nearBeam) continue;
+      coil.fed = true;
+      frontier.push(coil);
+      seen[coil.seq || coil.x] = 1;
     }
-    for (var j = 0; j < state.enemies.length; j++) {
-      var o = state.enemies[j];
-      if (o.hp <= 0 || hit[o.id]) continue;
-      var chained = false;
-      var from = null;
-      for (var k = 0; k < state.enemies.length; k++) {
-        var src = state.enemies[k];
-        if (!hit[src.id] || src.hp <= 0) continue;
-        if (hypot(o.x - src.x, o.y - src.y) < 56 + (o.def.size || 10)) {
-          chained = true;
-          from = src;
-          break;
-        }
+    while (frontier.length) {
+      var from = frontier.pop();
+      for (var c = 0; c < coils.length; c++) {
+        var other = coils[c];
+        var key = other.seq || other.x;
+        if (seen[key] || other === from) continue;
+        if (hypot(other.x - from.x, other.y - from.y) > chainR) continue;
+        seen[key] = 1;
+        other.fed = true;
+        frontier.push(other);
       }
-      if (!chained || !from) continue;
-      applyJolt(state, o, tick * 0.55, from.x, from.y);
-      state.beams.push(makeTeslaBolt(from.x, from.y, o.x, o.y, (state.time || 0) * 4 + j, 0.55));
-    }
-    for (var d = 0; d < state.deploys.length; d++) {
-      var coil = state.deploys[d];
-      if (coil.kind !== "coil_tower") continue;
-      if (hypot(coil.x - u.x, coil.y - u.y) > 260 && distToSeg(coil.x, coil.y, u.x, u.y, p.x, p.y) > 72) continue;
-      state.beams.push(makeTeslaBolt(u.x, u.y, coil.x, coil.y - 16, (state.time || 0) * 6 + d, 0.8));
     }
   }
 
@@ -1706,7 +1843,7 @@
       if (kind === "quartel") continue;
       if (kind === "caminhao" || kind === "oficina" || kind === "comandante") continue;
       if (kind === "tesla" || kind === "colosso") continue;
-      if (kind === "bombardeiro" || kind === "droneiro") continue;
+      if (kind === "bombardeiro" || kind === "droneiro" || kind === "helicoptero" || kind === "recon") continue;
       if (kind === "mineiro") continue;
       if (!firing && kind !== "giratoria" && kind !== "torreta") continue;
       if (kind === "giratoria" && (state.girSpin || 0) < 2) continue;
@@ -2089,8 +2226,65 @@
       for (var i = 0; i < state.units.length; i++) state.units[i].parasite = 0;
       return true;
     }
+    if (id === "strafe") {
+      var heli = dronesOf(state, "helicoptero");
+      var sm = Math.max(1, nKind(state, "helicoptero"));
+      var sDmg = Math.round(28 * C().dmgMul(state) * (sm > 1 ? 1 + 0.15 * (sm - 1) : 1));
+      if (!heli.length) {
+        var ap = aim(state);
+        C().explode(state, ap.x, ap.y, 70, sDmg, "player");
+      } else {
+        for (var hi = 0; hi < heli.length; hi++) {
+          C().explode(state, heli[hi].x, heli[hi].y, 62, sDmg, "player");
+        }
+      }
+      return true;
+    }
+    if (id === "airstrike") {
+      var live = [];
+      for (var ei = 0; ei < state.enemies.length; ei++) {
+        var en = state.enemies[ei];
+        if (en.hp <= 0 || en.fake || en.decoy) continue;
+        if (en.def && (en.def.kind === "orbit_shield" || en.def.codexHide)) continue;
+        live.push(en);
+      }
+      for (var sh = live.length - 1; sh > 0; sh--) {
+        var sw = (Math.random() * (sh + 1)) | 0;
+        var tmp = live[sh];
+        live[sh] = live[sw];
+        live[sw] = tmp;
+      }
+      var nBomb = 5;
+      var bDmg = Math.round((u.def.dmg || 28) * 1.45 * C().dmgMul(state));
+      var b = G.playfield(state);
+      for (var bi = 0; bi < nBomb; bi++) {
+        var tx;
+        var ty;
+        if (live.length) {
+          var pick = live[bi % live.length];
+          tx = pick.x + (Math.random() - 0.5) * 18;
+          ty = pick.y + (Math.random() - 0.5) * 18;
+        } else {
+          tx = b.x0 + 40 + Math.random() * Math.max(40, b.x1 - b.x0 - 80);
+          ty = b.y0 + 40 + Math.random() * Math.max(40, b.y1 - b.y0 - 80);
+        }
+        state.warnings = state.warnings || [];
+        state.warnings.push({
+          x: tx,
+          y: ty,
+          t: 0.7 + bi * 0.08,
+          max: 0.85,
+          r: 44,
+          dmg: bDmg,
+          team: "player",
+          color: "#5ad0c8"
+        });
+      }
+      return true;
+    }
     if (id === "rocket") {
-      var dr = state.drones[0] || u;
+      var pack = dronesOf(state, "droneiro");
+      var dr = pack[0] || state.drones[0] || u;
       var fake = { x: dr.x, y: dr.y, def: u.def, kind: u.kind, marked: 0, id: u.id };
       var rk = bolt(state, fake, mouseAng(state, dr), {
         kind: "missile",
@@ -2115,8 +2309,6 @@
         if (tu.kind !== "minitanque" && tu.kind !== "tanque") continue;
         tu.fireMode = state.tankFireMode;
       }
-      var labels = ["fuzil", "granada", "barragem"];
-      state.floaters.push(G.createFloater(u.x, u.y - 18, labels[state.tankFireMode] || "fuzil", "#9ad4ff"));
       return true;
     }
     if (id === "crate") {
@@ -2236,8 +2428,26 @@
 
   function drawCoilTower(ctx, dp, time) {
     var pulse = 0.55 + Math.sin(time * 10 + dp.x) * 0.25;
+    var fieldR = dp.fieldR || dp.range || 128;
+    var fed = !!dp.fed || !!dp.linked;
     ctx.save();
     ctx.translate(dp.x, dp.y);
+    ctx.fillStyle = fed ? "rgba(120, 240, 255, 0.16)" : "rgba(70, 190, 230, 0.09)";
+    ctx.beginPath();
+    ctx.arc(0, 0, fieldR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = fed ? "rgba(190, 255, 255, 0.72)" : "rgba(140, 230, 255, 0.38)";
+    ctx.lineWidth = fed ? 2.4 : 1.5;
+    ctx.setLineDash([10, 7]);
+    ctx.beginPath();
+    ctx.arc(0, 0, fieldR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "rgba(168, 246, 255, " + (0.18 + pulse * 0.32) + ")";
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(0, 0, fieldR * (0.52 + pulse * 0.14), 0, Math.PI * 2);
+    ctx.stroke();
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.beginPath();
     ctx.ellipse(0, 10, 11, 4, 0, 0, Math.PI * 2);
@@ -2588,10 +2798,45 @@
 
     for (i = 0; i < state.drones.length; i++) {
       var dr = state.drones[i];
-      ctx.fillStyle = "#7af0ff";
+      var spec = dr.spec || droneSpec(dr.from);
+      var col = spec.color || "#7af0ff";
+      var sz = spec.size || 5;
+      ctx.save();
+      ctx.translate(dr.x, dr.y);
+      ctx.fillStyle = "rgba(0,0,0,0.28)";
       ctx.beginPath();
-      ctx.arc(dr.x, dr.y, 5, 0, Math.PI * 2);
+      ctx.ellipse(1, sz * 1.1, sz * 0.9, sz * 0.35, 0, 0, Math.PI * 2);
       ctx.fill();
+      if (spec.fat) {
+        ctx.fillStyle = "#3a6a68";
+        ctx.beginPath();
+        ctx.ellipse(0, 2, sz * 0.95, sz * 0.62, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, sz, sz * 0.72, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#d8ffff";
+        ctx.beginPath();
+        ctx.ellipse(-sz * 0.2, -sz * 0.15, sz * 0.28, sz * 0.18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(232, 255, 255, 0.7)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, sz + 3, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(0, 0, sz, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#e8ffff";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, sz + 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
     for (i = 0; i < state.minions.length; i++) {
       var mn = state.minions[i];

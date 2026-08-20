@@ -968,11 +968,16 @@
             pip(guer.strike, guer.strikeMax) + "△</i>" +
           "</span>";
       } else {
+        var nm = act[s].def.active.name;
+        if (aid === "firemode") {
+          var modes = ["Fuzil", "Granada", "Barragem"];
+          nm = modes[state.tankFireMode || 0] || "Fuzil";
+        }
         slot.innerHTML =
           "<span class=\"key\">" + (s + 1) + "</span>" +
           (n > 1 ? "<span class=\"stack\">×" + n + "</span>" : "") +
           "<span class=\"ico\">" + meta.icon + "</span>" +
-          "<span class=\"nm\">" + act[s].def.active.name + "</span>";
+          "<span class=\"nm\">" + nm + "</span>";
       }
       slot.onclick = (function (idx) {
         return function (ev) {
@@ -1255,16 +1260,32 @@
         var k = Math.max(0, fx.t / fx.max);
         ctx.save();
         ctx.globalAlpha = k;
-        ctx.strokeStyle = fx.color;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(fx.x, fx.y, 16 + (1 - k) * 46, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.font = "22px Segoe UI, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = fx.color;
-        ctx.fillText(G.activeMeta(fx.id).icon, fx.x, fx.y - 8);
+        if (fx.notice) {
+          var hold = fx.t >= 0.4 ? 1 : Math.max(0, fx.t / 0.4);
+          ctx.globalAlpha = hold;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = fx.color;
+          ctx.font = "22px Segoe UI, sans-serif";
+          ctx.fillText(G.activeMeta(fx.id).icon, fx.x, fx.y - 20);
+          ctx.font = "bold 18px Segoe UI, sans-serif";
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = "rgba(0,0,0,0.78)";
+          ctx.lineWidth = 5;
+          ctx.strokeText(fx.title || "", fx.x, fx.y + 4);
+          ctx.fillText(fx.title || "", fx.x, fx.y + 4);
+        } else {
+          ctx.strokeStyle = fx.color;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(fx.x, fx.y, 16 + (1 - k) * 46, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.font = "22px Segoe UI, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = fx.color;
+          ctx.fillText(G.activeMeta(fx.id).icon, fx.x, fx.y - 8);
+        }
         ctx.restore();
       }
     }
