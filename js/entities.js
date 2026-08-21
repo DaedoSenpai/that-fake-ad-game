@@ -25,28 +25,63 @@
     ninho: { name: "Ninho-colmeia", hp: 130, dmg: 56, range: 28, fire: 0, speed: 12, size: 20, color: "#8a5a18", kind: "nest", blurb: "Estoca 5 a 7 larvas. Quando esvazia, se joga no esquadrão e explode." },
     parasita: { name: "Sanguessuga", hp: 22, dmg: 12, range: 16, fire: 0, speed: 120, size: 8, color: "#a03070", kind: "parasite", blurb: "Gruda num soldado, suga e deixa ele lento." },
     criomante: { name: "Gafanhoto-gelo", hp: 44, dmg: 14, range: 170, fire: 0.7, speed: 48, size: 13, color: "#7ad8ff", kind: "cryo", prefer: 150, blurb: "Tiro gelado. Atrasa o passo do esquadrão." },
+    chefe_invasao: {
+      name: "Irwin o Comandante da Invasão",
+      title: "Aquele que lidera para a assimilação",
+      hp: 620, dmg: 16, range: 190, fire: 0.9, speed: 62, size: 18, color: "#3d8a3a", kind: "boss_invasao", boss: true,
+      blurb: "Espelho hostil do comandante. Capa verde, duas pistolas e a bandeira da colmeia."
+    },
+    fuzileiro_alien: {
+      name: "Fuzileiro alienígena",
+      hp: 42, dmg: 11, range: 165, fire: 0.95, speed: 108, size: 13, color: "#4aa36a", kind: "alien_rifle",
+      blurb: "Soldado do Comandante da Invasão. Avança em formação e recua ferido."
+    },
     chefe_comandante: {
-      name: "Marechal Casca",
+      name: "Kaska O Marechal do Avanço",
       title: "A ponta de lança do enxame",
       hp: 930, dmg: 28, range: 210, fire: 0.9, speed: 48, size: 32, color: "#d4a024", kind: "boss_burst", boss: true,
-      blurb: "Chefe da linha. Escudos orbitam e ele gira atirando pra todos os lados."
+      blurb: "Chefe da linha. Escudos orbitam e ele gira atirando pelas duas pontas do corpo."
+    },
+    chefe_vulto: {
+      name: "Glinder o Vulto da Noite",
+      title: "Aquela que queima a luz",
+      hp: 1120, dmg: 24, range: 240, fire: 0.7, speed: 92, size: 26, color: "#c01818", kind: "boss_vulto", boss: true, flying: true,
+      blurb: "Vagalume vermelho e preto. Apaga a arena e ilumina só o que ele queima."
     },
     chefe_megatanque: {
-      name: "Beemote-07",
+      name: "Beequeen-07",
       title: "Imperatriz da Colmeia",
       hp: 1350, dmg: 46, range: 160, fire: 0.45, speed: 52, size: 42, color: "#f0b42a", kind: "boss_charge", boss: true, flying: true,
       blurb: "Imperatriz voadora. Ferrão venenoso e mergulho que atropela."
     },
+    chefe_beeking: {
+      name: "Beeking-08",
+      title: "O rei da colmeia",
+      hp: 780, dmg: 30, range: 110, fire: 0.35, speed: 118, size: 30, color: "#e87830", kind: "boss_king", boss: true, flying: true,
+      blurb: "Abelha coroada. Protege a rainha, cura ela e investe com a lança."
+    },
+    chefe_arklan: {
+      name: "Arklan",
+      title: "Devorador de planetas",
+      hp: 1980, dmg: 40, range: 90, fire: 0, speed: 36, size: 74, color: "#c4a06a", kind: "boss_worm", boss: true,
+      blurb: "Minhoca de areia colossal. Some debaixo da terra e explode pra fora com a boca aberta."
+    },
+    arklan_spike: {
+      name: "Espinho de areia",
+      hp: 55, dmg: 0, range: 0, fire: 0, speed: 0, size: 14, color: "#8a5a28", kind: "pin_spike",
+      blurb: "Finca no chão e prende o esquadrão. Atira nele pra se soltar.",
+      codexHide: true
+    },
     chefe_fortaleza: {
-      name: "Colmeia Andarilha",
+      name: "Fortilax o Ninho andarilho",
       title: "Fortaleza com patas",
       hp: 2280, dmg: 32, range: 200, fire: 0.7, speed: 28, size: 44, color: "#c45cff", kind: "boss_spawn", boss: true,
-      blurb: "Fortaleza ambulante. Vomita reforço e se cura se você parar de atirar."
+      blurb: "Ninho ambulante. Vomita qualquer bicho da colmeia e se cura se você parar de atirar."
     },
     chefe_espectro: {
-      name: "Mariposa-Véu",
+      name: "Dusk a Mariposa Lunar",
       title: "A Dama Da Noite",
-      hp: 1470, dmg: 26, range: 200, fire: 0.8, speed: 70, size: 30, color: "#c8a0ff", kind: "boss_veil", boss: true, flying: true,
+      hp: 1470, dmg: 26, range: 200, fire: 0.8, speed: 58, size: 40, color: "#c8a0ff", kind: "boss_veil", boss: true, flying: true,
       blurb: "Furtiva. O que ela invoca é isca: atrapalha, não mata."
     },
     chefe_final: {
@@ -66,9 +101,9 @@
       blurb: "Escudo vivo do Marechal. Orbita e toma tiro no lugar dele."
     },
     veu_clone: {
-      name: "Mariposa-Véu",
+      name: "Mariposa Lunar",
       title: "A Dama Da Noite",
-      hp: 420, dmg: 0, range: 200, fire: 0.8, speed: 70, size: 30, color: "#c8a0ff", kind: "boss_veil", boss: true, fake: true, flying: true, codexHide: true,
+      hp: 420, dmg: 0, range: 200, fire: 0.8, speed: 58, size: 40, color: "#c8a0ff", kind: "boss_veil", boss: true, fake: true, flying: true, codexHide: true,
       blurb: "Cópia vazia da Mariposa. Atrasa, não mata."
     }
   };
@@ -77,7 +112,7 @@
     "infantaria", "corredor", "escudeiro", "atirador", "tanque", "drone", "kamikaze",
     "medico", "artilharia", "fragmento", "sombra", "sniper", "ninho", "parasita", "criomante"
   ];
-  G.BOSS_POOL = ["chefe_comandante", "chefe_megatanque", "chefe_fortaleza", "chefe_espectro"];
+  G.BOSS_POOL = ["chefe_invasao", "chefe_comandante", "chefe_vulto", "chefe_megatanque", "chefe_fortaleza", "chefe_espectro", "chefe_arklan"];
 
   (function attachEnemySkills() {
     var E = G.ENEMY_DEFS;
@@ -113,12 +148,28 @@
     E.parasita.active = { name: "Infestação", desc: "Quem está grudado toma mais dano e atira mais devagar." };
     E.criomante.passive = { name: "Frente fria", desc: "Tiro gelado atrasa o passo do esquadrão." };
     E.criomante.active = { name: "Rajada fria", desc: "Cristais de gelo à distância." };
+    E.chefe_invasao.passive = { name: "Espelho da resistência", desc: "Copia o comandante: dispara com duas pistolas, manda tropa pra cima e cura quem fica na aura." };
+    E.chefe_invasao.skills = [
+      { type: "active", name: "Bomba de ácido", desc: "Marca o esquadrão e, depois do mesmo atraso do airstrike aliado, solta ácido no chão.", icon: "☢" },
+      { type: "active", name: "Fuzileiros", desc: "Invoca dois fuzileiros alienígenas. Eles avançam e recuam com a vida baixa.", icon: "🔫" },
+      { type: "active", name: "Aura verde", desc: "Cura o enxame perto dele enquanto a luta rola.", icon: "✚" },
+      { type: "active", name: "Reforço contínuo", desc: "A luta inteira chama inimigos comuns a cada 5–10s.", icon: "👁" }
+    ];
+    E.fuzileiro_alien.passive = { name: "Disciplina", desc: "Fecha no esquadrão. Com a vida baixa, recua." };
+    E.fuzileiro_alien.active = { name: "Rajada", desc: "Tiro de fuzil orgânico." };
     E.chefe_comandante.passive = { name: "Carrasco da linha", desc: "Escudos orbitam nele. Só chama o próximo anel quando o atual morre e passam 10s desprotegido." };
     E.chefe_comandante.skills = [
-      { type: "active", name: "Giro de fogo", desc: "Gira 360° no horário atirando pela frente e por trás, depois repete no anti-horário.", icon: "💥" },
+      { type: "active", name: "Giro de fogo", desc: "A cada 3 sequências de tiro ele gira 360° atirando pelas duas pontas, nos dois sentidos. Tem aviso no chão antes de girar.", icon: "💥" },
+      { type: "active", name: "Tiros sequenciais", desc: "Rajada pela frente e por trás, sem girar o corpo. Só entra no giro na terceira sequência.", icon: "🔫" },
       { type: "active", name: "Escudos arremessados", desc: "Joga os escudos orbitais em cima do esquadrão. Depois eles voltam pra órbita.", icon: "🛡" },
       { type: "active", name: "Guarda orbital", desc: "A cada 20% de HP chama um anel de escudos. Não chama outro enquanto algum estiver vivo. Quando o anel cai, fica 10s sem proteção.", icon: "🛡" },
       { type: "active", name: "Investida", desc: "Abaixo de 50% de HP, aponta e avança no esquadrão.", icon: "⚠" }
+    ];
+    E.chefe_vulto.passive = { name: "Apaga-luz", desc: "A arena escurece. Só as chamas dele devolvem a visão." };
+    E.chefe_vulto.skills = [
+      { type: "active", name: "Razante de napalm", desc: "Marca a linha e atravessa a arena num dash absurdo — horizontal, vertical ou diagonal. Deixa o chão queimando por 5s. Em 50% de vida cobre três linhas.", icon: "✈" },
+      { type: "active", name: "Laser de fogo", desc: "Aviso fino no chão, depois um tiro de chama bem estreito que atravessa a arena quase inteira.", icon: "🔥" },
+      { type: "active", name: "Escuridão", desc: "Por 5s a arena quase some. Só as chamas dele devolvem um pouco de visão. Não causa dano.", icon: "🌑" }
     ];
     E.chefe_megatanque.passive = { name: "Rainha de choque", desc: "Voa como abelha: oito, zumbido, ferrão. Atropela quem fica na frente. Não atira no meio da carga." };
     E.chefe_megatanque.skills = [
@@ -127,9 +178,22 @@
       { type: "active", name: "Ricochete", desc: "A cada 5 investidas, bate nas paredes 5 vezes com o rumo torto.", icon: "💥" },
       { type: "active", name: "Cria tóxica", desc: "A cada 30s invoca uma operária. Os ferrões também envenenam.", icon: "🐝" }
     ];
+    E.chefe_beeking.passive = { name: "Guarda real", desc: "20% do dano na rainha passa pra ele. Cura ela e se joga na frente." };
+    E.chefe_beeking.skills = [
+      { type: "active", name: "Investida da lança", desc: "Marca o chão e dá dash no esquadrão.", icon: "⚔" },
+      { type: "active", name: "Escudo vivo", desc: "Fica na frente da rainha e devolve um pouco de vida.", icon: "🛡" },
+      { type: "active", name: "Fúria do rei", desc: "Se a rainha cair primeiro, ele luta como cavaleiro: estocada, lança e mergulho.", icon: "👑" }
+    ];
+    E.chefe_megatanque.skills.push({ type: "active", name: "Enrage da colmeia", desc: "Se o rei cair, ela fica vermelha, cobra mais rápido, chama mais abelhas e joga mel pra atrasar o passo.", icon: "😡" });
+    E.chefe_arklan.passive = { name: "Planeta abaixo", desc: "A câmera abre. O corpo inteiro aparece quando ele sai da areia." };
+    E.chefe_arklan.skills = [
+      { type: "active", name: "Mergulho", desc: "Enterra, rasga a areia de A pra B pra C e explode do outro lado. O corpo fica exposto no caminho e acerta quem pisar.", icon: "🪱" },
+      { type: "active", name: "Espirar e girar", desc: "Vai ao centro. O jato nasce no norte e gira devagar no horário ou anti-horário. Em 50% viram dois jatos.", icon: "🌪" },
+      { type: "active", name: "Espinhos", desc: "Não ferem: fincam e prendem. Atira nos espinhos pra se mover de novo.", icon: "📌" }
+    ];
     E.chefe_fortaleza.passive = { name: "Muralha ambulante", desc: "Anda devagar e vomita reforço. Os minions dela não largam ouro nem reforço." };
     E.chefe_fortaleza.skills = [
-      { type: "active", name: "Portão", desc: "Invoca formigas-soldado e estaladores do lado.", icon: "🏕" },
+      { type: "active", name: "Portão", desc: "A cada 3s invoca qualquer unidade da colmeia — menos chefes.", icon: "🏕" },
       { type: "active", name: "Fortificar", desc: "Se ninguém acerta ela por um tempo, estaciona, levanta escudo e cura 0,5%/s nela e nos aliados perto.", icon: "✚" },
       { type: "active", name: "Guarnição final", desc: "Ao cair, solta 10 inimigos aleatórios.", icon: "👁" }
     ];
@@ -138,7 +202,8 @@
       { type: "active", name: "Passo atrás", desc: "Teleporta sempre atrás do esquadrão, considerando o movimento pra não nascer no meio deles.", icon: "🌫" },
       { type: "active", name: "Estouro do véu", desc: "A cada 3 a 6 saltos, o teleporte explode. O dano e a cor quente são só dela. Clone explode lilás e não fere.", icon: "💥" },
       { type: "active", name: "Sósia", desc: "A 60% de HP invoca um clone idêntico. A 30%, outro. Clones não dão dano: só distraem.", icon: "👥" },
-      { type: "active", name: "Tiro verdadeiro", desc: "Pra achar a verdadeira, olha a cor do tiro (vermelho) e da explosão. Clone atira e explode em lilás.", icon: "🔫" }
+      { type: "active", name: "Tiro verdadeiro", desc: "Pra achar a verdadeira, olha a cor do tiro (vermelho) e da explosão. Clone atira e explode em lilás.", icon: "🔫" },
+      { type: "active", name: "Feixe do luar", desc: "Holofote azul no centro. Ela absorve a lua e dispara ondas de luz lunar — o mesmo corte da Moonlight Greatsword.", icon: "🌙" }
     ];
     E.chefe_final.passive = { name: "Três camadas", desc: "Fase 1: a Colmeia protege. Fase 2: a Mariposa esconde. Fase 3: o núcleo exposto." };
     E.chefe_final.skills = [
@@ -251,7 +316,7 @@
       flash: 0,
       phase: Math.random() * Math.PI * 2,
       chargeT: type === "chefe_megatanque" ? 1.25 : 0,
-      spawnT: type === "ninho" ? 0.55 : 2.2,
+      spawnT: type === "ninho" ? 0.55 : type === "chefe_fortaleza" ? 3 : 2.2,
       nestStock: type === "ninho" ? 5 + ((Math.random() * 3) | 0) : 0,
       nestCharging: false,
       burstLeft: 0,
@@ -304,6 +369,27 @@
       coreActT: 1.1,
       coreLastAct: "",
       coreActDid: false,
+      seqMode: 0,
+      seqAcc: 0,
+      cascaVolley: 0,
+      seqWindup: 0,
+      invasaoAct: "",
+      invasaoT: 0.85,
+      spawnWaveT: 6,
+      kingMode: "",
+      kingAct: "",
+      kingT: 1.1,
+      queenId: 0,
+      kingId: 0,
+      enrage: false,
+      vultoAct: "",
+      vultoT: 1.8,
+      wormAct: "",
+      wormT: 2.2,
+      buried: false,
+      wormSegs: null,
+      pinOwner: 0,
+      moonReady: 8,
       def: def
     };
   };
@@ -338,6 +424,7 @@
       fromId: opt.fromId || 0,
       pairId: opt.pairId || 0,
       sticky: !!opt.sticky,
+      fromBoss: !!opt.fromBoss,
       arc: opt.arc || null,
       z: opt.z || 0,
       color: opt.color || ""
@@ -596,6 +683,68 @@
     return { rot: 1.56 - bounce, sink: 19, squish: 0.88 + bounce * 0.35, ring: 0 };
   }
 
+  function drawWarAxe(ctx, s, rot, side) {
+    ctx.save();
+    ctx.rotate(rot);
+    ctx.scale(1, side < 0 ? -1 : 1);
+    ctx.strokeStyle = "#3a2410";
+    ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(2.4, s * 0.15);
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.08, s * 0.18);
+    ctx.lineTo(s * 1.18, -s * 0.12);
+    ctx.stroke();
+    ctx.strokeStyle = "#c9a06a";
+    ctx.lineWidth = Math.max(1.1, s * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(s * 0.05, s * 0.12);
+    ctx.lineTo(s * 0.95, -s * 0.08);
+    ctx.stroke();
+    ctx.translate(s * 1.12, -s * 0.12);
+    ctx.rotate(-0.15);
+    ctx.fillStyle = "#6a1810";
+    ctx.beginPath();
+    ctx.moveTo(-2, -s * 0.28);
+    ctx.quadraticCurveTo(s * 0.55, -s * 0.08, s * 0.08, s * 0.32);
+    ctx.lineTo(-1, s * 0.08);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#c41e3a";
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.22);
+    ctx.quadraticCurveTo(s * 0.42, -s * 0.04, 2, s * 0.22);
+    ctx.lineTo(1, s * 0.04);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#ffe0c4";
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.06, -s * 0.16);
+    ctx.quadraticCurveTo(s * 0.3, -0.02, s * 0.08, s * 0.14);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  G.drawWarlordEscort = function (ctx, w, time) {
+    if (!w) return;
+    var dummy = {
+      x: w.x,
+      y: w.y,
+      kind: "warlord",
+      def: { size: w.size || 9, color: "#6a3220", accent: "#c41e3a", role: "warlord", flying: false },
+      rot: w.rot || 0,
+      hp: 1,
+      maxHp: 1,
+      id: w.id || -700,
+      gait: (time || 0) * 2.4 + (w.id || 0),
+      vx: w.vx || 0,
+      vy: 0,
+      leapZ: w.leapZ || 0,
+      escort: true
+    };
+    G.drawPlayerUnit(ctx, dummy, time);
+  };
+
   G.drawPlayerUnit = function (ctx, u, time) {
     if (u.stowed) return;
     var s = u.def.size;
@@ -832,6 +981,100 @@
         fillRound(ctx, -s * 0.55, s * 0.12, s * 0.55, 5, 2, acc);
       }
       ctx.restore();
+    } else if (role === "paladin" || kind === "phalanx") {
+      soldierLegs(ctx, s * 1.05, gait, moving, "#2a3038");
+      ctx.save();
+      ctx.scale(breath, 1 + (breath - 1) * 0.45);
+      oval(ctx, -s * 0.08, s * 0.08, s * 0.42, s * 0.55, "#4a2018");
+      oval(ctx, 0, 0, s * 0.9, s * 0.82, dimCol(col, 0.52));
+      oval(ctx, s * 0.04, -s * 0.06, s * 0.72, s * 0.64, col);
+      gleam(ctx, -s * 0.14, -s * 0.22, s * 0.3, s * 0.12, 0.22);
+      ctx.fillStyle = acc;
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(-s * 0.42, -s * 0.08, s * 0.84, 3);
+      ctx.globalAlpha = 1;
+      oval(ctx, s * 0.08, -s * 0.08, s * 0.4, s * 0.36, dimCol(col, 0.7));
+      fillRound(ctx, s * 0.18, -s * 0.18, s * 0.28, s * 0.12, 1.4, "#121820");
+      ctx.fillStyle = acc;
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.72);
+      ctx.lineTo(s * 0.1, -s * 0.38);
+      ctx.lineTo(-s * 0.1, -s * 0.38);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.translate(-s * 0.78, 0);
+      fillRound(ctx, -s * 0.28, -s * 1.08, s * 0.56, s * 2.16, 5, "#2c3644");
+      fillRound(ctx, -s * 0.2, -s * 0.96, s * 0.4, s * 1.92, 4, "#5a6a7a");
+      ctx.strokeStyle = acc;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.72);
+      ctx.lineTo(-s * 0.12, s * 0.08);
+      ctx.lineTo(0, s * 0.72);
+      ctx.stroke();
+      oval(ctx, 0, 0, s * 0.12, s * 0.12, acc);
+      gleam(ctx, -s * 0.08, -s * 0.55, s * 0.16, s * 0.22, 0.28);
+      ctx.restore();
+      ctx.save();
+      ctx.strokeStyle = "#3a2810";
+      ctx.lineWidth = Math.max(2.6, s * 0.16);
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.12, s * 0.18);
+      ctx.lineTo(s * 1.42, -s * 0.08);
+      ctx.stroke();
+      ctx.strokeStyle = acc;
+      ctx.lineWidth = Math.max(1.2, s * 0.07);
+      ctx.beginPath();
+      ctx.moveTo(s * 0.08, s * 0.14);
+      ctx.lineTo(s * 1.18, -s * 0.05);
+      ctx.stroke();
+      ctx.translate(s * 1.42, -s * 0.08);
+      ctx.rotate(-0.18);
+      ctx.fillStyle = "#e8f0ff";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.12);
+      ctx.lineTo(s * 0.52, 0);
+      ctx.lineTo(0, s * 0.12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = acc;
+      ctx.beginPath();
+      ctx.moveTo(2, -s * 0.06);
+      ctx.lineTo(s * 0.32, 0);
+      ctx.lineTo(2, s * 0.06);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else if (role === "warlord" || kind === "warlord") {
+      soldierLegs(ctx, s * 1.02, gait, moving, "#3a2214");
+      ctx.save();
+      ctx.scale(breath, 1 + (breath - 1) * 0.5);
+      oval(ctx, -s * 0.22, s * 0.12, s * 0.38, s * 0.55, "#5a1818");
+      oval(ctx, 0, 0, s * 0.86, s * 0.78, dimCol(col, 0.55));
+      oval(ctx, s * 0.04, -s * 0.06, s * 0.7, s * 0.62, col);
+      gleam(ctx, -s * 0.16, -s * 0.2, s * 0.28, s * 0.12, 0.2);
+      ctx.fillStyle = acc;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.55, -s * 0.12);
+      ctx.lineTo(s * 0.58, s * 0.08);
+      ctx.lineTo(s * 0.52, s * 0.26);
+      ctx.lineTo(-s * 0.6, s * 0.06);
+      ctx.closePath();
+      ctx.fill();
+      oval(ctx, s * 0.06, -s * 0.06, s * 0.38, s * 0.34, dimCol(col, 0.72));
+      fillRound(ctx, s * 0.12, -s * 0.2, s * 0.32, s * 0.14, 1.5, "#1a120c");
+      ctx.fillStyle = acc;
+      ctx.fillRect(-s * 0.42, -s * 0.48, s * 0.84, 3.2);
+      oval(ctx, 0, -s * 0.52, s * 0.48, s * 0.22, "#4a2a18");
+      ctx.restore();
+      if (u.escort) drawWarAxe(ctx, s, 0.55, 1);
+      else {
+        drawWarAxe(ctx, s, -0.72, 1);
+        drawWarAxe(ctx, s, 0.72, -1);
+      }
     } else {
       var vest = dimCol(col, 0.55);
       soldierLegs(ctx, s, gait, moving, vest);
@@ -865,7 +1108,69 @@
         oval(ctx, 0, 0, s * 0.85, s * 0.75, "rgba(160,144,255,0.25)");
         ctx.globalAlpha = 1;
       }
+      if (kind === "ceifador" || role === "reaper") {
+        var L = u.leap;
+        var hideBlade = L && L.slash && (L.phase === "rip" || (L.phase === "spin" && L.t > L.dur * 0.28));
+        if (!hideBlade) {
+        var spin = u.scytheSpin || 0;
+        if (L && L.slash && L.phase === "out") {
+          var lk = Math.min(1, (L.t || 0) / Math.max(0.08, L.dur || 0.34));
+          spin += -0.4 + Math.pow(lk, 2.2) * 2.8;
+        }
+        ctx.save();
+        ctx.rotate(spin);
+        ctx.strokeStyle = "#1a080c";
+        ctx.lineWidth = Math.max(2.1, s * 0.17);
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(0, s * 0.12);
+        ctx.lineTo(0, -s * 1.38);
+        ctx.stroke();
+        ctx.strokeStyle = acc;
+        ctx.lineWidth = Math.max(1.3, s * 0.09);
+        ctx.beginPath();
+        ctx.moveTo(-1.4, -s * 0.15);
+        ctx.lineTo(1.4, -s * 0.38);
+        ctx.stroke();
+        ctx.translate(0, -s * 1.32);
+        ctx.shadowColor = "rgba(196, 30, 58, 0.8)";
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = "#c41e3a";
+        ctx.beginPath();
+        ctx.moveTo(1.4, 3);
+        ctx.quadraticCurveTo(s * 1.22, s * 0.12, s * 0.22, s * 1.05);
+        ctx.quadraticCurveTo(s * 0.62, s * 0.38, 2, s * 0.28);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "#ffe4ea";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(3, 4);
+        ctx.quadraticCurveTo(s * 1.08, s * 0.16, s * 0.28, s * 0.92);
+        ctx.stroke();
+        ctx.fillStyle = "#6e0b1e";
+        ctx.beginPath();
+        ctx.arc(0, 4, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        }
+      }
+      if (kind === "bandeira") {
+        ctx.fillStyle = "#6a4a22";
+        ctx.fillRect(-2, -s * 1.25, 4, s * 1.4);
+        ctx.fillStyle = "#c45a2a";
+        ctx.beginPath();
+        ctx.moveTo(2, -s * 1.25);
+        ctx.lineTo(s * 0.85, -s * 0.95);
+        ctx.lineTo(2, -s * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = acc;
+        ctx.fillRect(2, -s * 1.18, s * 0.55, 4);
+      }
       ctx.restore();
+      if (role !== "reaper" && kind !== "bandeira" && kind !== "ceifador") {
       var gunLen = s * (role === "sniper" || role === "observer" ? 1.35 : role === "mg" || role === "grenadier" ? 1.1 : 0.78);
       var gunTh = role === "mg" ? 6 : role === "flamer" || role === "inferno" ? 7 : 3.6;
       if (role === "flamer" || role === "inferno") {
@@ -879,6 +1184,7 @@
       } else {
         barrel(ctx, s * 0.28, -2, gunLen, gunTh, "#121828");
         if (role === "dual" || role === "outlaw") barrel(ctx, s * 0.28, 4, gunLen * 0.85, 3.2, "#121828");
+      }
       }
       if (role === "scout" || role === "stealth" || role === "assassin") {
         ctx.fillStyle = dimCol(col, 0.4);
@@ -968,18 +1274,19 @@
       ctx.globalAlpha = 1;
     }
     var bx = u.x + s * 0.85;
-    var by = u.y - s - 6;
+    var by = u.y - s - 4;
     ctx.fillStyle = "rgba(0,0,0,0.72)";
     ctx.beginPath();
-    ctx.arc(bx, by, 9, 0, Math.PI * 2);
+    ctx.arc(bx, by, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = ready ? meta.color : "#9aa4b8";
-    ctx.font = "bold 11px Segoe UI, sans-serif";
+    ctx.font = "bold 8px Segoe UI, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(String((u.activeSlot | 0) + 1), bx, by + 0.5);
-    ctx.font = "12px Segoe UI, sans-serif";
-    ctx.fillText(meta.icon, bx, by - 16);
+    ctx.font = "9px Segoe UI, sans-serif";
+    if (u.def.active.id === "reap" && G.drawScytheIcon) G.drawScytheIcon(ctx, bx, by - 11, 9, ready ? meta.color : "#9aa4b8");
+    else ctx.fillText(meta.icon, bx, by - 11);
     ctx.restore();
   }
 
@@ -1057,19 +1364,56 @@
 
   function beeBody(ctx, e, s, queen) {
     var ph = e.phase || 0;
-    buzzWings(ctx, s, ph, queen ? 1.35 : 1);
-    insectLegs(ctx, s * 0.7, 3, "#1a0c04");
-    var aw = queen ? s * 1.05 : s * 0.78;
-    var ah = queen ? s * 0.62 : s * 0.46;
-    oval(ctx, -s * 0.55, 0, aw, ah, "#1a0c04");
-    oval(ctx, -s * 0.55, 0, aw * 0.9, ah * 0.86, queen ? "#f0b42a" : "#ffc44a");
-    ctx.fillStyle = "#1a0c04";
-    var stripes = queen ? 5 : 3;
+    var king = e.type === "chefe_beeking";
+    var rage = !!e.enrage && queen;
+    var knight = king && !!e.enrage;
+    buzzWings(ctx, s, ph, queen || king ? 1.35 : 1);
+    insectLegs(ctx, s * 0.7, 3, rage ? "#3a0808" : king ? "#3a1408" : "#1a0c04");
+    var aw = queen ? s * 1.05 : king ? s * 0.92 : s * 0.78;
+    var ah = queen ? s * 0.62 : king ? s * 0.54 : s * 0.46;
+    var stripe = rage ? "#7a1010" : king ? "#4a1808" : "#1a0c04";
+    var abdomen = rage ? "#ff4a32" : queen ? "#f0b42a" : king ? (knight ? "#ff6a28" : "#e07028") : "#ffc44a";
+    if (king) {
+      ctx.save();
+      ctx.translate(s * 0.02, s * 0.78);
+      ctx.rotate(0.18);
+      ctx.fillStyle = "#5a2a0c";
+      ctx.beginPath();
+      ctx.ellipse(0, 4, s * 0.62, s * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = knight ? "#c03018" : "#c45a22";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 0.56, s * 0.56, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#ffd24a";
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 0.56, s * 0.56, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255, 210, 74, 0.55)";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 0.38, s * 0.38, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#ffd24a";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.28);
+      ctx.lineTo(s * 0.16, s * 0.06);
+      ctx.lineTo(0, s * 0.22);
+      ctx.lineTo(-s * 0.16, s * 0.06);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    oval(ctx, -s * 0.55, 0, aw, ah, stripe);
+    oval(ctx, -s * 0.55, 0, aw * 0.9, ah * 0.86, abdomen);
+    ctx.fillStyle = stripe;
+    var stripes = queen ? 5 : king ? 4 : 3;
     for (var i = 0; i < stripes; i++) {
       var x = -s * 0.12 - i * (queen ? s * 0.26 : s * 0.28);
       ctx.fillRect(x - (queen ? 3.5 : 2.4), -ah * 0.84, queen ? 7 : 5, ah * 1.68);
     }
-    ctx.fillStyle = "#c8fff0";
+    ctx.fillStyle = rage ? "#ffd0a0" : king ? "#ffb060" : "#c8fff0";
     ctx.beginPath();
     ctx.moveTo(-s * 0.55 - aw + 2, 0);
     ctx.lineTo(-s * 0.55 - aw - s * 0.42, -3);
@@ -1077,22 +1421,22 @@
     ctx.lineTo(-s * 0.55 - aw - s * 0.42, 3);
     ctx.closePath();
     ctx.fill();
-    oval(ctx, s * 0.08, 0, s * (queen ? 0.55 : 0.42), s * (queen ? 0.48 : 0.36), "#3a2208");
-    oval(ctx, s * 0.08, 0, s * (queen ? 0.42 : 0.3), s * (queen ? 0.36 : 0.26), queen ? "#d49020" : "#e8a028");
+    oval(ctx, s * 0.08, 0, s * (queen ? 0.55 : 0.42), s * (queen ? 0.48 : 0.36), rage ? "#4a1010" : king ? "#5a220c" : "#3a2208");
+    oval(ctx, s * 0.08, 0, s * (queen ? 0.42 : 0.3), s * (queen ? 0.36 : 0.26), rage ? "#c03020" : queen ? "#d49020" : king ? "#e87830" : "#e8a028");
     if (queen) {
-      oval(ctx, s * 0.08, 0, s * 0.16, s * 0.16, "#7af7ff");
-      ctx.strokeStyle = "rgba(122, 247, 255, 0.7)";
+      oval(ctx, s * 0.08, 0, s * 0.16, s * 0.16, rage ? "#ff6a3a" : "#7af7ff");
+      ctx.strokeStyle = rage ? "rgba(255, 90, 50, 0.8)" : "rgba(122, 247, 255, 0.7)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(s * 0.08, 0, s * 0.28 + Math.sin(ph * 6) * 2, 0, Math.PI * 2);
       ctx.stroke();
     }
-    oval(ctx, s * 0.62, 0, s * (queen ? 0.42 : 0.32), s * (queen ? 0.36 : 0.28), "#2a1808");
-    oval(ctx, s * 0.62, 0, s * (queen ? 0.32 : 0.24), s * (queen ? 0.28 : 0.2), "#5a3010");
-    eye(ctx, s * 0.78, -s * 0.14, s * (queen ? 0.16 : 0.11), "#1a3040");
-    eye(ctx, s * 0.78, s * 0.14, s * (queen ? 0.16 : 0.11), "#1a3040");
-    mandibles(ctx, s * (queen ? 0.85 : 0.7), "#1a0c04");
-    ctx.strokeStyle = "#1a0c04";
+    oval(ctx, s * 0.62, 0, s * (queen ? 0.42 : 0.32), s * (queen ? 0.36 : 0.28), king ? "#3a1408" : "#2a1808");
+    oval(ctx, s * 0.62, 0, s * (queen ? 0.32 : 0.24), s * (queen ? 0.28 : 0.2), rage ? "#8a2010" : king ? "#a44818" : "#5a3010");
+    eye(ctx, s * 0.78, -s * 0.14, s * (queen ? 0.16 : 0.11), rage ? "#3a0000" : king ? "#2a1008" : "#1a3040");
+    eye(ctx, s * 0.78, s * 0.14, s * (queen ? 0.16 : 0.11), rage ? "#3a0000" : king ? "#2a1008" : "#1a3040");
+    mandibles(ctx, s * (queen ? 0.85 : 0.7), king ? "#3a1408" : "#1a0c04");
+    ctx.strokeStyle = king ? "#3a1408" : "#1a0c04";
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.moveTo(s * 0.7, -s * 0.22);
@@ -1101,15 +1445,71 @@
     ctx.quadraticCurveTo(s * 1.15, s * 0.7, s * 1.35, s * 0.85);
     ctx.stroke();
     if (queen) {
-      ctx.fillStyle = "#ffe08a";
+      ctx.fillStyle = rage ? "#ff6a3a" : "#ffe08a";
       ctx.beginPath();
       ctx.moveTo(s * 0.35, -s * 0.42);
       ctx.lineTo(s * 0.55, -s * 0.92);
       ctx.lineTo(s * 0.72, -s * 0.38);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "#7af7ff";
+      ctx.fillStyle = rage ? "#ff8a4a" : "#7af7ff";
       ctx.fillRect(-s * 0.15, -3, s * 0.7, 6);
+    }
+    if (king) {
+      ctx.strokeStyle = "#4a220c";
+      ctx.lineWidth = 5.2;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(s * 0.22, s * 0.1);
+      ctx.lineTo(s * 2.05, 0);
+      ctx.stroke();
+      ctx.strokeStyle = "#8a4a18";
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.22, s * 0.1);
+      ctx.lineTo(s * 2.02, 0);
+      ctx.stroke();
+      ctx.fillStyle = "#d8c090";
+      ctx.beginPath();
+      ctx.moveTo(s * 2.28, 0);
+      ctx.lineTo(s * 1.88, -s * 0.16);
+      ctx.lineTo(s * 1.88, s * 0.16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#fff4c4";
+      ctx.beginPath();
+      ctx.moveTo(s * 2.28, 0);
+      ctx.lineTo(s * 2.02, -s * 0.07);
+      ctx.lineTo(s * 2.02, s * 0.07);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#ffd24a";
+      ctx.fillRect(s * 0.48, -s * 0.12, s * 0.16, s * 0.28);
+      ctx.fillStyle = "#6a2a0c";
+      ctx.fillRect(s * 0.38, -s * 0.08, s * 0.12, s * 0.2);
+      ctx.fillStyle = "#c47820";
+      ctx.beginPath();
+      ctx.ellipse(s * 0.58, -s * 0.52, s * 0.34, s * 0.16, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffd24a";
+      ctx.beginPath();
+      ctx.ellipse(s * 0.58, -s * 0.56, s * 0.32, s * 0.14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      var pts = [-0.28, 0, 0.28];
+      for (var c = 0; c < pts.length; c++) {
+        var cx = s * 0.58 + pts[c] * s * 0.85;
+        ctx.fillStyle = "#ffd24a";
+        ctx.beginPath();
+        ctx.moveTo(cx - s * 0.08, -s * 0.58);
+        ctx.lineTo(cx, -s * (c === 1 ? 1.12 : 0.96));
+        ctx.lineTo(cx + s * 0.08, -s * 0.58);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = c === 1 ? "#ff6a3a" : "#7af7ff";
+        ctx.beginPath();
+        ctx.arc(cx, -s * (c === 1 ? 1.0 : 0.86), 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
@@ -1137,6 +1537,7 @@
       ctx.arc(0, 0, s + 10, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (e.zDraw) ctx.translate(0, -e.zDraw);
     ctx.rotate(e.rot || 0);
 
     if (t === "orb_escudo") {
@@ -1155,8 +1556,170 @@
         ctx.lineTo(Math.cos(ha) * s, Math.sin(ha) * s);
         ctx.stroke();
       }
-    } else if (t === "chefe_megatanque" || t === "mini_beemote") {
+    } else if (t === "chefe_megatanque" || t === "mini_beemote" || t === "chefe_beeking") {
       beeBody(ctx, e, s, t === "chefe_megatanque");
+    } else if (t === "chefe_invasao") {
+      var capeS = Math.sin(ph * 4.2) * s * 0.16;
+      ctx.fillStyle = "#1a4a1a";
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.15, -s * 0.3);
+      ctx.quadraticCurveTo(-s * 1.35 + capeS, 0, -s * 0.4, s * 0.85);
+      ctx.lineTo(-s * 0.05, s * 0.25);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#2f7a32";
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.1, -s * 0.22);
+      ctx.quadraticCurveTo(-s * 1.05 + capeS, 0, -s * 0.28, s * 0.7);
+      ctx.lineTo(0, s * 0.18);
+      ctx.closePath();
+      ctx.fill();
+      insectLegs(ctx, s * 0.72, 2, "#1a3010");
+      oval(ctx, 0, 0, s * 0.78, s * 0.92, "#245a28");
+      oval(ctx, 0.5, -0.4, s * 0.66, s * 0.8, "#3d8a3a");
+      oval(ctx, 0, -s * 0.52, s * 0.58, s * 0.24, "#1a3010");
+      ctx.strokeStyle = "#8ad422";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.12, -s * 0.62);
+      ctx.quadraticCurveTo(-s * 0.22, -s * 1.05, -s * 0.08, -s * 1.18);
+      ctx.moveTo(s * 0.12, -s * 0.62);
+      ctx.quadraticCurveTo(s * 0.22, -s * 1.05, s * 0.08, -s * 1.18);
+      ctx.stroke();
+      oval(ctx, -s * 0.08, -s * 1.18, 2.2, 2.2, "#b4ff40");
+      oval(ctx, s * 0.08, -s * 1.18, 2.2, 2.2, "#b4ff40");
+      visor(ctx, s * 0.08, -s * 0.16, s * 0.4, s * 0.26, "#0a2010");
+      ctx.fillStyle = "#8ad422";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.1);
+      ctx.lineTo(s * 0.16, s * 0.22);
+      ctx.lineTo(-s * 0.16, s * 0.22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#1a3010";
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.22, -s * 0.05);
+      ctx.lineTo(-s * 0.55, -s * 1.15);
+      ctx.stroke();
+      ctx.fillStyle = "#2a6a28";
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.55, -s * 1.15);
+      ctx.lineTo(-s * 0.08, -s * 1.02);
+      ctx.lineTo(-s * 0.52, -s * 0.78);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#b4ff40";
+      ctx.fillRect(-s * 0.5, -s * 1.08, s * 0.32, 3);
+      barrel(ctx, s * 0.32, -s * 0.22, s * 0.78, 3.2, "#0b1a12");
+      barrel(ctx, s * 0.32, s * 0.22, s * 0.78, 3.2, "#0b1a12");
+      ctx.strokeStyle = "rgba(180, 255, 64, 0.55)";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, s + 5, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (t === "fuzileiro_alien") {
+      insectLegs(ctx, s, 3, "#1a3018");
+      oval(ctx, -s * 0.2, 0, s * 0.7, s * 0.48, "#2a5a30");
+      oval(ctx, s * 0.28, 0, s * 0.5, s * 0.42, "#4aa36a");
+      ctx.fillStyle = "#1a3018";
+      ctx.fillRect(-s * 0.4, -s * 0.32, 3, s * 0.64);
+      eye(ctx, s * 0.42, -s * 0.1, s * 0.1, "#0a2010");
+      eye(ctx, s * 0.42, s * 0.1, s * 0.1, "#0a2010");
+      mandibles(ctx, s * 0.55, "#143018");
+      ctx.fillStyle = "#1a3018";
+      ctx.fillRect(s * 0.45, -2.4, s * 0.85, 4.8);
+      ctx.fillStyle = "#8ad422";
+      ctx.fillRect(s * 1.15, -1.5, s * 0.22, 3);
+    } else if (t === "chefe_vulto") {
+      var flap = 0.7 + Math.sin(ph * 14) * 0.28;
+      ctx.fillStyle = "#1a0808";
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.15, -s * 0.08, s * 1.25 * flap, s * 0.55, -0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.15, s * 0.08, s * 1.25 * flap, s * 0.55, 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#c01818";
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.2, -s * 0.12, s * 0.72 * flap, s * 0.28, -0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.2, s * 0.12, s * 0.72 * flap, s * 0.28, 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      oval(ctx, s * 0.1, 0, s * 0.48, s * 0.38, "#2a0c0c");
+      oval(ctx, s * 0.42, 0, s * 0.34, s * 0.3, "#c01818");
+      oval(ctx, s * 0.55, 0, s * 0.18, s * 0.22, "#ffd24a");
+      ctx.globalAlpha *= 0.85;
+      ctx.fillStyle = "rgba(255, 180, 40, 0.55)";
+      ctx.beginPath();
+      ctx.arc(s * 0.58, 0, s * 0.32 + Math.sin(ph * 8) * 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      eye(ctx, s * 0.52, -s * 0.1, s * 0.1, "#1a0808");
+      eye(ctx, s * 0.52, s * 0.1, s * 0.1, "#1a0808");
+    } else if (t === "chefe_arklan") {
+      if (e.buried) {
+        ctx.fillStyle = "rgba(160, 120, 60, 0.55)";
+        ctx.beginPath();
+        ctx.ellipse(0, s * 0.2, s * 1.15, s * 0.42, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#8a6030";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, s * 0.45 + Math.sin(ph * 10) * 4, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        oval(ctx, -s * 0.85, 0, s * 1.15, s * 0.62, "#6a4a22");
+        oval(ctx, -s * 0.85, 0, s * 1.0, s * 0.5, "#c4a06a");
+        ctx.fillStyle = "#8a6030";
+        for (var rg = 0; rg < 5; rg++) ctx.fillRect(-s * 1.55 + rg * s * 0.28, -s * 0.42, 7, s * 0.84);
+        oval(ctx, s * 0.35, 0, s * 0.7, s * 0.72, "#5a3818");
+        oval(ctx, s * 0.42, 0, s * 0.58, s * 0.58, "#3a2010");
+        ctx.fillStyle = "#1a0c08";
+        ctx.beginPath();
+        ctx.ellipse(s * 0.55, 0, s * 0.42, s * 0.48, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#f0d8a0";
+        for (var td = 0; td < 9; td++) {
+          var ta = -0.9 + (td / 8) * 1.8;
+          ctx.beginPath();
+          ctx.moveTo(s * 0.35, Math.sin(ta) * s * 0.38);
+          ctx.lineTo(s * 1.15, Math.sin(ta) * s * 0.22);
+          ctx.lineTo(s * 0.4, Math.sin(ta) * s * 0.28);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.fillStyle = "#ff6a3a";
+        ctx.beginPath();
+        ctx.ellipse(s * 0.62, 0, s * 0.18, s * 0.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (t === "arklan_spike") {
+      ctx.fillStyle = "#5a3414";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 1.55);
+      ctx.lineTo(s * 0.38, s * 0.55);
+      ctx.lineTo(-s * 0.38, s * 0.55);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#c4a06a";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 1.45);
+      ctx.lineTo(s * 0.16, s * 0.2);
+      ctx.lineTo(-s * 0.12, s * 0.28);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#2a1808";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.08, -s * 0.4);
+      ctx.lineTo(s * 0.12, -s * 0.9);
+      ctx.stroke();
+      ctx.fillStyle = "#8a5a28";
+      ctx.beginPath();
+      ctx.ellipse(0, s * 0.52, s * 0.55, s * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
     } else if (t === "chefe_comandante") {
       insectLegs(ctx, s, 3, "#3a2208");
       oval(ctx, -s * 0.35, 0, s * 0.95, s * 0.7, "#3a2208");
@@ -1179,6 +1742,10 @@
       ctx.fillRect(s * 0.15, -s * 0.72, s * 0.7, 7);
       ctx.fillStyle = "#ffd24a";
       ctx.fillRect(s * 0.55, -4, s * 0.95, 8);
+      ctx.fillStyle = "#c48a20";
+      ctx.fillRect(-s * 1.35, -3.5, s * 0.7, 7);
+      ctx.fillStyle = "#ffd24a";
+      ctx.fillRect(-s * 1.55, -2.5, s * 0.32, 5);
     } else if (t === "chefe_fortaleza") {
       ctx.strokeStyle = "#4a1848";
       ctx.lineWidth = 4;
@@ -1582,10 +2149,26 @@
     if (p.z) ctx.translate(0, -p.z);
     drawDarkShotGlow(ctx, p);
     if (p.kind === "flame") {
-      ctx.fillStyle = p.team === "player" ? "rgba(255,140,40,0.7)" : "#ff8a8a";
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(Math.atan2(p.vy || 0, p.vx || 1));
+      ctx.globalCompositeOperation = "lighter";
+      var fr = Math.max(4.5, p.r || 6);
+      ctx.fillStyle = "rgba(255, 90, 20, 0.45)";
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.ellipse(-fr * 0.2, 0, fr * 1.7, fr * 0.85, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = p.color || (p.team === "player" ? "rgba(255,160,40,0.95)" : "#ff8a8a");
+      ctx.beginPath();
+      ctx.moveTo(fr * 1.8, 0);
+      ctx.quadraticCurveTo(fr * 0.2, -fr * 0.85, -fr * 1.15, 0);
+      ctx.quadraticCurveTo(fr * 0.2, fr * 0.85, fr * 1.8, 0);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 244, 180, 0.9)";
+      ctx.beginPath();
+      ctx.ellipse(fr * 0.15, 0, fr * 0.7, fr * 0.32, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     } else if (p.kind === "missile") {
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -1656,19 +2239,69 @@
       ctx.closePath();
       ctx.fill();
       ctx.restore();
+    } else if (p.kind === "moonwave") {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(Math.atan2(p.vy, p.vx));
+      ctx.strokeStyle = "rgba(160, 220, 255, 0.95)";
+      ctx.fillStyle = "rgba(120, 190, 255, 0.35)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, -1.15, 1.15);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(4, 0, 11, -1.05, 1.05);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(230, 250, 255, 0.8)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(-2, 0, 18, -0.9, 0.9);
+      ctx.stroke();
+      ctx.restore();
+    } else if (p.kind === "lance") {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(Math.atan2(p.vy, p.vx));
+      ctx.fillStyle = "#f0d24a";
+      ctx.fillRect(-14, -2.2, 28, 4.4);
+      ctx.beginPath();
+      ctx.moveTo(16, 0);
+      ctx.lineTo(6, -5);
+      ctx.lineTo(6, 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#fff4c4";
+      ctx.fillRect(-4, -3.2, 6, 6.4);
+      ctx.restore();
+    } else if (p.kind === "honey") {
+      ctx.fillStyle = "rgba(232, 192, 64, 0.85)";
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 230, 140, 0.7)";
+      ctx.beginPath();
+      ctx.arc(p.x - 2, p.y - 2, p.r * 0.45, 0, Math.PI * 2);
+      ctx.fill();
     } else {
       if (p.tracer) {
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(Math.atan2(p.vy, p.vx));
-        ctx.strokeStyle = "rgba(138, 240, 216, 0.85)";
-        ctx.lineWidth = 2.2;
-        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = p.tracerColor || p.color || "rgba(138, 240, 216, 0.85)";
+        ctx.lineWidth = 2.6;
+        ctx.setLineDash([6, 3]);
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-16, 0);
+        ctx.moveTo(4, 0);
+        ctx.lineTo(-22, 0);
         ctx.stroke();
         ctx.setLineDash([]);
+        ctx.fillStyle = p.tracerColor || "#8af0d8";
+        ctx.beginPath();
+        ctx.moveTo(8, 0);
+        ctx.lineTo(-2, -3);
+        ctx.lineTo(-2, 3);
+        ctx.closePath();
+        ctx.fill();
         ctx.restore();
       }
       ctx.fillStyle = p.color || (p.team === "player" ? "#fff4b0" : (p.fake ? "rgba(255, 138, 138, 0.4)" : "#ff8a8a"));
@@ -1707,18 +2340,140 @@
   };
 
   G.drawWarning = function (ctx, w) {
-    var k = 1 - w.t / w.max;
-    ctx.strokeStyle = "rgba(255,70,70," + (0.35 + k * 0.5) + ")";
-    ctx.fillStyle = "rgba(255,40,40," + 0.12 * k + ")";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    var k = 1 - w.t / (w.max || w.t || 1);
+    var col = w.color || "#ff4646";
+    ctx.save();
+    if (w.kind === "lane") {
+      var ang = w.ang || 0;
+      var len = w.len || 240;
+      var hw = w.w || 18;
+      ctx.translate(w.x, w.y);
+      ctx.rotate(ang);
+      ctx.fillStyle = "rgba(255, 80, 40, " + (0.1 + k * 0.2) + ")";
+      if (col.indexOf("#9ad") === 0 || col.indexOf("#c8") === 0) ctx.fillStyle = "rgba(160, 210, 255, " + (0.1 + k * 0.18) + ")";
+      if (col.indexOf("#c4a") === 0 || col.indexOf("#e8c") === 0) ctx.fillStyle = "rgba(220, 180, 80, " + (0.12 + k * 0.16) + ")";
+      if (col.indexOf("#ffe") === 0) ctx.fillStyle = "rgba(255, 220, 80, " + (0.12 + k * 0.18) + ")";
+      ctx.fillRect(0, -hw, len, hw * 2);
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.45 + k * 0.5;
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([14, 8]);
+      ctx.strokeRect(0, -hw, len, hw * 2);
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(8, 0);
+      ctx.lineTo(len - 10, 0);
+      ctx.stroke();
+    } else if (w.kind === "cone") {
+      var cAng = w.ang || 0;
+      var range = w.range || 200;
+      var half = w.spread || 0.5;
+      ctx.translate(w.x, w.y);
+      ctx.fillStyle = "rgba(255, 110, 30, " + (0.1 + k * 0.2) + ")";
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, range, cAng - half, cAng + half);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.5 + k * 0.45;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([10, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (w.kind === "acid") {
+      var ar = w.r || 68;
+      ctx.translate(w.x, w.y);
+      ctx.fillStyle = "rgba(120, 210, 40, " + (0.12 + k * 0.22) + ")";
+      ctx.beginPath();
+      ctx.arc(0, 0, ar, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(180, 255, 70, " + (0.55 + k * 0.4) + ")";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, ar, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(0, 0, ar * (0.28 + k * 0.72), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(230, 255, 120, 0.95)";
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(0, -ar * 0.62);
+      ctx.lineTo(0, ar * 0.08);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, ar * 0.28, 3.4, 0, Math.PI * 2);
+      ctx.stroke();
+      var dropY = -ar * 1.15 + k * ar * 1.15;
+      ctx.fillStyle = "#8ad422";
+      ctx.beginPath();
+      ctx.ellipse(0, dropY, 7, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(210, 255, 90, 0.85)";
+      ctx.beginPath();
+      ctx.ellipse(-2, dropY - 2, 2.5, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (w.kind === "spin") {
+      var sr = w.r || 70;
+      ctx.translate(w.x, w.y);
+      ctx.save();
+      ctx.rotate(k * Math.PI * 2.2);
+      ctx.strokeStyle = "rgba(255, 210, 74, " + (0.5 + k * 0.45) + ")";
+      ctx.fillStyle = "rgba(255, 196, 50, " + (0.08 + k * 0.14) + ")";
+      ctx.lineWidth = 3.2;
+      ctx.setLineDash([12, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, sr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(0, 0, sr * (0.4 + k * 0.6), -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k);
+      ctx.stroke();
+      ctx.lineWidth = 2.4;
+      for (var sa = 0; sa < 4; sa++) {
+        var a = (Math.PI / 2) * sa;
+        ctx.save();
+        ctx.rotate(a);
+        ctx.beginPath();
+        ctx.moveTo(sr - 8, -10);
+        ctx.lineTo(sr + 10, 0);
+        ctx.lineTo(sr - 8, 10);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+      ctx.fillStyle = "rgba(255, 220, 90, " + (0.75 + k * 0.25) + ")";
+      ctx.strokeStyle = "rgba(40, 20, 0, 0.85)";
+      ctx.lineWidth = 4;
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.strokeText("GIRO", 0, 0);
+      ctx.fillText("GIRO", 0, 0);
+    } else {
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.35 + k * 0.55;
+      ctx.fillStyle = "rgba(255,40,40," + 0.12 * k + ")";
+      if (w.kind === "tp") ctx.fillStyle = "rgba(200, 160, 255, " + (0.1 + k * 0.16) + ")";
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r * Math.max(0.15, k), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   };
 
   G.drawChargeTelegraph = function (ctx, e) {
     if (!e || (e.chargeWindup || 0) <= 0) return;
+    if (e.kingAct === "dive") return;
     var ang = e.chargeAim || 0;
     var max = e.chargeWindupMax || 0.9;
     var k = 1 - e.chargeWindup / max;
@@ -1763,6 +2518,140 @@
     ctx.beginPath();
     ctx.arc(0, 0, 7 + k * 5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+  };
+
+  G.drawBossWorld = function (ctx, state) {
+    if (!state || !state.enemies) return;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (e.hp <= 0) continue;
+      if (e.type === "chefe_invasao") {
+        var pulse = 0.45 + Math.sin((e.phase || 0) * 5) * 0.2;
+        ctx.save();
+        ctx.strokeStyle = "rgba(120, 255, 140, " + (0.28 + pulse * 0.35) + ")";
+        ctx.fillStyle = "rgba(80, 220, 120, 0.08)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, 102, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (e.type === "chefe_arklan" && e.wormSegs) {
+        for (var s = 0; s < e.wormSegs.length; s++) {
+          var seg = e.wormSegs[s];
+          var k = s / Math.max(1, e.wormSegs.length - 1);
+          var fade = seg.sticky ? 1 : Math.max(0, Math.min(1, seg.life / 1.35));
+          var sr = (seg.r || 28) * (0.85 + k * 0.35);
+          ctx.save();
+          ctx.translate(seg.x, seg.y);
+          ctx.rotate(seg.rot || 0);
+          ctx.globalAlpha = (0.45 + k * 0.5) * fade;
+          ctx.fillStyle = "#6a4a22";
+          ctx.beginPath();
+          ctx.ellipse(0, 0, sr * 1.15, sr * 0.72, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#c4a06a";
+          ctx.beginPath();
+          ctx.ellipse(0, 0, sr * 0.92, sr * 0.55, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#8a6030";
+          ctx.fillRect(-sr * 0.55, -sr * 0.42, 6, sr * 0.84);
+          ctx.restore();
+        }
+      }
+      if (e.type === "chefe_arklan" && e.wormAct === "spin") {
+        var telling = (e.spinTell || 0) > 0;
+        var firing = (e.wormSpinT || 0) > 0;
+        if (telling || firing) {
+          var jets = e.wormJets || 1;
+          var jlen = Math.hypot((G.playfield(state).x1 - G.playfield(state).x0), (G.playfield(state).y1 - G.playfield(state).y0)) * 0.55;
+          for (var j = 0; j < jets; j++) {
+            var ja = (e.wormSpinAng || -Math.PI / 2) + (j ? Math.PI : 0);
+            ctx.save();
+            ctx.translate(e.x, e.y);
+            ctx.rotate(ja);
+            var grd = ctx.createLinearGradient(0, 0, jlen, 0);
+            if (telling) {
+              grd.addColorStop(0, "rgba(232, 192, 96, 0.22)");
+              grd.addColorStop(1, "rgba(180, 130, 50, 0.02)");
+              ctx.setLineDash([16, 10]);
+            } else {
+              grd.addColorStop(0, "rgba(232, 192, 96, 0.62)");
+              grd.addColorStop(1, "rgba(180, 130, 50, 0.06)");
+            }
+            ctx.fillStyle = grd;
+            ctx.fillRect(28, -14, jlen - 28, 28);
+            ctx.strokeStyle = telling ? "rgba(255, 230, 160, 0.55)" : "rgba(255, 230, 160, 0.85)";
+            ctx.lineWidth = 2.4;
+            ctx.strokeRect(28, -14, jlen - 28, 28);
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
+          var dir = e.wormSpinDir || 1;
+          ctx.save();
+          ctx.translate(e.x, e.y);
+          ctx.strokeStyle = "rgba(255, 220, 140, 0.85)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, 86, -0.9, 0.9);
+          ctx.stroke();
+          ctx.rotate(dir > 0 ? 0.9 : -0.9);
+          ctx.beginPath();
+          ctx.moveTo(86, 0);
+          ctx.lineTo(74, -12);
+          ctx.lineTo(74, 12);
+          ctx.closePath();
+          ctx.fillStyle = "rgba(255, 220, 140, 0.9)";
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+  };
+
+  G.drawArenaDark = function (ctx, state) {
+    var dark = state.vultoDark || 0;
+    var blind = state.vultoBlind || 0;
+    if (dark < 0.02 && blind <= 0) return;
+    var b = G.playfield(state);
+    var cover = 0.58 * dark + (blind > 0 ? 0.34 : 0);
+    var lights = [];
+    var ei;
+    for (ei = 0; ei < (state.enemies || []).length; ei++) {
+      var e = state.enemies[ei];
+      if (e.hp <= 0) continue;
+      if (e.type === "chefe_vulto") lights.push({ x: e.x, y: e.y, r: 96 + Math.sin((e.phase || 0) * 6) * 12, glow: "#ff6a18" });
+    }
+    for (var z = 0; z < (state.zones || []).length; z++) {
+      var zn = state.zones[z];
+      if (zn.kind === "napalm" || zn.kind === "fire") lights.push({ x: zn.x, y: zn.y, r: (zn.r || 28) * 2.2, glow: "#ff7a22" });
+      if (zn.kind === "moon_spot") lights.push({ x: zn.x, y: zn.y, r: 130, glow: "#9ad8ff" });
+    }
+    if (blind <= 0) lights.push({ x: state.squad.x, y: state.squad.y, r: 58, glow: "" });
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(b.x0 - 50, b.y0 - 50, b.x1 - b.x0 + 100, b.y1 - b.y0 + 100);
+    for (var L = 0; L < lights.length; L++) {
+      ctx.moveTo(lights[L].x + lights[L].r, lights[L].y);
+      ctx.arc(lights[L].x, lights[L].y, lights[L].r, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = "rgba(4, 1, 8, " + Math.min(0.93, cover) + ")";
+    ctx.fill("evenodd");
+    ctx.restore();
+    ctx.save();
+    for (var g = 0; g < lights.length; g++) {
+      var lt = lights[g];
+      if (!lt.glow) continue;
+      var rad = ctx.createRadialGradient(lt.x, lt.y, 2, lt.x, lt.y, lt.r);
+      rad.addColorStop(0, lt.glow === "#9ad8ff" ? "rgba(140, 210, 255, 0.28)" : "rgba(255, 140, 40, 0.32)");
+      rad.addColorStop(1, "rgba(255, 80, 20, 0)");
+      ctx.fillStyle = rad;
+      ctx.beginPath();
+      ctx.arc(lt.x, lt.y, lt.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   };
 

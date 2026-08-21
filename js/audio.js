@@ -24,19 +24,27 @@
     "stage-6": "audio/stage-06.ogg",
     "stage-7": "audio/stage-07.ogg",
     "stage-8": "audio/stage-08.ogg",
+    "boss-chefe_invasao": "audio/boss-dusk.ogg",
     "boss-chefe_comandante": "audio/boss-dusk.ogg",
+    "boss-chefe_vulto": "audio/boss-veu.ogg",
     "boss-chefe_megatanque": "audio/boss-beemote.ogg",
+    "boss-chefe_beeking": "audio/boss-beemote.ogg",
+    "boss-chefe_arklan": "audio/boss-cidadela.ogg",
     "boss-chefe_fortaleza": "audio/boss-cidadela.ogg",
     "boss-chefe_espectro": "audio/boss-veu.ogg",
     "boss-chefe_final": "audio/boss-nucleo.ogg"
   };
 
   var BOSS_PRIO = {
-    chefe_final: 5,
-    chefe_espectro: 4,
-    chefe_fortaleza: 3,
-    chefe_megatanque: 2,
-    chefe_comandante: 1
+    chefe_final: 8,
+    chefe_espectro: 7,
+    chefe_arklan: 6,
+    chefe_fortaleza: 5,
+    chefe_vulto: 4,
+    chefe_megatanque: 3,
+    chefe_beeking: 2,
+    chefe_comandante: 2,
+    chefe_invasao: 1
   };
 
   function makeDeck() {

@@ -8,6 +8,12 @@
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
+    <div id="boot-veil" aria-hidden="true">
+      <div class="boot-mark">
+        <p class="kicker">that fake ad game</p>
+        <div class="boot-track"><div class="boot-fill"></div></div>
+      </div>
+    </div>
     <div id="app">
       <canvas id="game"></canvas>
 
@@ -48,6 +54,8 @@
           <button id="btn-shop" class="btn" type="button">Upgrades permanentes</button>
           <button id="btn-codex" class="btn" type="button">Compêndio</button>
           <button id="btn-how" class="btn" type="button">Como jogar</button>
+          <button id="btn-update" class="btn" type="button">Verificar atualizações</button>
+          <p id="update-hint" class="update-hint"></p>
           <p id="menu-stats" class="stats"></p>
           <label class="vol-line">
             <span>Volume</span>
@@ -142,6 +150,23 @@
         </div>
       </div>
 
+      <div id="update-modal" class="hidden">
+        <div class="merge-panel pause-panel">
+          <p class="kicker">github</p>
+          <h2 id="update-title">Atualizações</h2>
+          <p class="tagline" id="update-text">Comparando arquivos com o GitHub.</p>
+          <div id="update-loader" class="update-loader">
+            <div class="update-loader-track">
+              <div id="update-loader-fill" class="update-loader-fill"></div>
+            </div>
+            <p id="update-loader-label" class="update-loader-label">VERIFICANDO</p>
+          </div>
+          <ul id="update-list" class="over-stats"></ul>
+          <button id="btn-update-apply" class="btn primary hidden" type="button">Baixar arquivos novos</button>
+          <button id="btn-update-close" class="btn" type="button">Fechar</button>
+        </div>
+      </div>
+
       <div id="pause-modal" class="hidden">
         <div class="merge-panel pause-panel">
           <p class="kicker">tática</p>
@@ -200,6 +225,7 @@
     <script src="js/upgrades.js"></script>
     <script src="js/game.js"></script>
     <script src="js/codex.js"></script>
+    <script src="js/updater.js"></script>
     <script src="js/main.js"></script>
   </body>
 </html>

@@ -76,6 +76,8 @@
   }
 
   function showScreen(name) {
+    var fromPlay = state.mode === "play" && name !== "play";
+    if (fromPlay) overlay.classList.add("is-fading");
     overlay.classList.toggle("hidden", name === "play");
     overlay.classList.toggle("field-visible", name === "cards");
     overlay.classList.remove("defeat", "lit");
@@ -96,6 +98,15 @@
       closeCodexSheet();
       G.audio.stopBgm();
     }
+    if (fromPlay) {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          overlay.classList.remove("is-fading");
+        });
+      });
+    }
+    if (name === "play") hud.classList.add("hud-enter");
+    else hud.classList.remove("hud-enter");
     syncAimCursor();
   }
 
@@ -505,7 +516,7 @@
           actBox.classList.remove("hidden");
           addSkill(
             actList,
-            meta.icon,
+            G.activeIconHtml ? G.activeIconHtml(def.active.id) : meta.icon,
             def.active.name,
             "Recarga " + def.active.cd + "s",
             meta.detail || def.active.desc
@@ -613,8 +624,9 @@
     stats.innerHTML = "";
     var chips = [
       "HP " + def.hp,
-      def.projectile === "none" ? "suporte" : "Dano " + def.dmg,
-      def.projectile === "none" ? "" : "Alcance " + def.range,
+      def.role === "warlord" || def.role === "paladin" || def.role === "reaper" ? "Dano " + def.dmg : def.projectile === "none" ? "suporte" : "Dano " + def.dmg,
+      def.role === "warlord" || def.role === "paladin" || def.role === "reaper" ? "Alcance " + def.range : def.projectile === "none" ? "" : "Alcance " + def.range,
+      def.role === "reaper" ? "AoE " + (def.aoe || 60) : "",
       def.fire ? def.fire.toFixed(2) + "/s" : ""
     ];
     chips.forEach(function (line) {
@@ -636,7 +648,7 @@
       var meta = G.activeMeta(def.active.id);
       var rowA = document.createElement("div");
       rowA.className = "merge-skill";
-      rowA.innerHTML = "<span class=\"ico\">" + meta.icon + "</span><p><b>Ativa · " + def.active.name + "</b> — " + (meta.detail || def.active.desc) + "</p>";
+      rowA.innerHTML = "<span class=\"ico\">" + (G.activeIconHtml ? G.activeIconHtml(def.active.id) : meta.icon) + "</span><p><b>Ativa · " + def.active.name + "</b> — " + (meta.detail || def.active.desc) + "</p>";
       skills.appendChild(rowA);
     }
     if (!pass.length && !def.active) {
@@ -748,19 +760,26 @@
   }
 
   function startPlay() {
+    if (state.starting) return;
+    state.starting = true;
     G.audio.ensure();
     G.audio.ui();
-    state.defeat = null;
-    state.camLook = null;
-    overlay.classList.remove("defeat", "lit");
-    hud.classList.remove("defeat-hide");
-    G.game.startRun(state);
-    state.pointer.live = false;
-    state.pointer.x = null;
-    state.pointer.y = null;
-    showScreen("play");
-    G.audio.sync(state, 0);
-    syncHud();
+    overlay.classList.add("is-fading");
+    setTimeout(function () {
+      state.starting = false;
+      state.defeat = null;
+      state.camLook = null;
+      overlay.classList.remove("defeat", "lit");
+      hud.classList.remove("defeat-hide");
+      G.game.startRun(state);
+      state.pointer.live = false;
+      state.pointer.x = null;
+      state.pointer.y = null;
+      showScreen("play");
+      overlay.classList.remove("is-fading");
+      G.audio.sync(state, 0);
+      syncHud();
+    }, 380);
   }
 
   function pointerPos(ev) {
@@ -901,6 +920,15 @@
       if (boss.type === "chefe_final") {
         var ph = boss.bossPhase || 1;
         title = ph === 1 ? "Camada 1 · a Colmeia protege" : ph === 2 ? "Camada 2 · a Mariposa esconde" : "Camada 3 · núcleo exposto";
+      } else if (boss.type === "chefe_megatanque") {
+        var kingHud = false;
+        for (var kh = 0; kh < state.enemies.length; kh++) {
+          if (state.enemies[kh].type === "chefe_beeking" && state.enemies[kh].hp > 0) kingHud = true;
+        }
+        if (kingHud) title = (title || "Imperatriz da Colmeia") + " · com o Beeking-08";
+        if (boss.enrage) title = "Enrage · a colmeia sem rei";
+      } else if (boss.type === "chefe_beeking" && boss.enrage) {
+        title = "Fúria do rei";
       }
       document.getElementById("boss-title").textContent = title;
       var pct = Math.max(0, boss.hp / boss.maxHp);
@@ -960,7 +988,7 @@
         }
         slot.innerHTML =
           "<span class=\"key\">" + (s + 1) + "</span>" +
-          "<span class=\"ico\">" + meta.icon + "</span>" +
+          "<span class=\"ico\">" + (G.activeIconHtml ? G.activeIconHtml(aid) : meta.icon) + "</span>" +
           "<span class=\"nm\">Guerrilha</span>" +
           "<span class=\"g-pips\">" +
             pip(guer.crate, guer.crateMax) + "✚</i>" +
@@ -976,7 +1004,7 @@
         slot.innerHTML =
           "<span class=\"key\">" + (s + 1) + "</span>" +
           (n > 1 ? "<span class=\"stack\">×" + n + "</span>" : "") +
-          "<span class=\"ico\">" + meta.icon + "</span>" +
+          "<span class=\"ico\">" + (G.activeIconHtml ? G.activeIconHtml(aid) : meta.icon) + "</span>" +
           "<span class=\"nm\">" + nm + "</span>";
       }
       slot.onclick = (function (idx) {
@@ -1180,6 +1208,7 @@
       if (state.warnings) {
         for (var w = 0; w < state.warnings.length; w++) G.drawWarning(ctx, state.warnings[w]);
       }
+      if (G.drawBossWorld) G.drawBossWorld(ctx, state);
       for (var ct = 0; ct < state.enemies.length; ct++) {
         if (G.drawChargeTelegraph) G.drawChargeTelegraph(ctx, state.enemies[ct]);
       }
@@ -1221,7 +1250,9 @@
       if (G.tactics && G.tactics.draw) G.tactics.draw(ctx, state);
       ctx.restore();
     }
+    if (G.drawArenaDark) G.drawArenaDark(ctx, state);
     if (cmdDraw) G.drawPlayerUnit(ctx, cmdDraw, state.time);
+    if ((state.vultoDark || 0) > 0.15 || (state.vultoBlind || 0) > 0) drawAim();
 
     if (state.run && state.run.smokeT > 0 && worldA > 0.02) {
       var pb = G.playfield(state);
@@ -1257,6 +1288,7 @@
     if (state.vfx && worldA > 0.02) {
       for (var v = 0; v < state.vfx.length; v++) {
         var fx = state.vfx[v];
+        if (fx.slash || fx.phalanxBeam || fx.warSlash) continue;
         var k = Math.max(0, fx.t / fx.max);
         ctx.save();
         ctx.globalAlpha = k;
@@ -1266,25 +1298,27 @@
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillStyle = fx.color;
-          ctx.font = "22px Segoe UI, sans-serif";
-          ctx.fillText(G.activeMeta(fx.id).icon, fx.x, fx.y - 20);
-          ctx.font = "bold 18px Segoe UI, sans-serif";
+          ctx.font = "13px Segoe UI, sans-serif";
+          if (fx.id === "reap" && G.drawScytheIcon) G.drawScytheIcon(ctx, fx.x, fx.y - 12, 13, fx.color || "#c41e3a");
+          else ctx.fillText(G.activeMeta(fx.id).icon, fx.x, fx.y - 12);
+          ctx.font = "bold 12px Segoe UI, sans-serif";
           ctx.lineJoin = "round";
           ctx.strokeStyle = "rgba(0,0,0,0.78)";
-          ctx.lineWidth = 5;
-          ctx.strokeText(fx.title || "", fx.x, fx.y + 4);
-          ctx.fillText(fx.title || "", fx.x, fx.y + 4);
+          ctx.lineWidth = 3;
+          ctx.strokeText(fx.title || "", fx.x, fx.y + 3);
+          ctx.fillText(fx.title || "", fx.x, fx.y + 3);
         } else {
           ctx.strokeStyle = fx.color;
           ctx.lineWidth = 3;
           ctx.beginPath();
           ctx.arc(fx.x, fx.y, 16 + (1 - k) * 46, 0, Math.PI * 2);
           ctx.stroke();
-          ctx.font = "22px Segoe UI, sans-serif";
+          ctx.font = "13px Segoe UI, sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillStyle = fx.color;
-          ctx.fillText(G.activeMeta(fx.id).icon, fx.x, fx.y - 8);
+          if (fx.id === "reap" && G.drawScytheIcon) G.drawScytheIcon(ctx, fx.x, fx.y - 6, 12, fx.color || "#c41e3a");
+          else ctx.fillText(G.activeMeta(fx.id).icon, fx.x, fx.y - 6);
         }
         ctx.restore();
       }
@@ -1333,14 +1367,24 @@
       ctx.globalAlpha = 1;
     }
 
-    if (state.banner && state.banner.t > 0 && !state.defeat) {
-      ctx.globalAlpha = Math.min(1, state.banner.t);
-      ctx.fillStyle = "#ffd24a";
-      ctx.font = "bold 32px Segoe UI, sans-serif";
-      ctx.fillText(state.banner.text, state.W / 2, 92);
-      ctx.globalAlpha = 1;
-    }
     ctx.restore();
+    if (state.banner && state.banner.t > 0 && !state.defeat) {
+      var ba = Math.min(1, state.banner.t);
+      ctx.save();
+      ctx.globalAlpha = ba;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "bold 20px Segoe UI, sans-serif";
+      var tw = ctx.measureText(state.banner.text).width;
+      ctx.fillStyle = "rgba(6, 8, 16, 0.55)";
+      ctx.fillRect(state.W / 2 - tw / 2 - 12, state.H / 2 - 16, tw + 24, 32);
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+      ctx.lineWidth = 4;
+      ctx.strokeText(state.banner.text, state.W / 2, state.H / 2);
+      ctx.fillStyle = "#ffd24a";
+      ctx.fillText(state.banner.text, state.W / 2, state.H / 2);
+      ctx.restore();
+    }
     if (state.defeat && !state.defeat.overlay) {
       var vt = Math.max(0, Math.min(1, state.defeat.t / 1.35));
       vt = vt * vt * (3 - 2 * vt);
@@ -1608,6 +1652,12 @@
   syncVolumeUi();
   resize();
   refreshMenu();
+  overlay.classList.add("boot-wait");
   showScreen("menu");
   requestAnimationFrame(loop);
+  setTimeout(function () {
+    var boot = document.getElementById("boot-veil");
+    if (boot) boot.classList.add("done");
+    overlay.classList.remove("boot-wait");
+  }, 780);
 })(window.TFAG = window.TFAG || {});

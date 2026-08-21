@@ -14,7 +14,8 @@
       waves: [
         [{ type: "infantaria", n: 3 }],
         [{ type: "infantaria", n: 4 }, { type: "corredor", n: 2 }],
-        [{ type: "infantaria", n: 5 }, { type: "corredor", n: 3 }, { type: "kamikaze", n: 1 }]
+        [{ type: "infantaria", n: 5 }, { type: "corredor", n: 3 }, { type: "kamikaze", n: 1 }],
+        [{ type: "chefe_invasao", n: 1 }, { type: "infantaria", n: 2 }]
       ]
     },
     {
@@ -36,7 +37,8 @@
         [{ type: "infantaria", n: 5 }, { type: "escudeiro", n: 1 }, { type: "sombra", n: 2 }],
         [{ type: "atirador", n: 3 }, { type: "corredor", n: 4 }, { type: "fragmento", n: 2 }],
         [{ type: "ninho", n: 1 }, { type: "infantaria", n: 4 }, { type: "drone", n: 2 }],
-        [{ type: "tanque", n: 1 }, { type: "atirador", n: 2 }, { type: "parasita", n: 2 }, { type: "corredor", n: 3 }]
+        [{ type: "tanque", n: 1 }, { type: "atirador", n: 2 }, { type: "parasita", n: 2 }, { type: "corredor", n: 3 }],
+        [{ type: "chefe_vulto", n: 1 }, { type: "sombra", n: 2 }]
       ]
     },
     {
@@ -58,7 +60,8 @@
         [{ type: "corredor", n: 7 }, { type: "criomante", n: 2 }],
         [{ type: "tanque", n: 1 }, { type: "ninho", n: 1 }, { type: "drone", n: 3 }],
         [{ type: "artilharia", n: 2 }, { type: "escudeiro", n: 2 }, { type: "kamikaze", n: 3 }],
-        [{ type: "sniper", n: 2 }, { type: "fragmento", n: 3 }, { type: "medico", n: 1 }]
+        [{ type: "sniper", n: 2 }, { type: "fragmento", n: 3 }, { type: "medico", n: 1 }],
+        [{ type: "chefe_arklan", n: 1 }]
       ]
     },
     {
@@ -161,6 +164,17 @@
         e.bossPhase = 1;
         state.enemies.push(cit);
         state.banner = { text: "Camada 1 · A Colmeia protege o núcleo", t: 2.2 };
+      }
+      if (type === "chefe_megatanque" && !(extra && extra.noLink)) {
+        var king = G.createEnemy("chefe_beeking", e.x - 70, e.y + 20, scaleFor(state.stageIndex));
+        king.queenId = e.id;
+        e.kingId = king.id;
+        state.enemies.push(king);
+        state.banner = { text: "A rainha e o rei", t: 2.0 };
+      }
+      if (type === "chefe_arklan" && !(extra && extra.noLink)) {
+        state.camZoomTo = 0.68;
+        state.banner = { text: "A areia se abre", t: 2.2 };
       }
       return e;
     },
