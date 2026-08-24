@@ -101,6 +101,7 @@
     index: 0,
     muted: false,
     volume: 0.8,
+    debugUnlocked: false,
     slots: [emptySlot(0), emptySlot(1), emptySlot(2)],
 
     load: function () {
@@ -111,6 +112,7 @@
           this.index = clamp(parsed.active, SLOT_COUNT - 1);
           this.muted = !!parsed.muted;
           this.volume = clampVol(parsed.volume);
+          this.debugUnlocked = false;
           this.slots = [];
           for (var i = 0; i < SLOT_COUNT; i++) {
             this.slots[i] = normalizeSlot(parsed.slots && parsed.slots[i], i);
@@ -121,6 +123,7 @@
           this.index = 0;
           this.muted = old ? old.muted : false;
           this.volume = old && old.volume != null ? clampVol(old.volume) : 0.8;
+          this.debugUnlocked = false;
           if (old) this.slots[0] = old.slot;
         }
       } catch (err) {
@@ -128,6 +131,7 @@
         this.index = 0;
         this.muted = false;
         this.volume = 0.8;
+        this.debugUnlocked = false;
       }
       this.data = this.slots[this.index];
       return this.data;

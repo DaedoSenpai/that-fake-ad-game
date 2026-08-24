@@ -184,12 +184,31 @@
       return e;
     },
 
-    startRun: function (state) {
+    startRun: function (state, opts) {
+      opts = opts || {};
       var perm = G.save.data.perm;
       state.run = G.upgrades.defaultRun();
       state.run.invasion = (G.save.data && G.save.data.invasion) | 0;
       state.history = [];
-      state.stageIndex = 0;
+      state.debugFight = !!opts.debug;
+      state.debugOpts = state.debugFight
+        ? {
+            lastWave: !!opts.lastWave,
+            bossType: opts.bossType || "",
+            dmgMul: Math.max(1, opts.dmgMul | 0),
+            god: !!opts.god,
+            startArchives: !!opts.startArchives
+          }
+        : null;
+      if (state.debugFight && opts.invasion != null) {
+        var inv = opts.invasion | 0;
+        var invMax = (G.invasion && G.invasion.MAX) || 8;
+        if (inv < 0) inv = 0;
+        if (inv > invMax) inv = invMax;
+        state.run.invasion = inv;
+      }
+      var maxStage = Math.max(0, G.STAGES.length - 1);
+      state.stageIndex = Math.max(0, Math.min(maxStage, opts.stageIndex | 0));
       state.units = [];
       state.enemies = [];
       state.projectiles = [];
@@ -217,7 +236,9 @@
       G.codex.unlockUnit(firstKind);
       state.run.rerolls = perm.rerolls | 0;
       state.run.reserve = [];
-      state.run.intel = { arquivo: 0 };
+      state.run.intel = {
+        arquivo: state.debugFight && state.debugOpts && state.debugOpts.startArchives ? 1000 : 0
+      };
       state.paused = false;
       state.userPaused = false;
       state.pendingMerge = null;
@@ -241,7 +262,12 @@
     },
 
     startStage: function (state) {
-      state.waveIndex = 0;
+      var stage = G.STAGES[state.stageIndex];
+      var wave = 0;
+      if (state.debugFight && state.debugOpts && state.debugOpts.lastWave && stage && stage.waves) {
+        wave = Math.max(0, stage.waves.length - 1);
+      }
+      state.waveIndex = wave;
       state.enemies = [];
       state.projectiles = [];
       state.drops = [];
@@ -286,18 +312,27 @@
         state.units[r].y = state.squad.y;
         state.units[r].held = false;
       }
-      var stage = G.STAGES[state.stageIndex];
       state.theme = G.THEMES[stage.theme];
       state.bgImg = G.stageBg(stage);
       state.camZoom = 1;
       state.camZoomTo = 1;
-      state.banner = { text: stage.name, t: 1.8 };
+      var customBoss = state.debugFight && state.debugOpts && state.debugOpts.bossType;
+      var bannerName = customBoss && G.ENEMY_DEFS[customBoss]
+        ? G.ENEMY_DEFS[customBoss].name
+        : stage.name;
+      state.banner = { text: bannerName, t: 1.8 };
       for (var h = 0; h < state.units.length; h++) {
         var u = state.units[h];
         u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.22));
       }
-      G.save.noteStage(state.stageIndex + 1);
-      queueWave(state);
+      if (!state.debugFight) G.save.noteStage(state.stageIndex + 1);
+      if (customBoss) {
+        state.spawnQueue = [customBoss];
+        state.spawnTimer = 0.15;
+        G.audio.wave();
+      } else {
+        queueWave(state);
+      }
     },
 
     update: function (state, dt) {

@@ -60,6 +60,7 @@
           <button id="btn-codex" class="btn" type="button">Compêndio</button>
           <button id="btn-how" class="btn" type="button">Como jogar</button>
           <button id="btn-update" class="btn" type="button">Verificar atualizações</button>
+          <button id="btn-ifcara" class="btn ifcara-btn hidden" type="button">Debug Hu3 Mode</button>
           <p id="update-hint" class="update-hint"></p>
           <p id="menu-stats" class="stats"></p>
           <label class="vol-line">
@@ -113,6 +114,60 @@
           </div>
           <div id="codex-grid" class="codex-grid"></div>
           <button id="btn-codex-back" class="btn primary" type="button">Voltar</button>
+        </section>
+
+        <section id="screen-debug" class="screen wide hidden">
+          <p class="kicker">hu3</p>
+          <h2>Debug Hu3 Mode</h2>
+          <p class="tagline">Ferramentas de teste. Luta daqui não conta na campanha nem libera invasão. Fecha o jogo e o menu some.</p>
+          <p id="debug-status" class="debug-status"></p>
+
+          <div class="debug-sec">
+            <p class="kicker">Desbloqueios</p>
+            <p class="debug-hint">Libera progresso neste perfil. O menu em si não grava: fecha o jogo e precisa clicar o comandante de novo.</p>
+            <div class="debug-actions">
+              <button id="dbg-units" class="btn" type="button">Todas as unidades</button>
+              <button id="dbg-upgrades" class="btn" type="button">Todos os upgrades</button>
+              <button id="dbg-invasion" class="btn" type="button">Invasão 1–8</button>
+              <button id="dbg-all" class="btn primary" type="button">Liberar tudo</button>
+            </div>
+          </div>
+
+          <div class="debug-sec">
+            <p class="kicker">Teste de luta</p>
+            <p class="debug-hint">Escolhe fase e invasão. “Só o chefe” pula as ondas. Cheats valem só neste teste.</p>
+            <p id="debug-fight-label" class="debug-fight-label"></p>
+            <div class="debug-field">
+              <p class="kicker">Fase</p>
+              <div id="debug-stages" class="invasion-picks"></div>
+            </div>
+            <div class="debug-field">
+              <p class="kicker">Invasão</p>
+              <div id="debug-invasions" class="invasion-picks"></div>
+            </div>
+            <div class="debug-field">
+              <p class="kicker">Cheats</p>
+              <label class="vol-line debug-dmg-line">
+                <span>Dano</span>
+                <input id="dbg-dmg" type="range" min="1" max="50" step="1" value="1" aria-label="Modificador de dano" />
+                <span id="dbg-dmg-val">1×</span>
+              </label>
+              <label class="debug-check">
+                <input id="dbg-god" type="checkbox" />
+                Invulnerável
+              </label>
+              <label class="debug-check">
+                <input id="dbg-archives" type="checkbox" />
+                Começar com 1000 arquivos
+              </label>
+            </div>
+            <div class="debug-actions">
+              <button id="dbg-stage" class="btn" type="button">Jogar a fase</button>
+              <button id="dbg-boss" class="btn primary" type="button">Só o chefe</button>
+            </div>
+          </div>
+
+          <button id="btn-debug-back" class="btn" type="button">Voltar</button>
         </section>
 
         <section id="screen-over" class="screen hidden">
@@ -208,6 +263,7 @@
             <div class="codex-art">
               <canvas id="codex-art" width="200" height="220"></canvas>
               <p id="codex-sticker" class="codex-sticker"></p>
+              <p id="codex-secret" class="codex-secret hidden"></p>
             </div>
             <div class="codex-info">
               <p class="kicker" id="codex-kicker">arquivo</p>
@@ -240,6 +296,7 @@
     <script src="js/upgrades.js"></script>
     <script src="js/game.js"></script>
     <script src="js/codex.js"></script>
+    <script src="js/debug.js"></script>
     <script src="js/updater.js"></script>
     <script src="js/main.js"></script>
   </body>

@@ -11,7 +11,8 @@
     cards: document.getElementById("screen-cards"),
     codex: document.getElementById("screen-codex"),
     over: document.getElementById("screen-over"),
-    win: document.getElementById("screen-win")
+    win: document.getElementById("screen-win"),
+    debug: document.getElementById("screen-debug")
   };
 
   var state = {
@@ -117,8 +118,9 @@
     var stage = G.STAGES[state.stageIndex] || { name: "—" };
     var coins = (state.run && state.run.coins) | 0;
     var intel = (state.run && state.run.intel) || {};
-    document.getElementById("over-text").textContent =
-      "A linha quebrou na fase " + (state.stageIndex + 1) + ".";
+    document.getElementById("over-text").textContent = state.debugFight
+      ? "Teste encerrado na fase " + (state.stageIndex + 1) + "."
+      : "A linha quebrou na fase " + (state.stageIndex + 1) + ".";
     var rows = [
       ["Fase", (state.stageIndex + 1) + " · " + stage.name],
       ["Onda", (state.waveIndex + 1) + "/" + ((stage.waves && stage.waves.length) || 1)],
@@ -206,8 +208,10 @@
     state.camZoomTo = 4.85;
     state.shake = Math.max(state.shake || 0, 6);
     if (cmd) G.burst(state, cmd.x, cmd.y, "#ffe08a", 18, 90);
-    G.save.bank(state.run.coins);
-    G.save.noteStage(state.stageIndex + 1);
+    if (!state.debugFight) {
+      G.save.bank(state.run.coins);
+      G.save.noteStage(state.stageIndex + 1);
+    }
     fillOverResults();
     G.audio.stopBgm();
     G.audio.over();
@@ -261,12 +265,19 @@
     if (d.t >= 3.45) presentDefeatOverlay();
   }
 
+  function syncIfcaraButton() {
+    var btn = document.getElementById("btn-ifcara");
+    if (!btn || !G.debug) return;
+    btn.classList.toggle("hidden", !G.debug.isOn());
+  }
+
   function refreshMenu() {
     var d = G.save.data;
     document.getElementById("menu-stats").textContent =
       d.name + " · Cofre: " + d.vault + " · Melhor fase: " + (d.bestStage || 0) + "/" + G.STAGES.length;
     renderSlots();
     renderInvasion();
+    syncIfcaraButton();
   }
 
   function renderInvasion() {
@@ -508,6 +519,16 @@
     passList.innerHTML = "";
     actList.innerHTML = "";
     G.drawPortrait(art, team, key, !known);
+    codexSheet = team + ":" + key;
+    var artWrap = art && art.parentElement;
+    var secret = document.getElementById("codex-secret");
+    var isCmd = team === "player" && key === "comandante";
+    if (artWrap) artWrap.classList.toggle("debug-hot", isCmd);
+    if (secret) {
+      var showSecret = isCmd && G.debug && G.debug.isOn();
+      secret.textContent = showSecret ? "Debug Hu3 Mode · menu inicial" : "";
+      secret.classList.toggle("hidden", !showSecret);
+    }
 
     function addSkill(boxList, icon, title, extra, desc, hint) {
       var card = document.createElement("div");
@@ -608,6 +629,10 @@
 
   function closeCodexSheet() {
     document.getElementById("codex-modal").classList.add("hidden");
+    codexSheet = null;
+    var artWrap = document.querySelector(".codex-art");
+    if (artWrap) artWrap.classList.remove("debug-hot", "tap-flash");
+    if (G.debug) G.debug.resetTaps();
   }
 
   function openMerge(pending) {
@@ -815,6 +840,7 @@
   }
 
   var codexTab = "ally";
+  var codexSheet = null;
   function renderCodex() {
     var c = G.codex.counts();
     document.getElementById("codex-stats").textContent =
@@ -906,7 +932,15 @@
     refreshMenu();
   }
 
-  function startPlay() {
+  function finishDebug() {
+    G.audio.ui();
+    setDebugStatus("Teste encerrado.");
+    renderDebug();
+    showScreen("debug");
+  }
+
+  function startPlay(opts) {
+    opts = opts || {};
     if (state.starting) return;
     state.starting = true;
     G.audio.ensure();
@@ -918,7 +952,7 @@
       state.camLook = null;
       overlay.classList.remove("defeat", "lit");
       hud.classList.remove("defeat-hide");
-      G.game.startRun(state);
+      G.game.startRun(state, opts);
       state.pointer.live = false;
       state.pointer.x = null;
       state.pointer.y = null;
@@ -927,6 +961,95 @@
       G.audio.sync(state, 0);
       syncHud();
     }, 380);
+  }
+
+  function setDebugStatus(msg) {
+    var el = document.getElementById("debug-status");
+    if (el) el.textContent = msg || "";
+  }
+
+  function renderDebug(skipPicks) {
+    if (!G.debug) return;
+    var info = G.debug.stageInfo(G.debug.selectedStage);
+    var inv = G.debug.clampInvasion(G.debug.selectedInvasion);
+    var bits = [
+      "Fase " + (G.debug.selectedStage + 1) + " · " + info.name + " · " + info.boss,
+      inv > 0 ? "Invasão " + inv : "Campanha"
+    ];
+    if (G.debug.dmgMul > 1) bits.push("dano " + G.debug.dmgMul + "×");
+    if (G.debug.god) bits.push("invulnerável");
+    if (G.debug.startArchives) bits.push("1000 arquivos");
+    var label = document.getElementById("debug-fight-label");
+    if (label) label.textContent = bits.join(" · ");
+
+    if (!skipPicks) {
+    function fillPicks(boxId, count, selected, onPick, labelFn, titleFn) {
+      var box = document.getElementById(boxId);
+      if (!box) return;
+      box.innerHTML = "";
+      for (var i = 0; i < count; i++) {
+        (function (n) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "invasion-pick" + (selected === n ? " active" : "");
+          btn.textContent = labelFn ? labelFn(n) : String(n + 1);
+          if (titleFn) btn.title = titleFn(n);
+          btn.onclick = function () {
+            G.audio.ui();
+            onPick(n);
+            renderDebug();
+          };
+          box.appendChild(btn);
+        })(i);
+      }
+    }
+
+    fillPicks("debug-stages", G.debug.stageCount(), G.debug.selectedStage, function (n) {
+      G.debug.selectedStage = n;
+    });
+    fillPicks(
+      "debug-invasions",
+      G.debug.invasionMax() + 1,
+      inv,
+      function (n) {
+        G.debug.selectedInvasion = n;
+      },
+      function (n) {
+        return n === 0 ? "C" : String(n);
+      },
+      function (n) {
+        return n === 0
+          ? "Campanha (sem invasão)"
+          : "Inimigos +" + (n * 20) + "% de vida, +" + (n * 10) + "% de quantidade. Chefes das fases 1–" + n + " entram em segunda barra.";
+      }
+    );
+    }
+    var dmgSlider = document.getElementById("dbg-dmg");
+    var dmgVal = document.getElementById("dbg-dmg-val");
+    var godBox = document.getElementById("dbg-god");
+    var archBox = document.getElementById("dbg-archives");
+    if (dmgSlider && dmgSlider.value !== String(G.debug.dmgMul)) dmgSlider.value = String(G.debug.dmgMul);
+    if (dmgVal) dmgVal.textContent = G.debug.dmgMul + "×";
+    if (godBox) godBox.checked = !!G.debug.god;
+    if (archBox) archBox.checked = !!G.debug.startArchives;
+  }
+
+  function openDebug() {
+    if (!G.debug || !G.debug.isOn()) return;
+    setDebugStatus("");
+    renderDebug();
+    showScreen("debug");
+  }
+
+  function leavePlayToMenu() {
+    if (state.debugFight) {
+      setDebugStatus("Teste encerrado.");
+      renderDebug();
+      showScreen("debug");
+    } else {
+      refreshMenu();
+      showScreen("menu");
+    }
   }
 
   function pointerPos(ev) {
@@ -1036,8 +1159,17 @@
   function syncHud(dt) {
     dt = dt || 0.016;
     var stage = G.STAGES[state.stageIndex];
-    document.getElementById("hud-stage").textContent = "Fase " + (state.stageIndex + 1) + " · " + stage.name;
-    document.getElementById("hud-wave").textContent = "Onda " + (state.waveIndex + 1) + "/" + stage.waves.length;
+    document.getElementById("hud-stage").textContent =
+      (state.debugFight ? "Teste · " : "") +
+      "Fase " + (state.stageIndex + 1) + " · " + stage.name +
+      (state.debugFight && (state.run.invasion | 0) > 0 ? " · Inv " + (state.run.invasion | 0) : "");
+    var waveTxt = "Onda " + (state.waveIndex + 1) + "/" + stage.waves.length;
+    if (state.debugFight && state.debugOpts) {
+      var dmgScale = state.debugOpts.dmgMul | 0;
+      if (dmgScale > 1) waveTxt += " · " + dmgScale + "×";
+      if (state.debugOpts.god) waveTxt += " · GOD";
+    }
+    document.getElementById("hud-wave").textContent = waveTxt;
     document.getElementById("hud-coins").textContent = String(state.run.coins);
     document.getElementById("hud-reserve").textContent = G.merge.intelLine(state.run);
     var hp = 0;
@@ -1681,7 +1813,8 @@
         var result = G.game.update(state, simDt);
         if (result === "dead") beginDefeat();
         else if (result === "stageClear") {
-          if (state.stageIndex >= G.STAGES.length - 1) finish(true);
+          if (state.debugFight) finishDebug();
+          else if (state.stageIndex >= G.STAGES.length - 1) finish(true);
           else showCards();
         }
       }
@@ -1692,7 +1825,9 @@
     requestAnimationFrame(loop);
   }
 
-  document.getElementById("btn-play").onclick = startPlay;
+  document.getElementById("btn-play").onclick = function () {
+    startPlay();
+  };
   document.getElementById("btn-merge-cancel").onclick = function () {
     G.audio.ui();
     closeMerge();
@@ -1734,6 +1869,84 @@
   document.getElementById("codex-modal").onclick = function (ev) {
     if (ev.target.id === "codex-modal") closeCodexSheet();
   };
+
+  var cmdTapLock = 0;
+  var cmdTapFlash = 0;
+  document.querySelector(".codex-art").addEventListener("click", function () {
+    if (codexSheet !== "player:comandante" || !G.debug) return;
+    var now = Date.now();
+    if (now - cmdTapLock < 260) return;
+    cmdTapLock = now;
+    var result = G.debug.tapCommander();
+    if (result === "already") return;
+    var wrap = document.querySelector(".codex-art");
+    if (wrap) {
+      wrap.classList.remove("tap-flash");
+      if (cmdTapFlash) clearTimeout(cmdTapFlash);
+      void wrap.offsetWidth;
+      wrap.classList.add("tap-flash");
+      cmdTapFlash = setTimeout(function () {
+        wrap.classList.remove("tap-flash");
+      }, 180);
+    }
+    G.audio.ui();
+    if (result === "unlocked") {
+      syncIfcaraButton();
+      var secret = document.getElementById("codex-secret");
+      if (secret) {
+        secret.textContent = "Debug Hu3 Mode · menu inicial";
+        secret.classList.remove("hidden");
+      }
+    }
+  });
+
+  document.getElementById("btn-ifcara").onclick = function () {
+    G.audio.ui();
+    openDebug();
+  };
+  document.getElementById("btn-debug-back").onclick = function () {
+    G.audio.ui();
+    refreshMenu();
+    showScreen("menu");
+  };
+  document.getElementById("dbg-units").onclick = function () {
+    G.audio.ui();
+    setDebugStatus(G.debug.unlockUnits() ? "Compêndio completo: aliados e inimigos." : "Unidades já estavam todas no compêndio.");
+    refreshMenu();
+  };
+  document.getElementById("dbg-upgrades").onclick = function () {
+    G.audio.ui();
+    setDebugStatus(G.debug.maxUpgrades() ? "Upgrades permanentes no máximo." : "Upgrades já estavam no máximo.");
+    refreshMenu();
+  };
+  document.getElementById("dbg-invasion").onclick = function () {
+    G.audio.ui();
+    setDebugStatus(G.debug.unlockInvasion() ? "Invasão 1 a 8 liberada." : "Invasão já estava toda liberada.");
+    refreshMenu();
+  };
+  document.getElementById("dbg-all").onclick = function () {
+    G.audio.ui();
+    setDebugStatus(G.debug.unlockAll() ? "Tudo liberado neste perfil." : "Nada novo pra liberar.");
+    refreshMenu();
+  };
+  document.getElementById("dbg-dmg").addEventListener("input", function () {
+    G.debug.dmgMul = G.debug.clampDmgMul(this.value);
+    renderDebug(true);
+  });
+  document.getElementById("dbg-god").onchange = function () {
+    G.debug.god = !!this.checked;
+    renderDebug();
+  };
+  document.getElementById("dbg-archives").onchange = function () {
+    G.debug.startArchives = !!this.checked;
+    renderDebug();
+  };
+  document.getElementById("dbg-stage").onclick = function () {
+    startPlay(G.debug.playOpts());
+  };
+  document.getElementById("dbg-boss").onclick = function () {
+    startPlay(G.debug.playOpts({ lastWave: true }));
+  };
   document.getElementById("pause-modal").onclick = function (ev) {
     if (ev.target.id === "pause-modal") {
       G.audio.ui();
@@ -1751,10 +1964,9 @@
   };
   document.getElementById("btn-pause-menu").onclick = function () {
     G.audio.ui();
-    G.save.bank(state.run.coins);
+    if (!state.debugFight) G.save.bank(state.run.coins);
     closePause();
-    refreshMenu();
-    showScreen("menu");
+    leavePlayToMenu();
   };
   window.addEventListener("keydown", function (ev) {
     var tag = ((ev.target && ev.target.tagName) || "").toLowerCase();
@@ -1762,6 +1974,12 @@
     if (ev.key === "Escape") {
       if (!document.getElementById("codex-modal").classList.contains("hidden")) {
         closeCodexSheet();
+        return;
+      }
+      if (state.mode === "debug") {
+        G.audio.ui();
+        refreshMenu();
+        showScreen("menu");
         return;
       }
       if (state.mode === "play" && state.pendingMerge) {
@@ -1883,8 +2101,7 @@
   };
   document.getElementById("btn-over-menu").onclick = document.getElementById("btn-win-menu").onclick = function () {
     G.audio.ui();
-    refreshMenu();
-    showScreen("menu");
+    leavePlayToMenu();
   };
   document.getElementById("btn-mute").onclick = function () {
     G.audio.muted = !G.audio.muted;

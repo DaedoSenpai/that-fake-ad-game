@@ -76,6 +76,10 @@
       }
       if (max > 0) mul *= 1 + (1 - hp / max) * 0.7;
     }
+    if (state.debugFight && state.debugOpts) {
+      var dmgScale = state.debugOpts.dmgMul | 0;
+      if (dmgScale > 1) mul *= dmgScale;
+    }
     return mul;
   }
 
@@ -179,6 +183,10 @@
     if (unit.immortal) {
       unit.flash = 0.06;
       G.burst(state, unit.x, unit.y, "#ffe08a", 3, 28);
+      return;
+    }
+    if (unit.team === "player" && state.debugFight && state.debugOpts && state.debugOpts.god) {
+      unit.flash = 0.06;
       return;
     }
     if (unit.stowed) return;
