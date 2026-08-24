@@ -22,7 +22,7 @@
           <div class="hud-chip" id="hud-stage">Fase 1</div>
           <div class="hud-chip" id="hud-wave">Onda 1/3</div>
           <div class="hud-chip gold" id="hud-coins">0</div>
-          <div class="hud-chip" id="hud-reserve">Arquivo 0</div>
+          <div class="hud-chip gold" id="hud-reserve">Arquivos 0</div>
           <div class="vol-wrap" id="vol-hud">
             <button id="btn-mute" type="button" aria-label="Som">Som</button>
             <input id="vol-slider" type="range" min="0" max="100" step="1" value="80" aria-label="Volume" />
@@ -42,6 +42,7 @@
           </div>
         </div>
         <div id="active-bar"></div>
+        <div id="buff-tray" class="hidden" aria-label="Buffs ativos"></div>
       </div>
 
       <div id="overlay">
@@ -50,6 +51,10 @@
           <h1>That Fake Ad Game</h1>
           <p class="tagline">De um AD Falso a um Jogo de Verdade!.</p>
           <div id="slot-row" class="slot-row"></div>
+          <div id="invasion-row" class="invasion-row">
+            <p class="kicker">Nível de Invasão</p>
+            <div id="invasion-picks" class="invasion-picks"></div>
+          </div>
           <button id="btn-play" class="btn primary" type="button">Jogar</button>
           <button id="btn-shop" class="btn" type="button">Upgrades permanentes</button>
           <button id="btn-codex" class="btn" type="button">Compêndio</button>
@@ -71,9 +76,8 @@
             <li><strong>Andar</strong> é WASD ou as setas. <strong>Shift</strong> dá um ímpeto curto — só pra sair da frente, não é skill de classe.</li>
             <li><strong>Mouse</strong> aponta. Segura o <strong>esquerdo</strong> pra atirar.</li>
             <li>A <strong>passiva</strong> já vem ligada: é o jeito da unidade atirar ou o efeito que ela faz sozinha. A <strong>ativa</strong> fica na barra. <strong>1 a 9</strong> escolhe a skill, <strong>direito</strong> habilidades são usadas na mira.</li>
-            <li>Duas unidades iguais se juntam. Arrasta um no outro para evoluir.</li>
-            <li>O <strong>comandante</strong> não ocupa vaga. O laser marca quem você aponta. Mira num reforço caído pra virar arquivo. Com a ativa dele, segura o <strong>direito</strong>: menu radial — cima aura de cura em volta do comandante (1% da vida máxima por segundo, 5s), direita airstrike, esquerda recruta. Solta na fatia; volta ao centro pra cancelar.</li>
-            <li>Dois arquivos viram <strong>informação confidencial</strong> que sobe uma unidade fraca. Duas confidenciais viram <strong>segurança máxima</strong> e sobem uma unidade para o nível 2.</li>
+            <li>O <strong>comandante</strong> não ocupa vaga. O laser marca quem você aponta. O esquadrão pega o reforço caído e vira arquivo. <strong>R</strong> abre a lista: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Com a ativa dele, segura o <strong>direito</strong>: menu radial — cima aura de cura em volta do comandante (2% da vida máxima por segundo, 5s), direita airstrike, esquerda recruta perto do comandante. Solta na fatia; volta ao centro pra cancelar.</li>
+            <li>Duas unidades iguais se juntam no <strong>Q</strong>. Arrasta uma em cima da outra e solta o Q pra confirmar o merge.</li>
             <li>Cabe <strong>5</strong> soldados no começo. Upgrade permanente sobe isso até 10.</li>
             <li><strong>Esc</strong> pausa. Na pausa, passa o mouse em alguém pra ler o que ele faz.</li>
             <li>O <strong>compêndio</strong> anota unidades aliadas quando você faz merge e inimigo no primeiro abate.</li>
@@ -124,6 +128,16 @@
           <p class="tagline" id="win-text"></p>
           <button id="btn-win-menu" class="btn primary" type="button">Menu</button>
         </section>
+      </div>
+
+      <div id="archive-modal" class="hidden">
+        <div class="merge-panel archive-panel">
+          <p class="kicker">comandante</p>
+          <h2>Arquivos de guerra</h2>
+          <p class="tagline">Você tem <b id="archive-count">0</b>. 1 arquivo convoca um recruta. Promover: nível 0 custa 2, nível 1 custa 4, nível 2 custa 8 — e dobra depois. R ou Esc fecha.</p>
+          <div id="archive-list"></div>
+          <button id="btn-archive-close" class="btn" type="button">Fechar</button>
+        </div>
       </div>
 
       <div id="merge-modal" class="hidden">
@@ -219,6 +233,7 @@
     <script src="js/audio.js"></script>
     <script src="js/units.js"></script>
     <script src="js/entities.js"></script>
+    <script src="js/invasion.js"></script>
     <script src="js/combat.js"></script>
     <script src="js/tactics.js"></script>
     <script src="js/merge.js"></script>

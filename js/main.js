@@ -37,6 +37,7 @@
     dashDir: { x: 0, y: -1 },
     held: null,
     mergeHint: null,
+    mergeSlow: false,
     shake: 0,
     banner: { text: "", t: 0 },
     theme: G.THEMES.field,
@@ -52,6 +53,7 @@
     paused: false,
     userPaused: false,
     pendingMerge: null,
+    archiveMenu: false,
     vfx: [],
     codexTab: "ally"
   };
@@ -93,6 +95,7 @@
     state.mode = name === "play" ? "play" : name;
     if (name !== "play") {
       state.userPaused = false;
+      closeArchive();
       closeMerge();
       closePause();
       closeCodexSheet();
@@ -122,8 +125,8 @@
       ["Abates", String((state.run && state.run.kills) | 0)],
       ["Moedas", "+" + coins + " pro cofre"]
     ];
-    if ((intel.arquivo | 0) || (intel.confidencial | 0) || (intel.maximo | 0)) {
-      rows.push(["Dossiê", (intel.arquivo | 0) + " arq. · " + (intel.confidencial | 0) + " conf."]);
+    if (intel.arquivo | 0) {
+      rows.push(["Arquivos", String(intel.arquivo | 0)]);
     }
     var list = document.getElementById("over-stats");
     list.innerHTML = rows.map(function (r) {
@@ -195,6 +198,7 @@
     };
     state.camLook = { x: state.W / 2, y: state.H / 2 };
     state.userPaused = false;
+    closeArchive();
     closeMerge();
     closePause();
     closeCodexSheet();
@@ -262,6 +266,40 @@
     document.getElementById("menu-stats").textContent =
       d.name + " · Cofre: " + d.vault + " · Melhor fase: " + (d.bestStage || 0) + "/" + G.STAGES.length;
     renderSlots();
+    renderInvasion();
+  }
+
+  function renderInvasion() {
+    var row = document.getElementById("invasion-row");
+    var picks = document.getElementById("invasion-picks");
+    if (!row || !picks || !G.invasion) return;
+    row.classList.remove("hidden");
+    var unlocked = G.invasion.unlocked();
+    var sel = G.invasion.selected();
+    picks.innerHTML = "";
+    function addPick(n, label, locked) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "invasion-pick" + (sel === n ? " active" : "") + (locked ? " locked" : "");
+      btn.disabled = !!locked;
+      btn.textContent = locked ? "🔒 " + label : label;
+      btn.title = locked
+        ? "Termina uma run no nível anterior pra abrir."
+        : n === 0
+          ? "Campanha padrão."
+          : "Inimigos +" + (n * 20) + "% de vida, +" + (n * 10) + "% de quantidade, +" + (n * 2) + "% de velocidade. Chefes das fases 1–" + n + " entram em segunda barra.";
+      btn.onclick = function () {
+        if (locked) return;
+        G.audio.ui();
+        G.invasion.setSelected(n);
+        renderInvasion();
+      };
+      picks.appendChild(btn);
+    }
+    addPick(0, "Campanha", false);
+    for (var i = 1; i <= G.invasion.MAX; i++) addPick(i, String(i), i > unlocked);
+    var play = document.getElementById("btn-play");
+    if (play) play.textContent = sel > 0 ? "Jogar · Invasão " + sel : "Jogar";
   }
 
   function renderSlots() {
@@ -379,14 +417,14 @@
   }
 
   function syncFreeze() {
-    state.paused = !!state.pendingMerge || !!state.userPaused;
+    state.paused = !!state.pendingMerge || !!state.archiveMenu || !!state.userPaused;
     syncAimCursor();
   }
 
   function syncAimCursor() {
     canvas.classList.toggle(
       "aim-hide",
-      state.mode === "play" && !state.userPaused && !state.pendingMerge
+      state.mode === "play" && !state.userPaused && !state.pendingMerge && !state.archiveMenu
     );
   }
 
@@ -399,7 +437,7 @@
   }
 
   function openPause() {
-    if (state.mode !== "play" || state.pendingMerge || state.defeat) return;
+    if (state.mode !== "play" || state.pendingMerge || state.archiveMenu || state.defeat) return;
     state.userPaused = true;
     document.getElementById("pause-modal").classList.remove("hidden");
     syncFreeze();
@@ -584,7 +622,7 @@
       : "Dois <span id=\"merge-from\"></span>";
     document.getElementById("merge-from").textContent = pending.a.def.name;
     document.querySelector("#merge-modal .tagline").textContent = intel
-      ? "O comandante usa o dossiê. Escolhe no que essa unidade vira — passe o mouse pra ver o arquivo."
+      ? "Gasta os arquivos e escolhe no que essa unidade vira. Passe o mouse pra ver o dossiê."
       : "Escolhe o caminho da pirâmide. Passe o mouse na carta pra ver o dossiê.";
     var box = document.getElementById("merge-options");
     box.innerHTML = "";
@@ -660,14 +698,119 @@
   }
 
   function closeMerge() {
-    if (state.pendingMerge && state.pendingMerge.fromBank && !state.pendingMerge.consumed) {
+    var pending = state.pendingMerge;
+    if (pending && pending.fromBank && !pending.consumed) {
       var intel = G.merge.ensureIntel(state.run);
-      var token = state.pendingMerge.token || "confidencial";
-      intel[token] = (intel[token] | 0) + 1;
+      intel.arquivo = (intel.arquivo | 0) + (pending.cost | 0);
     }
+    var reopen = !!(pending && pending.fromBank && state.archiveMenu && state.mode === "play" && !state.defeat);
     state.pendingMerge = null;
     document.getElementById("merge-modal").classList.add("hidden");
     document.getElementById("merge-preview").classList.add("empty");
+    syncFreeze();
+    if (reopen) openArchive();
+  }
+
+  function renderArchiveList() {
+    var intel = G.merge.ensureIntel(state.run);
+    var n = intel.arquivo | 0;
+    document.getElementById("archive-count").textContent = n === 1 ? "1 arquivo" : n + " arquivos";
+    var box = document.getElementById("archive-list");
+    box.innerHTML = "";
+
+    function addRow(opt) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "archive-row" + (opt.special ? " archive-hire" : "");
+      btn.disabled = !opt.ok;
+      var art = document.createElement("canvas");
+      art.className = "archive-art";
+      art.width = 56;
+      art.height = 56;
+      G.drawPortrait(art, "player", opt.kind, false);
+      var meta = document.createElement("span");
+      meta.className = "archive-meta";
+      var title = document.createElement("b");
+      title.textContent = opt.name;
+      var sub = document.createElement("small");
+      sub.textContent = opt.sub;
+      meta.appendChild(title);
+      meta.appendChild(sub);
+      var price = document.createElement("span");
+      price.className = "archive-cost";
+      price.textContent = opt.price;
+      btn.appendChild(art);
+      btn.appendChild(meta);
+      btn.appendChild(price);
+      if (opt.ok && opt.onclick) btn.onclick = opt.onclick;
+      box.appendChild(btn);
+    }
+
+    var room = G.soldierCount(state) < G.maxUnits();
+    var canHire = n >= 1 && room;
+    addRow({
+      special: true,
+      kind: "recruta",
+      name: "Convocar recruta",
+      sub: room ? "Nasce ao lado do comandante" : "Esquadrão cheio",
+      price: !room ? "cheio" : canHire ? "1 arq." : "faltam " + (1 - n),
+      ok: canHire,
+      onclick: function () {
+        if (!G.tactics.recruitWithArquivo(state)) {
+          renderArchiveList();
+          return;
+        }
+        G.audio.ui();
+        renderArchiveList();
+      }
+    });
+
+    var roster = G.merge.listRoster(state);
+    if (!roster.length) {
+      var empty = document.createElement("p");
+      empty.className = "archive-empty";
+      empty.textContent = "Ninguém no esquadrão pra promover.";
+      box.appendChild(empty);
+      return;
+    }
+    roster.forEach(function (u) {
+      var can = G.merge.canEvolve(u);
+      var cost = G.merge.promoteCost(u.gen | 0);
+      var afford = n >= cost;
+      addRow({
+        kind: u.kind,
+        name: u.def.name,
+        sub: can
+          ? "Nível " + (u.gen | 0) + " · " + G.unitStatsLine(u.def)
+          : "Nível " + (u.gen | 0) + " · no topo da pirâmide",
+        price: !can ? "—" : afford ? cost + " arq." : "faltam " + (cost - n),
+        ok: can && afford,
+        onclick: function () {
+          var pending = G.merge.beginPromote(state, u);
+          if (!pending) {
+            renderArchiveList();
+            return;
+          }
+          G.audio.ui();
+          document.getElementById("archive-modal").classList.add("hidden");
+          openMerge(pending);
+        }
+      });
+    });
+  }
+
+  function openArchive() {
+    if (state.mode !== "play" || state.defeat || state.userPaused || state.pendingMerge) return;
+    state.archiveMenu = true;
+    syncFreeze();
+    renderArchiveList();
+    document.getElementById("archive-modal").classList.remove("hidden");
+  }
+
+  function closeArchive() {
+    state.archiveMenu = false;
+    var modal = document.getElementById("archive-modal");
+    if (modal) modal.classList.add("hidden");
     syncFreeze();
   }
 
@@ -751,8 +894,12 @@
     G.save.bank(state.run.coins);
     G.save.noteStage(state.stageIndex + 1);
     if (win) {
+      var next = G.invasion ? G.invasion.noteWin(state.run.invasion | 0) : 0;
+      var extra = next && next > (state.run.invasion | 0)
+        ? " Nível de Invasão " + next + " liberado."
+        : "";
       document.getElementById("win-text").textContent =
-        "Você limpou as " + G.STAGES.length + " fases. +" + state.run.coins + " moedas foram pro cofre.";
+        "Você limpou as " + G.STAGES.length + " fases. +" + state.run.coins + " moedas foram pro cofre." + extra;
       G.audio.win();
       showScreen("win");
     }
@@ -815,6 +962,7 @@
     state.pointer.down = true;
     var target = G.merge.unitAt(state, p.x, p.y);
     var canMerge =
+      state.mergeSlow &&
       target &&
       !target.commander &&
       G.merge.canEvolve(target) &&
@@ -877,8 +1025,7 @@
       return;
     }
     if (state.held) {
-      var pending = G.merge.end(state);
-      if (pending) openMerge(pending);
+      // Confirmação do merge é soltar o Q, não o mouse.
     } else if (state.pointer.fireHold && G.tactics) {
       G.tactics.onFireUp(state);
     }
@@ -931,14 +1078,31 @@
         title = "Fúria do rei";
       }
       document.getElementById("boss-title").textContent = title;
-      var pct = Math.max(0, boss.hp / boss.maxHp);
-      if (pct < state.bossShown) state.bossShown = Math.max(pct, state.bossShown - dt * 0.55);
-      else state.bossShown = pct;
-      document.getElementById("souls-fill").style.width = pct * 100 + "%";
+      var bars = Math.max(1, boss.hpBars || 1);
+      var per = 1 / bars;
+      var frac = Math.max(0, boss.hp / boss.maxHp);
+      var barI = Math.max(0, Math.min(bars - 1, Math.floor((frac - 1e-6) / per)));
+      var local = bars === 1 ? frac : Math.max(0, Math.min(1, (frac - barI * per) / per));
+      if (local < state.bossShown) state.bossShown = Math.max(local, state.bossShown - dt * 0.55);
+      else state.bossShown = local;
+      document.getElementById("souls-fill").style.width = local * 100 + "%";
       document.getElementById("souls-delay").style.width = state.bossShown * 100 + "%";
+      var pips = document.getElementById("souls-pips");
+      if (pips) {
+        pips.classList.toggle("hidden", bars < 2);
+        if (bars >= 2) {
+          var html = "";
+          for (var pi = 0; pi < bars; pi++) {
+            html += "<span class=\"pip" + (pi <= barI ? " on" : "") + "\"></span>";
+          }
+          if (pips.innerHTML !== html) pips.innerHTML = html;
+        }
+      }
     } else {
       bossHud.classList.add("hidden");
       state.bossShown = 1;
+      var pipsOff = document.getElementById("souls-pips");
+      if (pipsOff) pipsOff.classList.add("hidden");
     }
     var bar = document.getElementById("active-bar");
     bar.innerHTML = "";
@@ -1017,6 +1181,47 @@
         };
       })(s);
       bar.appendChild(slot);
+    }
+    syncBuffTray(state);
+  }
+
+  function syncBuffTray(state) {
+    var tray = document.getElementById("buff-tray");
+    if (!tray) return;
+    var list = G.tactics && G.tactics.listStatus ? G.tactics.listStatus(state) : [];
+    tray.classList.toggle("hidden", !list.length);
+    if (!list.length) {
+      tray.innerHTML = "";
+      tray.dataset.sig = "";
+      return;
+    }
+    var sig = list.map(function (b) { return b.id; }).join(",");
+    if (tray.dataset.sig !== sig) {
+      tray.dataset.sig = sig;
+      var html = "<div class=\"buff-kicker\">Buffs</div>";
+      for (var i = 0; i < list.length; i++) {
+        var b = list[i];
+        html +=
+          "<div class=\"buff-icon\" data-id=\"" + b.id + "\" style=\"color:" + b.col + ";border-color:" + b.col + "66\" tabindex=\"0\">" +
+          "<span>" + b.icon + "</span>" +
+          "<span class=\"buff-cd\"><i></i></span>" +
+          "<div class=\"buff-tip\"><b>" + b.name + "</b><p class=\"buff-desc\"></p><span class=\"buff-time\"></span></div>" +
+          "</div>";
+      }
+      tray.innerHTML = html;
+    }
+    var icons = tray.querySelectorAll(".buff-icon");
+    for (var n = 0; n < list.length; n++) {
+      var item = list[n];
+      var el = icons[n];
+      if (!el) continue;
+      var frac = Math.max(0, Math.min(1, item.t / (item.max || 1)));
+      var bar = el.querySelector(".buff-cd i");
+      if (bar) bar.style.width = (frac * 100) + "%";
+      var timeEl = el.querySelector(".buff-time");
+      if (timeEl) timeEl.textContent = item.t.toFixed(1) + "s";
+      var descEl = el.querySelector(".buff-desc");
+      if (descEl) descEl.textContent = item.desc;
     }
   }
 
@@ -1126,7 +1331,7 @@
   }
 
   function drawAim() {
-    if (state.mode !== "play" || state.userPaused || state.pendingMerge || state.defeat) return;
+    if (state.mode !== "play" || state.userPaused || state.pendingMerge || state.archiveMenu || state.defeat) return;
     if (!state.pointer.live || state.pointer.x == null) return;
     var p = G.combat.aimPoint(state);
     var snap = G.combat.aimTarget(state);
@@ -1288,7 +1493,7 @@
     if (state.vfx && worldA > 0.02) {
       for (var v = 0; v < state.vfx.length; v++) {
         var fx = state.vfx[v];
-        if (fx.slash || fx.phalanxBeam || fx.warSlash) continue;
+        if (fx.slash || fx.phalanxBeam || fx.warSlash || fx.flameCone) continue;
         var k = Math.max(0, fx.t / fx.max);
         ctx.save();
         ctx.globalAlpha = k;
@@ -1331,6 +1536,49 @@
       ctx.arc(state.mergeHint.x, state.mergeHint.y, state.mergeHint.def.size + 10, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (state.mergeSlow && state.mode === "play" && !state.paused) {
+      var pbSlow = G.playfield(state);
+      ctx.fillStyle = "rgba(40, 90, 160, 0.12)";
+      ctx.fillRect(pbSlow.x0, pbSlow.y0, pbSlow.x1 - pbSlow.x0, pbSlow.y1 - pbSlow.y0);
+      ctx.strokeStyle = "rgba(140, 200, 255, 0.35)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(pbSlow.x0 + 4, pbSlow.y0 + 4, pbSlow.x1 - pbSlow.x0 - 8, pbSlow.y1 - pbSlow.y0 - 8);
+    }
+    for (var ai = 0; ai < state.enemies.length; ai++) {
+      var ae = state.enemies[ai];
+      if (ae.hp <= 0) continue;
+      if (ae.vultoAct === "arena" && ae.arenaSx != null) {
+        var pbA = G.playfield(state);
+        var ar = ae.arenaR || 122;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(pbA.x0, pbA.y0, pbA.x1 - pbA.x0, pbA.y1 - pbA.y0);
+        ctx.arc(ae.arenaSx, ae.arenaSy, ar, 0, Math.PI * 2, true);
+        ctx.clip("evenodd");
+        ctx.fillStyle = "rgba(180, 20, 20, 0.32)";
+        ctx.fillRect(pbA.x0, pbA.y0, pbA.x1 - pbA.x0, pbA.y1 - pbA.y0);
+        ctx.restore();
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 220, 80, 0.9)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(ae.arenaSx, ae.arenaSy, ar, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (ae.veilAct === "sweep") {
+        var pbS = G.playfield(state);
+        var pad = 42;
+        ctx.save();
+        ctx.fillStyle = "rgba(140, 190, 255, 0.28)";
+        ctx.fillRect(pbS.x0 + pad, pbS.y0 + pad, pbS.x1 - pbS.x0 - pad * 2, pbS.y1 - pbS.y0 - pad * 2);
+        ctx.strokeStyle = "rgba(200, 230, 255, 0.7)";
+        ctx.setLineDash([10, 8]);
+        ctx.strokeRect(pbS.x0 + pad, pbS.y0 + pad, pbS.x1 - pbS.x0 - pad * 2, pbS.y1 - pbS.y0 - pad * 2);
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
 
     for (var i = 0; i < state.particles.length; i++) {
       var pt = state.particles[i];
@@ -1349,6 +1597,26 @@
         var cs = pt.size;
         ctx.fillRect(pt.x - cs * 0.22, pt.y - cs, cs * 0.44, cs * 2);
         ctx.fillRect(pt.x - cs, pt.y - cs * 0.22, cs * 2, cs * 0.44);
+      } else if (pt.flame) {
+        ctx.save();
+        ctx.translate(pt.x, pt.y);
+        ctx.rotate(Math.atan2(pt.vy || 0, pt.vx || 1));
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha *= 0.9;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, pt.size * 1.8, pt.size * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = pt.napalm ? "rgba(255, 255, 255, 0.95)" : "rgba(255, 240, 180, 0.85)";
+        ctx.beginPath();
+        ctx.ellipse(pt.size * 0.2, 0, pt.size * (pt.napalm ? 0.95 : 0.7), pt.size * (pt.napalm ? 0.38 : 0.28), 0, 0, Math.PI * 2);
+        ctx.fill();
+        if (pt.napalm) {
+          ctx.fillStyle = "rgba(170, 230, 255, 0.55)";
+          ctx.beginPath();
+          ctx.ellipse(-pt.size * 0.15, 0, pt.size * 1.1, pt.size * 0.22, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
       } else {
         ctx.beginPath();
         ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
@@ -1408,11 +1676,9 @@
     if (state.mode === "play") {
       if (state.banner) state.banner.t -= dt;
       if (!state.paused) {
-        var result = G.game.update(state, dt);
-        if (state.pendingPromote && !state.pendingMerge) {
-          openMerge(state.pendingPromote);
-          state.pendingPromote = null;
-        }
+        var simDt = dt;
+        if (state.mergeSlow) simDt *= 0.22;
+        var result = G.game.update(state, simDt);
         if (result === "dead") beginDefeat();
         else if (result === "stageClear") {
           if (state.stageIndex >= G.STAGES.length - 1) finish(true);
@@ -1430,6 +1696,16 @@
   document.getElementById("btn-merge-cancel").onclick = function () {
     G.audio.ui();
     closeMerge();
+  };
+  document.getElementById("btn-archive-close").onclick = function () {
+    G.audio.ui();
+    closeArchive();
+  };
+  document.getElementById("archive-modal").onclick = function (ev) {
+    if (ev.target.id === "archive-modal") {
+      G.audio.ui();
+      closeArchive();
+    }
   };
   document.getElementById("btn-codex").onclick = function () {
     G.audio.ui();
@@ -1488,10 +1764,27 @@
         closeCodexSheet();
         return;
       }
-      if (state.mode === "play" && !state.pendingMerge) {
+      if (state.mode === "play" && state.pendingMerge) {
+        G.audio.ui();
+        closeMerge();
+        return;
+      }
+      if (state.mode === "play" && state.archiveMenu) {
+        G.audio.ui();
+        closeArchive();
+        return;
+      }
+      if (state.mode === "play") {
         if (state.userPaused) closePause();
         else openPause();
       }
+      return;
+    }
+    if ((ev.code === "KeyR" || ev.key === "r" || ev.key === "R") && state.mode === "play" && !state.defeat && !state.pendingMerge && !state.userPaused) {
+      ev.preventDefault();
+      G.audio.ui();
+      if (state.archiveMenu) closeArchive();
+      else openArchive();
       return;
     }
     if (state.mode === "play") {
@@ -1511,6 +1804,10 @@
         ev.preventDefault();
       }
       if (ev.key === "Shift" && !ev.repeat && !state.paused && !state.defeat) G.combat.tryDash(state);
+      if ((ev.code === "KeyQ" || ev.key === "q" || ev.key === "Q") && !ev.repeat && !state.paused && !state.defeat && !state.pendingMerge) {
+        ev.preventDefault();
+        state.mergeSlow = true;
+      }
     }
     if (state.mode !== "play" || state.paused) return;
     var n = ev.key === "1" || ev.key === "2" || ev.key === "3" || ev.key === "4" || ev.key === "5" || ev.key === "6" || ev.key === "7" || ev.key === "8" || ev.key === "9"
@@ -1527,9 +1824,26 @@
   });
   window.addEventListener("keyup", function (ev) {
     if (state.keys) state.keys[ev.code] = false;
+    if (ev.code === "KeyQ" || ev.key === "q" || ev.key === "Q") {
+      if (state.mergeSlow && state.mode === "play" && !state.paused && !state.pendingMerge) {
+        var pending = G.merge.end(state);
+        if (pending) openMerge(pending);
+      } else if (state.held) {
+        state.held.held = false;
+        state.held = null;
+        state.mergeHint = null;
+      }
+      state.mergeSlow = false;
+    }
   });
   window.addEventListener("blur", function () {
     state.keys = {};
+    state.mergeSlow = false;
+    if (state.held) {
+      state.held.held = false;
+      state.held = null;
+      state.mergeHint = null;
+    }
   });
   document.getElementById("btn-how").onclick = function () {
     G.audio.ui();
@@ -1627,7 +1941,7 @@
     state.pointer.sx = p.sx;
     state.pointer.sy = p.sy;
     if (state.mode === "play") state.pointer.live = true;
-    if (state.userPaused || state.paused || state.stageOutro || state.pendingMerge) return;
+    if (state.userPaused || state.paused || state.stageOutro || state.pendingMerge || state.archiveMenu) return;
     G.audio.ensure();
     if (G.tactics) G.tactics.onAltDown(state);
   }

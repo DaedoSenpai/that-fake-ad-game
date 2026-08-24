@@ -14,7 +14,7 @@
   }
 
   function unitHittable(u) {
-    return u && u.hp > 0 && !u.stowed;
+    return u && u.hp > 0 && !u.stowed && !u.stolen;
   }
 
   function nearest(list, x, y, ignoreId) {
@@ -98,6 +98,13 @@
     var slow = e.slowT > 0 || e.freezeT > 0 ? 0.42 : 1;
     e.x += (dx / len) * speed * slow * dt;
     e.y += (dy / len) * speed * slow * dt;
+    if ((e.drunkT || 0) > 0) {
+      e.drunkPhase = (e.drunkPhase || Math.random() * 6) + dt * 9;
+      var sway = Math.sin(e.drunkPhase) * 52 * dt;
+      var pa = Math.atan2(dy, dx) + Math.PI / 2;
+      e.x += Math.cos(pa) * sway;
+      e.y += Math.sin(pa) * sway;
+    }
   }
 
   function chase(state, e, target, speed, dt) {
@@ -169,7 +176,13 @@
 
   function hurt(state, unit, amount, srcX, srcY, fromPlayer, opts) {
     if (unit.hp <= 0) return;
+    if (unit.immortal) {
+      unit.flash = 0.06;
+      G.burst(state, unit.x, unit.y, "#ffe08a", 3, 28);
+      return;
+    }
     if (unit.stowed) return;
+    if (fromPlayer && unit.stolen) return;
     var trueDmg = opts && opts.trueDmg;
     if (unit.team === "player") {
       if (G.tactics && G.tactics.blockHurt && G.tactics.blockHurt(state, unit, opts)) return;
@@ -188,6 +201,7 @@
         }
         if (unit.commander) amount *= 0.9;
         if (unit.parasite > 0) amount *= 1.15;
+        if ((unit.exposedT || 0) > 0) amount *= 1.35;
       }
     } else {
       unit.lastHitT = 0;
@@ -257,7 +271,7 @@
     var list = team === "player" ? state.enemies : state.units;
     for (var i = 0; i < list.length; i++) {
       var t = list[i];
-      if (t.hp <= 0 || t.stowed) continue;
+      if (t.hp <= 0 || t.stowed || t.stolen) continue;
       if (team === "enemy" && G.tactics && G.tactics.shieldProtects && G.tactics.shieldProtects(state, x, y, t.x, t.y)) continue;
       var dx = t.x - x;
       var dy = t.y - y;
@@ -354,6 +368,9 @@
         if (state.units[i].id === e.attached) state.units[i].parasite = Math.max(0, state.units[i].parasite - 1);
       }
     }
+    if (e.type === "chefe_megatanque" || e.type === "chefe_beeking") {
+      if (G.invasion) G.invasion.maybePrincess(state);
+    }
     if (e.type === "orb_escudo" && e.orbitHost) {
       var dusk = findEnemy(state, e.orbitHost);
       if (dusk && countOrbitShields(state, e.orbitHost) === 0) {
@@ -376,15 +393,11 @@
         G.game.spawnAt(state, pick, e.x + Math.cos(ang) * 42, e.y + Math.sin(ang) * 42);
       }
       state.floaters.push(G.createFloater(e.x, e.y - 26, "guarnição", "#e05cff"));
-    }
-    if (e.type === "chefe_beeking") {
-      var queen = findEnemy(state, e.queenId);
-      if (queen && queen.hp > 0) {
-        queen.enrage = true;
-        queen.miniT = Math.min(queen.miniT || 30, 8);
-        queen.colorShift = 1;
-        state.banner = { text: "A rainha enlouquece", t: 2.1 };
-        state.floaters.push(G.createFloater(queen.x, queen.y - 28, "enrage", "#ff4a3a"));
+      if (e.invP2) {
+        var minibosses = ["formiga_leao", "besouro_bombardeiro", "louva_deus"];
+        var mini = minibosses[(Math.random() * minibosses.length) | 0];
+        G.game.spawnAt(state, mini, e.x, e.y);
+        state.banner = { text: G.ENEMY_DEFS[mini].name, t: 2.2 };
       }
     }
     if (e.type === "chefe_megatanque") {
@@ -397,6 +410,18 @@
         state.banner = { text: "O rei não recua", t: 2.1 };
         state.floaters.push(G.createFloater(kingLeft.x, kingLeft.y - 28, "cavaleiro", "#ffe08a"));
       }
+      if (G.invasion) G.invasion.maybePrincess(state);
+    }
+    if (e.type === "chefe_beeking") {
+      var queen = findEnemy(state, e.queenId);
+      if (queen && queen.hp > 0) {
+        queen.enrage = true;
+        queen.miniT = Math.min(queen.miniT || 30, 8);
+        queen.colorShift = 1;
+        state.banner = { text: "A rainha enlouquece", t: 2.1 };
+        state.floaters.push(G.createFloater(queen.x, queen.y - 28, "enrage", "#ff4a3a"));
+      }
+      if (G.invasion) G.invasion.maybePrincess(state);
     }
     if (e.type === "chefe_arklan") {
       var keepZ = false;
@@ -451,7 +476,7 @@
   function flameAt(state, u, target, opt) {
     opt = opt || {};
     var ang = Math.atan2(target.y - u.y, target.x - u.x);
-    var cone = 0.62;
+    var cone = 0.38;
     var range = u.def.range * (1 + (state.run.flame || 0) * 0.12);
     var dmg = Math.round(u.def.dmg * dmgMul(state));
     var burnMul = opt.burnMul || 1;
@@ -466,24 +491,33 @@
       var diff = Math.abs(Math.atan2(Math.sin(a - ang), Math.cos(a - ang)));
       if (diff < cone) {
         hurt(state, e, dmg, u.x, u.y, true);
-        if (u.kind === "lanca_chamas") {
+        if (u.kind === "lanca_chamas" || u.kind === "inferno") {
           e.burnT = 5;
           e.burnDps = Math.max(e.burnDps || 0, u.def.dmg * 0.85 * dmgMul(state) * burnMul);
         }
       }
     }
-    for (var n = 0; n < 5; n++) {
-      var spread = ang + (Math.random() - 0.5) * cone * 1.6;
-      var sp = 90 + Math.random() * 80;
+    var napalm = !!opt.napalm;
+    var pal = napalm
+      ? ["#ffffff", "#fff4c8", "#ffd27a", "#ff4a18", "#7ad8ff"]
+      : ["#ff9a2a", "#ffe060"];
+    var speed = napalm ? 760 : 640;
+    var life = range / speed;
+    var count = napalm ? 42 : 18;
+    for (var n = 0; n < count; n++) {
+      var spread = ang + (Math.random() - 0.5) * cone * 2;
+      var sp = speed * (0.72 + Math.random() * 0.38);
       state.particles.push({
-        x: u.x + Math.cos(ang) * 10,
-        y: u.y + Math.sin(ang) * 10,
+        x: u.x + Math.cos(ang) * 12,
+        y: u.y + Math.sin(ang) * 12,
         vx: Math.cos(spread) * sp,
         vy: Math.sin(spread) * sp,
-        life: 0.22,
-        max: 0.22,
-        size: 3 + Math.random() * 4,
-        color: Math.random() > 0.5 ? "#ff9a2a" : "#ffe060"
+        life: life * (0.65 + Math.random() * 0.4),
+        max: life,
+        size: napalm ? 8 + Math.random() * 10 : 5 + Math.random() * 7,
+        color: pal[(Math.random() * pal.length) | 0],
+        flame: true,
+        napalm: napalm
       });
     }
   }
@@ -518,30 +552,33 @@
     if ((e.silenceT || 0) > 0) return;
     var speed = extra.speed || (e.def.boss ? 280 : 250);
     var dmg = extra.dmg != null ? extra.dmg : e.def.dmg;
-    if (e.fake || e.decoy || extra.fake) dmg = 0;
+    if (extra.fake) dmg = 0;
+    if (e.dmgMul) dmg = Math.round(dmg * e.dmgMul);
     var shotCol = extra.color || "";
     if (!shotCol && e.def && e.def.kind === "boss_veil") {
-      shotCol = e.fake || e.decoy ? "#c8b4ff" : "#ff4a62";
+      shotCol = "#9ad8ff";
     }
-    state.projectiles.push(
-      G.createProjectile({
+    var proj = G.createProjectile({
         x: e.x + (extra.ox || 0) + Math.cos(ang) * (extra.muzzle || 0),
         y: e.y + (extra.oy || 0) + Math.sin(ang) * (extra.muzzle || 0),
         vx: Math.cos(ang) * speed,
         vy: Math.sin(ang) * speed,
         dmg: dmg,
-        team: "enemy",
+        team: extra.team || (e.stolen ? "player" : "enemy"),
         kind: kind || "bullet",
         life: extra.life || 1.4,
         r: extra.r || (e.def.boss ? 5 : 3),
         poison: !!extra.poison,
-        fake: !!(e.fake || e.decoy || extra.fake),
+        fake: !!extra.fake,
         color: shotCol,
         hitsLeft: extra.hitsLeft || 1,
         fromBoss: !!(e.def && e.def.boss),
-        fromId: e.id
-      })
-    );
+        fromId: e.id,
+        homing: !!extra.homing
+      });
+    if (extra.slashLen) proj.slashLen = extra.slashLen;
+    if (extra.exposed) proj.exposed = true;
+    state.projectiles.push(proj);
   }
 
   function enemyFan(state, e, target, n, spread, kind, extra) {
@@ -565,7 +602,8 @@
   function spawnDuskShields(state, e) {
     if ((e.shieldLockT || 0) > 0) return false;
     if (countOrbitShields(state, e.id) > 0) return false;
-    for (var k = 0; k < 4; k++) {
+    var n = e.invP2 ? 6 : 4;
+    for (var k = 0; k < n; k++) {
       G.game.spawnAt(state, "orb_escudo", e.x, e.y, {
         orbitHost: e.id,
         orbitIndex: k,
@@ -697,7 +735,7 @@
     G.clampPlay(e, state);
     if (withBoom) {
       var fake = !!(e.fake || e.decoy);
-      explode(state, e.x, e.y, fake ? 96 : 124, fake ? 0 : 42, "enemy", fake ? "#c8b4ff" : "#ff4a62");
+      explode(state, e.x, e.y, fake ? 96 : 124, fake ? 22 : 42, "enemy", "#9ad8ff");
       G.audio.explosion();
     } else {
       G.burst(state, e.x, e.y, "#c8a0ff", 16, 90);
@@ -722,8 +760,54 @@
       noDrop: true,
       nextBoom: 3 + ((Math.random() * 4) | 0)
     });
-    G.burst(state, c.x, c.y, "#c8a0ff", 14, 80);
+    G.burst(state, c.x, c.y, "#9ad8ff", 14, 80);
+    state.floaters.push(G.createFloater(c.x, c.y - 18, "clone", "#9ad8ff"));
     return c;
+  }
+
+  function applyNestBuff(e) {
+    e.def = Object.assign({}, e.def);
+    var roll = (Math.random() * 3) | 0;
+    e.nestBuff = roll === 0 ? "speed" : roll === 1 ? "dmg" : "fire";
+    if (roll === 0) e.def.speed = Math.round(e.def.speed * 1.55);
+    else if (roll === 1) e.def.dmg = Math.round(e.def.dmg * 1.45);
+    else e.def.fire *= 1.55;
+    return e;
+  }
+
+  function fuseNestUnits(state, host) {
+    var pool = [];
+    for (var i = 0; i < state.enemies.length; i++) {
+      var n = state.enemies[i];
+      if (n.hp <= 0 || n.id === host.id) continue;
+      if (n.def.boss || n.fused || n.type.indexOf("chefe") === 0) continue;
+      pool.push(n);
+    }
+    if (pool.length < 2) return;
+    var a = pool[(Math.random() * pool.length) | 0];
+    var b = a;
+    var guard = 0;
+    while (b.id === a.id && guard++ < 8) b = pool[(Math.random() * pool.length) | 0];
+    if (b.id === a.id) return;
+    var mx = (a.x + b.x) / 2;
+    var my = (a.y + b.y) / 2;
+    var fused = G.game.spawnAt(state, a.type, mx, my, { noDrop: true, fused: true, fuseKind: b.def.kind });
+    fused.def = Object.assign({}, fused.def);
+    fused.maxHp = Math.round(a.maxHp + b.maxHp * 0.55);
+    fused.hp = fused.maxHp;
+    fused.def.hp = fused.maxHp;
+    fused.def.dmg = Math.round((a.def.dmg + b.def.dmg) * 0.72);
+    fused.def.speed = Math.round(Math.max(a.def.speed, b.def.speed) * 1.12);
+    fused.def.fire = Math.max(a.def.fire, b.def.fire) * 1.2;
+    fused.def.size = Math.min(28, Math.max(a.def.size, b.def.size) + 5);
+    fused.fuseShot = (b.def.kind === "cryo") ? "ice" : (b.def.kind === "artillery" ? "bullet" : "bullet");
+    fused.fuseCd = 0.4;
+    a.hp = 0;
+    a.noDrop = true;
+    b.hp = 0;
+    b.noDrop = true;
+    G.burst(state, mx, my, "#c45cff", 22, 140);
+    state.floaters.push(G.createFloater(mx, my - 20, "fusão", "#c45cff"));
   }
 
   function beginCoreAct(e, act, dur) {
@@ -921,7 +1005,7 @@
 
   function isInvasaoMinion(state, e) {
     if (!e || e.def.boss || e.type === "chefe_invasao") return false;
-    if (e.rushMinion || e.ownerId || e.type === "fuzileiro_alien") return true;
+    if (e.rushMinion || e.ownerId || e.type === "fuzileiro_alien" || e.type === "batedor_alien" || e.type === "pistoleiro_alien") return true;
     return !!invasaoHost(state, e);
   }
 
@@ -931,8 +1015,24 @@
       return true;
     }
     if (e.retreatHeal && e.hp < e.maxHp * 0.82) return true;
+    if (e.retreatHeal) e.justHealed = 2.4;
     e.retreatHeal = false;
     return false;
+  }
+
+  function countInvasaoMinions(state) {
+    var n = 0;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var m = state.enemies[i];
+      if (m.hp > 0 && isInvasaoMinion(state, m)) n++;
+    }
+    return n;
+  }
+
+  function trySpawnInvasao(state, e, type, x, y, force) {
+    var cap = (e && (e.invP2 || e.inv)) ? 8 : 5;
+    if (!force && countInvasaoMinions(state) >= cap) return null;
+    return G.game.spawnAt(state, type, x, y, { noDrop: true, rushMinion: true, ownerId: e.id });
   }
 
   function retreatBehindBoss(state, e, boss, dt, spd) {
@@ -954,20 +1054,67 @@
   function tickInvasao(state, e, target, dt, spd) {
     var d = dist(e, target);
     var prefer = 176;
+    var p2 = G.invasion && G.invasion.isP2(e);
+    if (G.invasion && G.invasion.enterP2(state, e, "Irwin · segunda barra")) {
+      trySpawnInvasao(state, e, "fuzileiro_alien", e.x + 36, e.y + 10, true);
+      trySpawnInvasao(state, e, "fuzileiro_alien", e.x - 36, e.y - 10, true);
+      trySpawnInvasao(state, e, "batedor_alien", e.x + 20, e.y - 28, true);
+      trySpawnInvasao(state, e, "batedor_alien", e.x - 20, e.y + 28, true);
+      trySpawnInvasao(state, e, "pistoleiro_alien", e.x + 48, e.y, true);
+      trySpawnInvasao(state, e, "pistoleiro_alien", e.x - 48, e.y, true);
+      e.dashCd = 2;
+    }
     if (d < prefer - 28) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
     else if (d > prefer + 24) moveTowards(e, target.x, target.y, spd * 0.85, dt);
     e.auraPulse = (e.auraPulse || 0) + dt;
+    var auraR = p2 ? 204 : 102;
     for (var al = 0; al < state.enemies.length; al++) {
       var ally = state.enemies[al];
       if (ally.hp <= 0 || ally.id === e.id) continue;
-      if (dist(e, ally) < 102) ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * 0.012 * dt);
+      if (dist(e, ally) < auraR) ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * 0.012 * dt);
+    }
+    if (p2) {
+      e.dashCd = (e.dashCd == null ? 10 : e.dashCd) - dt;
+      if ((e.irwinDashT || 0) > 0) {
+        e.irwinDashT -= dt;
+        e.x += (e.vx || 0) * dt;
+        e.y += (e.vy || 0) * dt;
+        G.clampPlay(e, state);
+        if (e.irwinDashT <= 0) e.vx = e.vy = 0;
+      } else if (e.dashCd <= 0 && target) {
+        var da = Math.atan2(target.y - e.y, target.x - e.x);
+        e.vx = Math.cos(da) * 620;
+        e.vy = Math.sin(da) * 620;
+        e.irwinDashT = 0.32;
+        e.dashCd = 10;
+        warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: da, len: 180, w: 16, t: 0.18, max: 0.18, r: 16, dmg: 0, color: "#8ad422" });
+        G.burst(state, e.x, e.y, "#8ad422", 10, 90);
+      }
     }
     e.spawnWaveT = (e.spawnWaveT == null ? 6 : e.spawnWaveT) - dt;
     if (e.spawnWaveT <= 0) {
-      e.spawnWaveT = 5 + Math.random() * 5;
-      var trash = G.ENEMY_POOL[(Math.random() * G.ENEMY_POOL.length) | 0];
-      var off = pickPlay(state, 40);
-      G.game.spawnAt(state, trash, off.x, off.y, { noDrop: true, rushMinion: true, ownerId: e.id });
+      if (p2) {
+        var kinds = ["fuzileiro_alien", "batedor_alien", "pistoleiro_alien"];
+        var spawnedP2 = 0;
+        for (var sk = 0; sk < kinds.length; sk++) {
+          while (G.invasion.countType(state, kinds[sk]) < 2) {
+            if (!trySpawnInvasao(state, e, kinds[sk], e.x + (Math.random() - 0.5) * 50, e.y + (Math.random() - 0.5) * 50)) break;
+            spawnedP2++;
+            if (spawnedP2 >= 2) break;
+          }
+        }
+        e.spawnWaveT = spawnedP2 ? 3.2 : 1.2;
+      } else {
+        var room = 5 - countInvasaoMinions(state);
+        if (room <= 0) {
+          e.spawnWaveT = 1.1;
+        } else {
+          e.spawnWaveT = 2.4 + Math.random() * 2.2;
+          var trash = G.ENEMY_POOL[(Math.random() * G.ENEMY_POOL.length) | 0];
+          var off = pickPlay(state, 40);
+          trySpawnInvasao(state, e, trash, off.x, off.y);
+        }
+      }
     }
     e.invasaoT -= dt;
     if (e.invasaoT <= 0 && (e.bombT || 0) <= 0) {
@@ -980,25 +1127,35 @@
         var leadX = state.squad.x + (state.squad.vx || 0) * 0.18;
         var leadY = state.squad.y + (state.squad.vy || 0) * 0.18;
         e.bombT = delay;
-        warnAt(state, {
-          kind: "acid",
-          x: leadX,
-          y: leadY,
-          t: delay,
-          max: delay,
-          r: 68,
-          dmg: Math.round(e.def.dmg * 2.4),
-          color: "#8ad422"
-        });
-        state.floaters.push(G.createFloater(e.x, e.y - 26, "ácido", "#8ad422"));
+        var nG = p2 ? 3 : 2;
+        var gR = p2 ? 92 : 68;
+        warnAt(state, { kind: "acid", x: leadX, y: leadY, t: delay, max: delay, r: gR, dmg: Math.round(e.def.dmg * 2.4), color: "#8ad422" });
+        for (var g = 1; g < nG; g++) {
+          var ba = Math.random() * Math.PI * 2;
+          var ring = (p2 ? 88 : 72) + Math.random() * 28;
+          warnAt(state, {
+            kind: "acid",
+            x: leadX + Math.cos(ba) * ring,
+            y: leadY + Math.sin(ba) * ring,
+            t: delay,
+            max: delay,
+            r: p2 ? 84 : 62,
+            dmg: Math.round(e.def.dmg * 2.1),
+            color: "#8ad422"
+          });
+        }
+        state.floaters.push(G.createFloater(e.x, e.y - 26, p2 ? "3 ácidos" : "ácido", "#8ad422"));
         e.invasaoT = 1.55;
       } else if (pick === "rifles") {
-        warnAt(state, { kind: "mark", x: e.x + 28, y: e.y, t: 0.4, max: 0.4, r: 22, dmg: 0 });
-        warnAt(state, { kind: "mark", x: e.x - 28, y: e.y, t: 0.4, max: 0.4, r: 22, dmg: 0 });
-        G.game.spawnAt(state, "fuzileiro_alien", e.x + 32, e.y + 8, { noDrop: true, rushMinion: true, ownerId: e.id });
-        G.game.spawnAt(state, "fuzileiro_alien", e.x - 32, e.y - 8, { noDrop: true, rushMinion: true, ownerId: e.id });
-        state.floaters.push(G.createFloater(e.x, e.y - 26, "fuzileiros", "#4aa36a"));
-        e.invasaoT = 4.2;
+        var spawned = 0;
+        if (trySpawnInvasao(state, e, p2 ? "fuzileiro_alien" : "fuzileiro_alien", e.x + 32, e.y + 8)) spawned++;
+        if (trySpawnInvasao(state, e, p2 ? "batedor_alien" : "fuzileiro_alien", e.x - 32, e.y - 8)) spawned++;
+        if (spawned) {
+          warnAt(state, { kind: "mark", x: e.x + 28, y: e.y, t: 0.4, max: 0.4, r: 22, dmg: 0 });
+          warnAt(state, { kind: "mark", x: e.x - 28, y: e.y, t: 0.4, max: 0.4, r: 22, dmg: 0 });
+          state.floaters.push(G.createFloater(e.x, e.y - 26, "fuzileiros", "#4aa36a"));
+        }
+        e.invasaoT = spawned ? 3.4 : 1.2;
       } else {
         e.invasaoT = 1.1;
       }
@@ -1016,13 +1173,320 @@
 
   function tickAlienRifle(state, e, target, dt, spd) {
     var d = dist(e, target);
-    var prefer = 96;
-    if (d > prefer + 14) moveTowards(e, target.x, target.y, spd * 1.2, dt);
+    var prefer = (e.justHealed || 0) > 0 ? 54 : (e.def.kind === "alien_scout" ? 70 : 96);
+    var chase = e.def.kind === "alien_scout" ? 1.55 : 1.2;
+    if (d > prefer + 14) moveTowards(e, target.x, target.y, spd * ((e.justHealed || 0) > 0 ? 1.55 : chase), dt);
     else if (d < prefer - 18) moveTowards(e, e.x + (e.x - target.x) * 0.15, e.y + (e.y - target.y) * 0.15, spd * 0.55, dt);
+    if (e.def.kind === "alien_pistol") {
+      var irw = invasaoHost(state, e);
+      if (irw && dist(e, irw) < 90) irw.hp = Math.min(irw.maxHp, irw.hp + irw.maxHp * 0.008 * dt);
+    }
     if (d <= e.def.range && e.cooldown <= 0) {
       e.cooldown = 1 / e.def.fire;
-      enemyFire(state, e, target, "bullet", { speed: 310, r: 3 });
+      enemyFire(state, e, target, "bullet", { speed: e.def.kind === "alien_scout" ? 340 : 310, r: 3 });
     }
+  }
+
+  function tickBonfire(state, e, dt) {
+    e.phase = (e.phase || 0) + dt;
+    e.vx = 0;
+    e.vy = 0;
+  }
+
+  function tickSentry(state, e, target, dt) {
+    e.vx = 0;
+    e.vy = 0;
+    if (!target) return;
+    e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+    if (e.cooldown <= 0) {
+      e.cooldown = 1 / Math.max(0.4, e.def.fire);
+      enemyFire(state, e, target, "bullet", { speed: 300, r: 4, color: "#ffd24a" });
+    }
+  }
+
+  function tickPrincess(state, e, target, dt, spd) {
+    e.skillT = (e.skillT == null ? 1.6 : e.skillT) - dt;
+    if ((e.kneelT || 0) > 0) {
+      e.kneelT -= dt;
+      e.vx = e.vy = 0;
+      e.weak = true;
+      return;
+    }
+    e.weak = false;
+    var act = e.princessAct || "";
+    if (act === "pierce") {
+      if ((e.chargeWindup || 0) > 0) {
+        e.chargeWindup -= dt;
+        if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+        if (e.chargeWindup <= 0) {
+          var ang = e.rot || 0;
+          var b = G.playfield(state);
+          var hit = rayExitPlay(b, e.x, e.y, Math.cos(ang), Math.sin(ang), 28);
+          e.pierceTx = hit.x;
+          e.pierceTy = hit.y;
+          e.vx = Math.cos(ang) * 780;
+          e.vy = Math.sin(ang) * 780;
+          e.pierceT = Math.max(0.18, hit.dist / 780);
+        }
+        return;
+      }
+      e.pierceT = (e.pierceT || 0) - dt;
+      e.x += (e.vx || 0) * dt;
+      e.y += (e.vy || 0) * dt;
+      pushZone(state, { kind: "honey", x: e.x, y: e.y, r: 22, t: 2.4, max: 2.4, dmg: 8, hurtPlayer: true, pin: true });
+      if (e.pierceT <= 0) {
+        explode(state, e.x, e.y, 78, Math.round(e.def.dmg * 1.4), "enemy", "#ffe08a");
+        pushZone(state, { kind: "honey", x: e.x, y: e.y, r: 86, t: 2.8, max: 2.8, dmg: 12, hurtPlayer: true, pin: true });
+        state.honeyT = Math.max(state.honeyT || 0, 1.6);
+        e.princessAct = "";
+        e.skillT = 2.4;
+        e.vx = e.vy = 0;
+      }
+      return;
+    }
+    if (act === "thrust") {
+      e.thrustT = (e.thrustT || 0) - dt;
+      if (target) moveTowards(e, target.x, target.y, spd * 1.4, dt);
+      if (!e.thrustDid && e.thrustT <= 0.15) {
+        e.thrustDid = true;
+        var base = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
+        for (var i = 0; i < 5; i++) {
+          var a = base + (i - 2) * 0.55;
+          hurtBeam(state, e.x, e.y, a, 160, 14, Math.round(e.def.dmg * 1.15));
+        }
+      }
+      if (e.thrustT <= 0) {
+        e.princessAct = "";
+        e.skillT = 2.2;
+      }
+      return;
+    }
+    if (act === "cavalry") {
+      e.princessAct = "";
+      e.skillT = 4.5;
+      var dest = G.invasion.pickOpposite(state, target || state.squad);
+      G.game.spawnAt(state, "abelha_enfermeira", e.x + 24, e.y, { noDrop: true, hostId: e.id, destX: dest.x, destY: dest.y });
+      G.game.spawnAt(state, "abelha_arquiteta", dest.x, dest.y, { noDrop: true, hostId: e.id });
+      state.banner = { text: "Cavalaria real", t: 1.8 };
+      return;
+    }
+    if (act === "flash") {
+      e.flashCuts = e.flashCuts || 0;
+      e.flashCd = (e.flashCd || 0) - dt;
+      e.stealth = 0.85;
+      if (e.flashCd <= 0 && e.flashCuts < 20) {
+        e.flashCd = 0.16;
+        var b2 = G.playfield(state);
+        var a2 = Math.random() * Math.PI * 2;
+        var x0 = b2.x0 + 20 + Math.random() * (b2.x1 - b2.x0 - 40);
+        var y0 = b2.y0 + 20 + Math.random() * (b2.y1 - b2.y0 - 40);
+        var len = 220 + Math.random() * 180;
+        warnAt(state, { kind: "lane", x: x0, y: y0, ang: a2, len: len, w: 12, t: 0.28, max: 0.28, r: 12, dmg: Math.round(e.def.dmg * 1.6), color: "#fff36a" });
+        e.flashCuts++;
+      }
+      if (e.flashCuts >= 20 && e.flashCd <= 0) {
+        e.princessAct = "";
+        e.stealth = 0;
+        e.kneelT = 5;
+        e.skillT = 6;
+        var mid = G.playfield(state);
+        e.x = (mid.x0 + mid.x1) / 2;
+        e.y = (mid.y0 + mid.y1) / 2;
+        state.banner = { text: "A princesa descansa", t: 2.2 };
+      }
+      return;
+    }
+    if (target) moveTowards(e, target.x, target.y, spd * 0.7, dt);
+    if (e.cooldown <= 0 && target) {
+      e.cooldown = 1 / Math.max(0.35, e.def.fire);
+      enemyFire(state, e, target, "sting", { speed: 280, r: 4, color: "#ffd24a" });
+    }
+    if (e.skillT > 0) return;
+    var pool = ["pierce", "thrust", "cavalry", "flash"];
+    if (e.lastPrincess) {
+      var np = [];
+      for (var p = 0; p < pool.length; p++) if (pool[p] !== e.lastPrincess) np.push(pool[p]);
+      pool = np.length ? np : pool;
+    }
+    var pick = pool[(Math.random() * pool.length) | 0];
+    e.lastPrincess = pick;
+    e.princessAct = pick;
+    if (pick === "pierce") {
+      e.chargeWindup = 0.55;
+      e.rot = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
+      warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: e.rot, len: 340, w: 22, t: 0.55, max: 0.55, r: 20, dmg: 0, color: "#ffe08a" });
+      state.floaters.push(G.createFloater(e.x, e.y - 24, "perfuração", "#ffe08a"));
+    } else if (pick === "thrust") {
+      e.thrustT = 0.85;
+      e.thrustDid = false;
+      var tb = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
+      for (var s = 0; s < 5; s++) {
+        warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: tb + (s - 2) * 0.55, len: 160, w: 12, t: 0.7, max: 0.7, r: 12, dmg: 0, color: "#fff4c4" });
+      }
+      state.floaters.push(G.createFloater(e.x, e.y - 24, "estocadas", "#fff4c4"));
+    } else if (pick === "flash") {
+      e.flashCuts = 0;
+      e.flashCd = 0.2;
+      e.stealth = 0.7;
+      state.banner = { text: "Final Flash", t: 1.6 };
+    }
+  }
+
+  function tickNurse(state, e, dt, spd) {
+    var host = findEnemy(state, e.hostId);
+    if (!host || host.hp <= 0) {
+      e.hp = 0;
+      return;
+    }
+    var dest = { x: e.destX, y: e.destY };
+    moveTowards(e, dest.x, dest.y, spd * 1.2, dt);
+    moveTowards(host, dest.x, dest.y, spd * 1.05, dt);
+    if (Math.hypot(host.x - dest.x, host.y - dest.y) < 40) {
+      host.hp = Math.min(host.maxHp, host.hp + host.maxHp * 0.06 * dt);
+    }
+  }
+
+  function tickArchitect(state, e, dt) {
+    var host = findEnemy(state, e.hostId);
+    if (!host || host.hp <= 0) {
+      e.hp = 0;
+      return;
+    }
+    if (!e.walls) {
+      e.walls = true;
+      for (var i = 0; i < 3; i++) {
+        var ang = -Math.PI / 2 + (i - 1) * 0.55;
+        G.game.spawnAt(state, "barreira_colmeia", host.x + Math.cos(ang) * (36 + i * 18), host.y + Math.sin(ang) * (36 + i * 18), { noDrop: true, hostId: host.id, layer: i });
+      }
+    }
+    e.vx = e.vy = 0;
+  }
+
+  function tickAntlion(state, e, target, dt, spd) {
+    e.skillT = (e.skillT == null ? 2 : e.skillT) - dt;
+    if (e.act === "pit") {
+      e.pitT = (e.pitT || 0) - dt;
+      var pull = 70;
+      var dx = e.x - state.squad.x;
+      var dy = e.y - state.squad.y;
+      var len = Math.hypot(dx, dy) || 1;
+      if (len < 160) {
+        state.squad.x += (dx / len) * pull * dt;
+        state.squad.y += (dy / len) * pull * dt;
+        if (len < 36 && e.contactCd <= 0) {
+          e.contactCd = 0.35;
+          hurt(state, target, Math.round(e.def.dmg * 0.8), e.x, e.y);
+        }
+      }
+      if (e.pitT <= 0) {
+        e.act = "";
+        e.skillT = 2.2;
+      }
+      return;
+    }
+    if (e.act === "bury") {
+      e.buryT = (e.buryT || 0) - dt;
+      e.buried = true;
+      e.stealth = 0.8;
+      if (e.buryT <= 0) {
+        e.x = state.squad.x;
+        e.y = state.squad.y;
+        e.buried = false;
+        e.stealth = 0;
+        explode(state, e.x, e.y, 70, Math.round(e.def.dmg * 1.3), "enemy", "#c4a06a");
+        e.act = "";
+        e.skillT = 2.4;
+      }
+      return;
+    }
+    if (target) moveTowards(e, target.x, target.y, spd, dt);
+    if (e.cooldown <= 0 && target && dist(e, target) < 200) {
+      e.cooldown = 1.1;
+      enemyFire(state, e, target, "bullet", { speed: 240, r: 5, color: "#c4a06a" });
+    }
+    if (e.skillT > 0) return;
+    e.act = Math.random() < 0.5 ? "pit" : "bury";
+    if (e.act === "pit") {
+      e.pitT = 2.6;
+      warnAt(state, { kind: "mark", x: e.x, y: e.y, t: 0.4, max: 0.4, r: 150, dmg: 0, color: "#c4a06a" });
+    } else {
+      e.buryT = 1.1;
+      warnAt(state, { kind: "mark", x: state.squad.x, y: state.squad.y, t: 1.1, max: 1.1, r: 56, dmg: 0, color: "#8a5a28" });
+    }
+    e.skillT = 3;
+  }
+
+  function tickBomber(state, e, target, dt, spd) {
+    e.skillT = (e.skillT == null ? 1.8 : e.skillT) - dt;
+    if (e.act === "dive") {
+      e.diveT = (e.diveT || 0) - dt;
+      e.x += (e.vx || 0) * dt;
+      e.y += (e.vy || 0) * dt;
+      if (e.diveT <= 0) {
+        explode(state, e.x, e.y, 80, Math.round(e.def.dmg * 1.5), "enemy", "#ff7a2a");
+        e.act = "";
+        e.skillT = 2.4;
+        e.vx = e.vy = 0;
+      }
+      return;
+    }
+    if (target) moveTowards(e, target.x, target.y, spd * 0.8, dt);
+    if (e.cooldown <= 0 && target) {
+      e.cooldown = 0.9;
+      warnAt(state, { kind: "acid", x: target.x, y: target.y, t: 0.7, max: 0.7, r: 42, dmg: Math.round(e.def.dmg * 1.1), color: "#ff7a2a" });
+    }
+    if (e.skillT > 0) return;
+    if (Math.random() < 0.45 && target) {
+      e.act = "dive";
+      var ang = Math.atan2(target.y - e.y, target.x - e.x);
+      e.vx = Math.cos(ang) * 420;
+      e.vy = Math.sin(ang) * 420;
+      e.diveT = 0.55;
+      warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: ang, len: 240, w: 20, t: 0.25, max: 0.25, r: 18, dmg: 0, color: "#ff7a2a" });
+    } else {
+      for (var i = 0; i < 5; i++) {
+        var ox = (i - 2) * 36;
+        warnAt(state, { kind: "acid", x: state.squad.x + ox, y: state.squad.y, t: 0.7 + i * 0.08, max: 0.85, r: 34, dmg: Math.round(e.def.dmg), color: "#c45a22" });
+      }
+      e.skillT = 2.8;
+    }
+  }
+
+  function tickMantis(state, e, target, dt, spd) {
+    e.skillT = (e.skillT == null ? 1.4 : e.skillT) - dt;
+    if (e.act === "stealth") {
+      e.stealth = 0.92;
+      e.hideT = (e.hideT || 0) - dt;
+      if (target) moveTowards(e, target.x, target.y, spd * 1.5, dt);
+      if (e.hideT <= 0) {
+        e.stealth = 0;
+        e.act = "";
+        explode(state, e.x, e.y, 52, Math.round(e.def.dmg * 1.2), "enemy", "#4a7a32");
+        e.skillT = 1.8;
+      }
+      return;
+    }
+    if (e.act === "blink") {
+      if (target) {
+        var a = Math.atan2(target.y - e.y, target.x - e.x) + Math.PI / 2;
+        e.x = target.x + Math.cos(a) * 48;
+        e.y = target.y + Math.sin(a) * 48;
+        hurt(state, target, Math.round(e.def.dmg * 1.35), e.x, e.y);
+      }
+      e.act = "";
+      e.skillT = 1.6;
+      return;
+    }
+    if (target) moveTowards(e, target.x, target.y, spd, dt);
+    if (e.cooldown <= 0 && target && dist(e, target) < 90) {
+      e.cooldown = 0.7;
+      var ang = Math.atan2(target.y - e.y, target.x - e.x);
+      for (var f = -1; f <= 1; f++) enemyFireAng(state, e, ang + f * 0.4, "bullet", { speed: 320, r: 4, color: "#8ad46a" });
+    }
+    if (e.skillT > 0) return;
+    e.act = Math.random() < 0.5 ? "stealth" : "blink";
+    if (e.act === "stealth") e.hideT = 1.6;
+    e.skillT = 2.2;
   }
 
   function vultoDashSpd() {
@@ -1041,33 +1505,79 @@
   }
 
   function pickVultoDashAng(e, target) {
-    var ax = (Math.random() * 3) | 0;
-    var sx = target.x - e.x;
-    var sy = target.y - e.y;
-    if (ax === 0) return sx >= 0 ? 0 : Math.PI;
-    if (ax === 1) return sy >= 0 ? Math.PI / 2 : -Math.PI / 2;
-    return Math.atan2(sy >= 0 ? 1 : -1, sx >= 0 ? 1 : -1);
+    if (Math.random() < 0.35 && target) return Math.atan2(target.y - e.y, target.x - e.x);
+    return Math.random() * Math.PI * 2;
+  }
+
+  function planVultoPath(state, cx, cy, ang, twist) {
+    var b = G.playfield(state);
+    var dx = Math.cos(ang);
+    var dy = Math.sin(ang);
+    var start = rayExitPlay(b, cx, cy, -dx, -dy, 16);
+    var end = rayExitPlay(b, cx, cy, dx, dy, 16);
+    var A = { x: start.x, y: start.y };
+    var C = { x: end.x, y: end.y };
+    if (!twist) return [A, C];
+    var mx = (A.x + C.x) / 2;
+    var my = (A.y + C.y) / 2;
+    var side = twist.side || 1;
+    var amp = twist.amp || 110;
+    var B = {
+      x: Math.max(b.x0 + 28, Math.min(b.x1 - 28, mx - dy * side * amp)),
+      y: Math.max(b.y0 + 28, Math.min(b.y1 - 28, my + dx * side * amp))
+    };
+    if (twist.double) {
+      var D = {
+        x: Math.max(b.x0 + 28, Math.min(b.x1 - 28, mx * 0.28 + C.x * 0.72 + dy * side * amp * 0.55)),
+        y: Math.max(b.y0 + 28, Math.min(b.y1 - 28, my * 0.28 + C.y * 0.72 - dx * side * amp * 0.55))
+      };
+      return [A, B, D, C];
+    }
+    return [A, B, C];
+  }
+
+  function warnVultoPath(state, pts, t) {
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i];
+      var b = pts[i + 1];
+      warnAt(state, {
+        kind: "lane",
+        x: a.x,
+        y: a.y,
+        ang: Math.atan2(b.y - a.y, b.x - a.x),
+        len: Math.hypot(b.x - a.x, b.y - a.y),
+        w: 26,
+        t: t,
+        max: t,
+        r: 26,
+        dmg: 0,
+        color: "#ff6a18"
+      });
+    }
   }
 
   function vultoLaneCenter(e, pass) {
     var lanes = e.strafeLanes || 1;
-    var off = (pass - (lanes - 1) / 2) * (e.strafeShift || 72);
+    var off = (pass - (lanes - 1) / 2) * (e.strafeShift || 40);
+    var ang = (e.strafeAngs && e.strafeAngs[pass] != null) ? e.strafeAngs[pass] : (e.strafeAng || 0);
     return {
-      x: e.strafeCx + (e.strafePerpX || 0) * off,
-      y: e.strafeCy + (e.strafePerpY || 0) * off
+      x: e.strafeCx + Math.cos(ang + Math.PI / 2) * off,
+      y: e.strafeCy + Math.sin(ang + Math.PI / 2) * off
     };
   }
 
   function setupVultoPass(state, e, pass) {
-    var b = G.playfield(state);
+    var ang = (e.strafeAngs && e.strafeAngs[pass] != null) ? e.strafeAngs[pass] : (e.strafeAng || 0);
     var p = vultoLaneCenter(e, pass);
-    var dx = Math.cos(e.strafeAng);
-    var dy = Math.sin(e.strafeAng);
-    var start = rayExitPlay(b, p.x, p.y, -dx, -dy, 20);
-    var end = rayExitPlay(b, p.x, p.y, dx, dy, 20);
+    var twist = (e.strafeTwist && e.strafeTwist[pass]) || null;
+    e.strafeAng = ang;
+    e.strafePath = planVultoPath(state, p.x, p.y, ang, twist);
+    e.strafeDist = 0;
+    e.strafeLen = polyLen(e.strafePath);
+    var start = e.strafePath[0];
     e.x = start.x;
     e.y = start.y;
-    e.strafeDur = Math.max(0.06, Math.hypot(end.x - start.x, end.y - start.y) / vultoDashSpd());
+    e.strafeDur = Math.max(0.06, e.strafeLen / vultoDashSpd());
   }
 
   function tickVulto(state, e, target, dt, spd) {
@@ -1080,6 +1590,26 @@
       state.vultoBlind -= dt;
       if (state.vultoBlind <= 0) state.vultoBlind = 0;
     }
+    if (e.vultoAct === "arena") {
+      e.arenaT = (e.arenaT || 0) - dt;
+      if ((e.arenaT || 0) <= 0 && !e.arenaDid) {
+        e.arenaDid = true;
+        var sx = e.arenaSx;
+        var sy = e.arenaSy;
+        var sr = e.arenaR || (G.invasion && G.invasion.PHALANX_R) || 122;
+        var bA = G.playfield(state);
+        explode(state, (bA.x0 + bA.x1) / 2, (bA.y0 + bA.y1) / 2, 40, 0, "enemy", "#ff4a2a");
+        if (Math.hypot(state.squad.x - sx, state.squad.y - sy) > sr) {
+          hurtSquadArea(state, state.squad.x, state.squad.y, 80, Math.round(e.def.dmg * 2.4), e.x, e.y);
+        }
+        G.burst(state, sx, sy, "#ffd24a", 18, 90);
+      }
+      if ((e.arenaT || 0) <= -0.25) {
+        e.vultoAct = "";
+        e.vultoT = 2.6;
+      }
+      return;
+    }
     if (e.vultoAct === "strafe") {
       e.strafeT = (e.strafeT || 0) - dt;
       if ((e.strafeWait || 0) > 0) {
@@ -1087,17 +1617,23 @@
         e.rot = e.strafeAng || 0;
         if (e.strafeWait <= 0) e.strafeT = e.strafeDur || 0.2;
       } else {
-        var ang = e.strafeAng || 0;
         var sp = vultoDashSpd();
-        e.x += Math.cos(ang) * sp * dt;
-        e.y += Math.sin(ang) * sp * dt;
-        e.rot = ang;
+        var path = e.strafePath || [];
+        if (path.length < 2) {
+          e.vultoAct = "";
+          return;
+        }
+        e.strafeDist = (e.strafeDist || 0) + sp * dt;
+        var pos = pointOnPoly(path, Math.min(e.strafeLen || polyLen(path), e.strafeDist));
+        e.x = pos.x;
+        e.y = pos.y;
+        e.rot = pos.ang;
         e.napalmAcc = (e.napalmAcc || 0) + dt;
         if (e.napalmAcc > 24 / sp) {
           e.napalmAcc = 0;
           pushZone(state, { kind: "napalm", x: e.x, y: e.y, r: 30, t: 5, max: 5, dmg: 18, hurtPlayer: true });
         }
-        if (e.strafeT <= 0) {
+        if (e.strafeDist >= (e.strafeLen || 1) || e.strafeT <= 0) {
           if ((e.strafeLeft || 0) > 1) {
             e.strafeLeft--;
             e.strafePass = (e.strafePass || 0) + 1;
@@ -1119,9 +1655,16 @@
         e.coneDid = true;
         var beamLen = e.coneRange || vultoBeamLen(state);
         var beamAng = e.coneAng || 0;
+        var beams = e.invP2 ? 5 : 1;
+        for (var bi = 0; bi < beams; bi++) {
+          var off = beams === 1 ? 0 : (bi - (beams - 1) / 2) * 0.16;
+          var bang = beamAng + off;
+          if (e.invP2 && target) bang = Math.atan2(target.y - e.y, target.x - e.x) + off;
+          hurtBeam(state, e.x, e.y, bang, beamLen, 11, Math.round(e.def.dmg * 1.8));
+          enemyFireAng(state, e, bang, "flame", { speed: 520, r: 5, dmg: Math.round(e.def.dmg * 0.55), life: 1.2, homing: !!e.invP2, color: "#ff6a18" });
+        }
         var ca = Math.cos(beamAng);
         var sa = Math.sin(beamAng);
-        hurtBeam(state, e.x, e.y, beamAng, beamLen, 11, Math.round(e.def.dmg * 1.8));
         for (var n = 0; n < 36; n++) {
           var along = (n / 35) * beamLen;
           var jitter = (Math.random() - 0.5) * 10;
@@ -1150,7 +1693,7 @@
     moveTowards(e, hx, hy, spd, dt);
     if (e.cooldown <= 0 && d < e.def.range) {
       e.cooldown = 0.85;
-      enemyFire(state, e, target, "flame", { speed: 240, r: 5, dmg: Math.round(e.def.dmg * 0.7), color: "#ff6a2a" });
+      enemyFire(state, e, target, "flame", { speed: 420, r: 5, dmg: Math.round(e.def.dmg * 0.7), color: "#ff6a2a" });
     }
     if (e.vultoT > 0) return;
     var pool = ["strafe", "cone", "dark"];
@@ -1162,41 +1705,45 @@
     var act = pool[(Math.random() * pool.length) | 0];
     e.vultoLast = act;
     if (act === "strafe") {
+      if (e.invP2) {
+        e.vultoAct = "arena";
+        e.arenaT = 1.25;
+        e.arenaDid = false;
+        var safe = G.invasion.pickOpposite(state, target || state.squad);
+        e.arenaSx = safe.x;
+        e.arenaSy = safe.y;
+        e.arenaR = G.invasion.PHALANX_R;
+        warnAt(state, { kind: "mark", x: safe.x, y: safe.y, t: 1.25, max: 1.25, r: e.arenaR, dmg: 0, color: "#ffe08a" });
+        state.banner = { text: "Fica no círculo", t: 1.6 };
+        state.floaters.push(G.createFloater(e.x, e.y - 24, "carga total", "#ff6a18"));
+        return;
+      }
       var lanes = rage ? 3 : 1;
-      var b = G.playfield(state);
-      var angS = pickVultoDashAng(e, target);
-      var dx = Math.cos(angS);
-      var dy = Math.sin(angS);
       e.vultoAct = "strafe";
-      e.strafeAng = angS;
       e.strafeLanes = lanes;
       e.strafeLeft = lanes;
       e.strafePass = 0;
-      e.strafeShift = 72;
+      e.strafeShift = 36;
       e.strafeCx = target.x;
       e.strafeCy = target.y;
-      e.strafePerpX = -dy;
-      e.strafePerpY = dx;
+      e.strafeAngs = [];
+      e.strafeTwist = [];
+      for (var ln = 0; ln < lanes; ln++) {
+        e.strafeAngs.push(pickVultoDashAng(e, target) + (Math.random() - 0.5) * 0.7);
+        e.strafeTwist.push({
+          side: Math.random() < 0.5 ? 1 : -1,
+          amp: 80 + Math.random() * 150,
+          double: Math.random() < 0.6
+        });
+      }
+      e.strafeAng = e.strafeAngs[0];
       setupVultoPass(state, e, 0);
       e.strafeWait = 0.7;
       e.napalmAcc = 0;
-      for (var ln = 0; ln < lanes; ln++) {
-        var lp = vultoLaneCenter(e, ln);
-        var st = rayExitPlay(b, lp.x, lp.y, -dx, -dy, 20);
-        var en = rayExitPlay(b, lp.x, lp.y, dx, dy, 20);
-        warnAt(state, {
-          kind: "lane",
-          x: st.x,
-          y: st.y,
-          ang: angS,
-          len: Math.hypot(en.x - st.x, en.y - st.y),
-          w: 26,
-          t: 0.7,
-          max: 0.7,
-          r: 26,
-          dmg: 0,
-          color: "#ff6a18"
-        });
+      for (var lp = 0; lp < lanes; lp++) {
+        var p0 = vultoLaneCenter(e, lp);
+        var path0 = planVultoPath(state, p0.x, p0.y, e.strafeAngs[lp], e.strafeTwist[lp]);
+        warnVultoPath(state, path0, 0.7);
       }
       state.floaters.push(G.createFloater(e.x, e.y - 24, lanes > 1 ? "três linhas" : "razante", "#ff6a18"));
     } else if (act === "cone") {
@@ -1226,6 +1773,7 @@
       state.banner = { text: "A visão some", t: 1.6 };
       state.floaters.push(G.createFloater(e.x, e.y - 24, "escuridão", "#3a1020"));
       e.vultoT = 5.4;
+      if (e.invP2 && G.invasion && !G.invasion.firesAlive(state)) G.invasion.spawnFires(state);
     }
   }
 
@@ -1357,13 +1905,9 @@
     }
   }
 
-  function wormCallout(state, text) {
-    state.banner = { text: text, t: 1.9 };
-  }
-
   function wormJetLen(state) {
     var b = G.playfield(state);
-    return Math.hypot(b.x1 - b.x0, b.y1 - b.y0) * 0.55;
+    return Math.hypot(b.x1 - b.x0, b.y1 - b.y0) * 0.78;
   }
 
   function polyLen(pts) {
@@ -1399,61 +1943,24 @@
     var len = Math.hypot(dx, dy) || 1;
     dx /= len;
     dy /= len;
-    var C = rayExitPlay(b, target.x, target.y, dx, dy, 52);
-    if (Math.hypot(C.x - A.x, C.y - A.y) < 180) C = rayExitPlay(b, A.x, A.y, dx, dy, 52);
+    var C = rayExitPlay(b, target.x, target.y, dx, dy, -90);
+    if (Math.hypot(C.x - A.x, C.y - A.y) < 260) C = rayExitPlay(b, A.x, A.y, dx, dy, -90);
+    C.x += dx * 220;
+    C.y += dy * 220;
     var mx = (A.x + C.x) / 2;
     var my = (A.y + C.y) / 2;
     var side = Math.random() < 0.5 ? 1 : -1;
     var B = {
-      x: Math.max(b.x0 + 56, Math.min(b.x1 - 56, mx + -dy * side * (100 + Math.random() * 80))),
-      y: Math.max(b.y0 + 56, Math.min(b.y1 - 56, my + dx * side * (100 + Math.random() * 80)))
+      x: Math.max(b.x0 - 40, Math.min(b.x1 + 40, mx + -dy * side * (180 + Math.random() * 140))),
+      y: Math.max(b.y0 - 40, Math.min(b.y1 + 40, my + dx * side * (180 + Math.random() * 140)))
     };
     return [A, B, C];
   }
 
   function warnWormPath(state, pts, t) {
-    for (var i = 0; i < pts.length - 1; i++) {
-      var a = pts[i];
-      var b = pts[i + 1];
-      warnAt(state, {
-        kind: "lane",
-        x: a.x,
-        y: a.y,
-        ang: Math.atan2(b.y - a.y, b.x - a.x),
-        len: Math.hypot(b.x - a.x, b.y - a.y),
-        w: 30,
-        t: t,
-        max: t,
-        r: 30,
-        dmg: 0,
-        color: "#c4a06a"
-      });
-    }
+    if (!pts || !pts.length) return;
     var last = pts[pts.length - 1];
-    warnAt(state, { kind: "mark", x: last.x, y: last.y, t: t, max: t, r: 62, dmg: 0, color: "#e8c070" });
-    warnAt(state, { kind: "mark", x: pts[0].x, y: pts[0].y, t: t, max: t, r: 48, dmg: 0, color: "#8a6030" });
-  }
-
-  function warnWormJets(state, e, t) {
-    var len = wormJetLen(state);
-    var jets = e.wormJets || 1;
-    var ang0 = -Math.PI / 2;
-    for (var j = 0; j < jets; j++) {
-      warnAt(state, {
-        kind: "lane",
-        x: e.x,
-        y: e.y,
-        ang: ang0 + (j ? Math.PI : 0),
-        len: len,
-        w: 16,
-        t: t,
-        max: t,
-        r: 16,
-        dmg: 0,
-        color: "#e8c070",
-        followId: e.id
-      });
-    }
+    warnAt(state, { kind: "mark", x: last.x, y: last.y, t: t, max: t, r: 28, dmg: 0, color: "#8a6030" });
   }
 
   function dropWormSeg(e) {
@@ -1462,7 +1969,7 @@
       x: e.x,
       y: e.y,
       rot: e.rot || 0,
-      r: 26 + Math.min(18, e.wormSegs.length * 0.6),
+      r: 40 + Math.min(22, e.wormSegs.length * 0.7),
       sticky: true,
       life: 1.4
     });
@@ -1513,13 +2020,68 @@
 
   function tickWorm(state, e, target, dt) {
     var rage = e.hp <= e.maxHp * 0.5;
+    if (G.invasion && G.invasion.enterP2(state, e, "Arklan · tempestade")) {
+      e.stormT = 0.6;
+      e.suckT = 8;
+    }
+    var p2 = !!(e.invP2);
     tickWormSegs(state, e, dt);
+    if (p2) {
+      e.stormT = (e.stormT == null ? 3.2 : e.stormT) - dt;
+      if (e.stormT <= 0) {
+        e.stormT = 4.2;
+        var hole = pickPlay(state, 70);
+        pushZone(state, { kind: "sandstorm", x: hole.x, y: hole.y, r: 70, t: 4.5, max: 4.5, dmg: 10, hurtPlayer: true, pull: 90 });
+      }
+      e.suckT = (e.suckT == null ? 11 : e.suckT) - dt;
+      if (e.suckT <= 0 && e.wormAct !== "suck") {
+        e.suckT = 16;
+        e.wormAct = "suck";
+        e.suckLeft = 4.5;
+        var mid = G.playfield(state);
+        e.x = (mid.x0 + mid.x1) / 2;
+        e.y = (mid.y0 + mid.y1) / 2;
+      }
+    }
+    if (e.wormAct === "suck") {
+      e.suckLeft -= dt;
+      var cx = e.x;
+      var cy = e.y;
+      var dx = cx - state.squad.x;
+      var dy = cy - state.squad.y;
+      var len = Math.hypot(dx, dy) || 1;
+      state.squad.x += (dx / len) * 55 * dt;
+      state.squad.y += (dy / len) * 55 * dt;
+      if (Math.random() < 0.12) {
+        var ang = Math.random() * Math.PI * 2;
+        enemyFireAng(state, e, ang, "bullet", { speed: 180, r: 6, color: "#8a5a28", dmg: Math.round(e.def.dmg * 0.55) });
+      }
+      if (e.suckLeft <= 0) {
+        e.wormAct = "";
+        e.wormT = 1.2;
+      }
+      return;
+    }
+    e.wormlingT = (e.wormlingT == null ? 2.4 : e.wormlingT) - dt;
+    if (e.wormlingT <= 0) {
+      var worms = 0;
+      for (var wi0 = 0; wi0 < state.enemies.length; wi0++) {
+        if (state.enemies[wi0].hp > 0 && state.enemies[wi0].type === "minhoca_deserto") worms++;
+      }
+      e.wormlingT = rage ? 3.2 : 5.0;
+      if (worms < 4) {
+        var hole = pickPlay(state, 50);
+        G.game.spawnAt(state, "minhoca_deserto", hole.x, hole.y, { noDrop: true, buried: true, sandT: 0.7, ownerId: e.id });
+        sandBurst(state, hole.x, hole.y, 10);
+        state.floaters.push(G.createFloater(hole.x, hole.y - 16, "minhoca", "#c4a06a"));
+      }
+    }
     if (e.wormAct === "dive") {
       if ((e.diveHold || 0) > 0) {
         e.diveHold -= dt;
         e.buried = true;
         e.stealth = 0.9;
-        e.rot = (e.rot || 0) + dt * 3;
+        e.rot = (e.rot || 0) + dt * 8;
         if (e.diveHold <= 0) {
           e.diveDist = 0;
           e.segAcc = 0;
@@ -1537,7 +2099,7 @@
         return;
       }
       var total = e.diveLen || polyLen(pts);
-      var spd = 340;
+      var spd = 1020;
       e.diveDist = (e.diveDist || 0) + spd * dt;
       var pos = pointOnPoly(pts, Math.min(total, e.diveDist));
       var moved = Math.hypot(pos.x - e.x, pos.y - e.y);
@@ -1549,20 +2111,36 @@
         e.segAcc -= 28;
         dropWormSeg(e);
       }
-      if (e.contactCd <= 0 && Math.hypot(e.x - state.squad.x, e.y - state.squad.y) < 42) {
-        e.contactCd = 0.18;
-        hurtSquadArea(state, e.x, e.y, 44, Math.round(e.def.dmg * 0.9), e.x, e.y);
+      if (p2) {
+        e.eyeShotT = (e.eyeShotT || 0) - dt;
+        if (e.eyeShotT <= 0 && target && e.wormSegs && e.wormSegs.length) {
+          e.eyeShotT = 0.2;
+          var seg = e.wormSegs[(Math.random() * e.wormSegs.length) | 0];
+          var ea = Math.atan2(target.y - seg.y, target.x - seg.x);
+          enemyFireAng(state, e, ea, "bullet", {
+            speed: 260,
+            r: 4,
+            color: "#ffd24a",
+            dmg: Math.round(e.def.dmg * 0.45),
+            ox: seg.x - e.x,
+            oy: seg.y - e.y,
+            muzzle: 0
+          });
+        }
+      }
+      if (e.contactCd <= 0 && Math.hypot(e.x - state.squad.x, e.y - state.squad.y) < 52) {
+        e.contactCd = 0.14;
+        hurtSquadArea(state, e.x, e.y, 54, Math.round(e.def.dmg * 0.9), e.x, e.y);
       }
       if (e.diveDist >= total) {
         e.buried = false;
         e.stealth = 0;
         e.wormAct = "";
-        e.wormT = rage ? 2.0 : 2.6;
+        e.wormT = rage ? 0.75 : 1.0;
         releaseWormSegs(e);
         explode(state, e.x, e.y, 78, Math.round(e.def.dmg * 1.15), "enemy", "#c4a06a");
         sandBurst(state, e.x, e.y, 28);
         G.audio.explosion();
-        wormCallout(state, "Emergiu");
       }
       return;
     }
@@ -1571,18 +2149,16 @@
       var cy = (G.playfield(state).y0 + G.playfield(state).y1) / 2;
       if ((e.spinWind || 0) > 0) {
         e.spinWind -= dt;
-        moveTowards(e, cx, cy, 150, dt);
-        e.rot = (e.rot || 0) + dt * 1.4;
+        moveTowards(e, cx, cy, 450, dt);
+        e.rot = (e.rot || 0) + dt * 4.2;
         if (e.spinWind <= 0 || Math.hypot(e.x - cx, e.y - cy) < 22) {
           e.x = cx;
           e.y = cy;
           e.spinWind = 0;
-          e.spinTell = 1.35;
+          e.spinTell = 0.48;
           e.wormSpinAng = -Math.PI / 2;
           e.wormSpinT = 0;
           e.rot = e.wormSpinAng;
-          warnWormJets(state, e, 1.35);
-          wormCallout(state, (e.wormSpinDir || 1) > 0 ? "Jato · horário" : "Jato · anti-horário");
         }
         return;
       }
@@ -1602,21 +2178,21 @@
       e.y = cy;
       e.wormSpinT -= dt;
       var dir = e.wormSpinDir || 1;
-      e.wormSpinAng = (e.wormSpinAng || -Math.PI / 2) + dir * 0.42 * dt;
+      e.wormSpinAng = (e.wormSpinAng || -Math.PI / 2) + dir * 1.26 * dt;
       e.rot = e.wormSpinAng;
       var jets = e.wormJets || 1;
       var jlen = wormJetLen(state);
       e.wormJetTick = (e.wormJetTick || 0) - dt;
       if (e.wormJetTick <= 0) {
-        e.wormJetTick = 0.16;
+        e.wormJetTick = 0.07;
         for (var j = 0; j < jets; j++) {
           var ja = e.wormSpinAng + (j ? Math.PI : 0);
-          hurtLane(state, e.x, e.y, ja, jlen, 18, Math.round(e.def.dmg * 0.55));
+          hurtLane(state, e.x, e.y, ja, jlen, 40, Math.round(e.def.dmg * 0.55));
         }
       }
       if (e.wormSpinT <= 0) {
         e.wormAct = "";
-        e.wormT = 2.4;
+        e.wormT = 0.9;
       }
       return;
     }
@@ -1632,16 +2208,16 @@
       }
       if (e.spikeWait <= -0.25) {
         e.wormAct = "";
-        e.wormT = 2.8;
+        e.wormT = 1.05;
       }
       return;
     }
     e.buried = false;
     e.stealth = 0;
-    moveTowards(e, target.x, target.y, 22, dt);
+    moveTowards(e, target.x, target.y, 66, dt);
     e.wormT -= dt;
     if (e.wormT > 0) return;
-    var wpool = ["dive", "dive", "spin", "spikes"];
+    var wpool = p2 ? ["dive", "dive", "dive", "spin", "spikes"] : ["dive", "dive", "spin", "spikes"];
     if (e.wormLast) {
       var ww = [];
       for (var wi = 0; wi < wpool.length; wi++) if (wpool[wi] !== e.wormLast) ww.push(wpool[wi]);
@@ -1655,26 +2231,22 @@
       e.diveLen = polyLen(path);
       e.wormAct = "dive";
       e.diveDist = 0;
-      e.diveHold = 1.15;
+      e.diveHold = p2 ? 0.22 : 0.4;
       e.segAcc = 0;
       e.wormSegs = [];
       e.buried = true;
-      warnWormPath(state, path, 1.15);
+      warnWormPath(state, path, 0.55);
       sandBurst(state, e.x, e.y, 18);
-      wormCallout(state, "Mergulho");
       return;
     }
     if (wact === "spin") {
       e.wormAct = "spin";
-      e.spinWind = 1.35;
+      e.spinWind = 0.48;
       e.spinTell = 0;
       e.wormSpinT = 0;
       e.wormSpinAng = -Math.PI / 2;
       e.wormSpinDir = Math.random() < 0.5 ? -1 : 1;
       e.wormJets = rage ? 2 : 1;
-      var mid = { x: (G.playfield(state).x0 + G.playfield(state).x1) / 2, y: (G.playfield(state).y0 + G.playfield(state).y1) / 2 };
-      warnAt(state, { kind: "mark", x: mid.x, y: mid.y, t: 1.35, max: 1.35, r: 74, dmg: 0, color: "#e8c070" });
-      wormCallout(state, "Vai ao centro");
       return;
     }
     var spots = [];
@@ -1688,12 +2260,43 @@
     }
     e.wormAct = "spikes";
     e.spikeSpots = spots;
-    e.spikeWait = 0.95;
+    e.spikeWait = 0.55;
     e.spikeDid = false;
     for (var sm = 0; sm < spots.length; sm++) {
-      warnAt(state, { kind: "mark", x: spots[sm].x, y: spots[sm].y, t: 0.95, max: 0.95, r: 22, dmg: 0, color: "#8a5a28" });
+      warnAt(state, { kind: "mark", x: spots[sm].x, y: spots[sm].y, t: 0.55, max: 0.55, r: 16, dmg: 0, color: "#6a4a22" });
     }
-    wormCallout(state, "Espinhos");
+  }
+
+  function tickSandWorm(state, e, target, dt, spd) {
+    e.sandT = (e.sandT == null ? 0.8 : e.sandT) - dt;
+    if (e.buried) {
+      e.stealth = 0.72;
+      moveTowards(e, target.x, target.y, spd * 2.4, dt);
+      var close = dist(e, target) < 34;
+      if (close || e.sandT <= 0) {
+        e.buried = false;
+        e.stealth = 0;
+        e.sandT = 1.35;
+        sandBurst(state, e.x, e.y, 12);
+        if (close) {
+          hurtSquadArea(state, e.x, e.y, 36, Math.round(e.def.dmg * 1.1), e.x, e.y);
+        }
+      }
+      return;
+    }
+    chase(state, e, target, spd * 1.15, dt);
+    var d = dist(e, target);
+    if (e.contactCd <= 0 && d < (e.def.range || 26) + (target.def.size || 10)) {
+      e.contactCd = 0.28;
+      if (!(G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e))) {
+        hurt(state, target, e.def.dmg, e.x, e.y);
+      }
+    }
+    if (e.sandT <= 0) {
+      e.buried = true;
+      e.sandT = 0.55 + Math.random() * 0.35;
+      sandBurst(state, e.x, e.y, 8);
+    }
   }
 
   function fireMoonWaves(state, e) {
@@ -1701,14 +2304,47 @@
     for (var i = 0; i < n; i++) {
       var ang = (Math.PI * 2 * i) / n + e.phase;
       enemyFireAng(state, e, ang, "moonwave", {
-        speed: 260,
-        r: 10,
-        dmg: Math.round(e.def.dmg * 1.15),
+        speed: 280,
+        r: 12,
+        dmg: Math.round(e.def.dmg * (e.fake ? 0.7 : 1.15)),
         life: 1.55,
         color: "#9ad8ff",
-        hitsLeft: 3
+        hitsLeft: 3,
+        exposed: true
       });
     }
+  }
+
+  function fireMoonSlash(state, e, target) {
+    var ang = target ? Math.atan2(target.y - e.y, target.x - e.x) : (e.rot || 0);
+    e.swordAng = ang;
+    var spread = [-0.38, 0, 0.38];
+    for (var i = 0; i < spread.length; i++) {
+      enemyFireAng(state, e, ang + spread[i], "moonslash", {
+        speed: 340,
+        r: 18,
+        dmg: Math.round(e.def.dmg * 1.35),
+        life: 1.7,
+        color: "#c8e8ff",
+        hitsLeft: 6,
+        slashLen: 92,
+        exposed: true,
+        muzzle: 18
+      });
+    }
+  }
+
+  function spawnMoonBurn(state, x, y) {
+    pushZone(state, {
+      kind: "moon_burn",
+      x: x,
+      y: y,
+      r: 46,
+      t: 5.5,
+      max: 5.5,
+      dmg: 16,
+      hurtPlayer: true
+    });
   }
 
   function face(u, tx, ty, dt) {
@@ -1930,6 +2566,10 @@
     if (state.aura && state.aura.slowSquad) speedMul *= Math.max(0.55, 1 - state.aura.slowSquad);
     if (G.tactics && G.tactics.speedMul) speedMul *= G.tactics.speedMul(state);
     if ((state.honeyT || 0) > 0) speedMul *= 0.42;
+    if ((state.honeyPin || 0) > 0) {
+      state.honeyPin = Math.max(0, state.honeyPin - dt);
+      speedMul *= 0.12;
+    }
     if (squadPinned(state)) {
       state.dashT = 0;
       state.dashActive = false;
@@ -2030,7 +2670,9 @@
         /* banner planted: CD does not tick */
       } else if (u.activeCd > 0) u.activeCd -= dt;
       if (u.activeFlash > 0) u.activeFlash -= dt;
+      if (u.throwT > 0) u.throwT -= dt;
       if (u.veilFogT > 0) u.veilFogT -= dt;
+      if (u.exposedT > 0) u.exposedT -= dt;
       var ox = u.x;
       var oy = u.y;
       if (u.held || u.detached) {
@@ -2129,6 +2771,33 @@
     if (G.tactics && G.tactics.playerShoot) G.tactics.playerShoot(state, dt);
   }
 
+  function nearestHostile(state, from) {
+    var best = null;
+    var bestD = 1e9;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (e.hp <= 0 || e.stolen || (from && e.id === from.id)) continue;
+      var d = dist(from, e);
+      if (d < bestD) {
+        bestD = d;
+        best = e;
+      }
+    }
+    return best;
+  }
+
+  function detonateStolen(state, e) {
+    if (!e || e.stolenBoom) return;
+    e.stolenBoom = true;
+    var r = 58 + (e.def.size || 12);
+    var dmg = Math.max(52, Math.round((e.maxHp || 40) * 0.4 + (e.def.dmg || 12) * 3.2));
+    e.hp = 0;
+    e.noDrop = true;
+    explode(state, e.x, e.y, r, dmg, "player", "#c86a3a");
+    G.audio.explosion();
+    state.floaters.push(G.createFloater(e.x, e.y - 16, "boom", "#c86a3a"));
+  }
+
   function updateEnemies(state, dt) {
     var units = state.units;
     for (var i = 0; i < state.enemies.length; i++) {
@@ -2141,6 +2810,7 @@
       e.lastHitT = (e.lastHitT || 0) + dt;
       if (e.revealT > 0) e.revealT = Math.max(0, e.revealT - dt);
       if (e.slowT > 0) e.slowT -= dt;
+      if (e.drunkT > 0) e.drunkT -= dt;
       if (e.freezeT > 0) e.freezeT -= dt;
       if (e.silenceT > 0) {
         e.silenceT -= dt;
@@ -2153,10 +2823,15 @@
         if (e.fearImmuneT <= 0) e.fearUsed = false;
       }
       if (e.obsMarkT > 0) e.obsMarkT -= dt;
-      if (e.burnT > 0) {
+    if (e.burnT > 0) {
         e.burnT -= dt;
+        if (!e.stolen) {
         hurt(state, e, (e.burnDps || 8) * dt, e.x, e.y, true, { trueDmg: true });
         if (e.burnT <= 0) e.burnDps = 0;
+        } else {
+          e.burnT = 0;
+          e.burnDps = 0;
+        }
       }
       if (e.bleedT > 0) {
         e.bleedT -= dt;
@@ -2180,13 +2855,28 @@
           e.reconDarts = [];
         }
       }
-      if (G.tactics && G.tactics.tickConfuse && G.tactics.tickConfuse(state, e, dt)) continue;
-      var target = nearest(units, e.x, e.y);
-      if (G.tactics && G.tactics.enemyTarget) {
-        var bait = G.tactics.enemyTarget(state, e);
-        if (bait) target = bait;
+      if (!e.stolen && G.tactics && G.tactics.tickConfuse && G.tactics.tickConfuse(state, e, dt)) continue;
+      var target;
+      if (e.stolen) {
+        e.stolenT = (e.stolenT || 0) - dt;
+        if (e.stolenT <= 0) {
+          detonateStolen(state, e);
+          continue;
+        }
+        target = nearestHostile(state, e);
+        if (!target) {
+          var sqd = dist(e, state.squad);
+          if (sqd > 68) moveTowards(e, state.squad.x, state.squad.y, (e.def.speed || 50) * 0.75, dt);
+          continue;
+        }
+      } else {
+        target = nearest(units, e.x, e.y);
+        if (G.tactics && G.tactics.enemyTarget) {
+          var bait = G.tactics.enemyTarget(state, e);
+          if (bait) target = bait;
+        }
+        if (G.tactics && G.tactics.enemyAim) target = G.tactics.enemyAim(state, e, target);
       }
-      if (G.tactics && G.tactics.enemyAim) target = G.tactics.enemyAim(state, e, target);
       if (!target) {
         if (e.def.kind !== "nest") continue;
         target = { x: state.squad.x, y: state.squad.y, def: { size: 12 }, hp: 1, id: -1 };
@@ -2198,12 +2888,16 @@
       var kind = e.def.kind;
       var spd = e.def.speed;
 
-      if (isInvasaoMinion(state, e)) {
+      if (isInvasaoMinion(state, e) && !e.stolen) {
         var host = invasaoHost(state, e);
         if (host && wantHealRetreat(e)) {
           retreatBehindBoss(state, e, host, dt, spd);
           if (!e.attached && !(e.ricoLeft > 0)) G.clampPlay(e, state);
           continue;
+        }
+        if ((e.justHealed || 0) > 0) {
+          e.justHealed -= dt;
+          spd *= 1.5;
         }
       }
 
@@ -2211,11 +2905,11 @@
         chase(state, e, target, spd, dt);
         if (d < e.def.range + target.def.size && e.contactCd <= 0) {
           e.contactCd = 0.32;
-          if (G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e)) {
+          if (!e.stolen && G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e)) {
             /* frontal armor */
           } else if (isDecoy(e)) applyVeilNuisance(state, target, e);
           else {
-            hurt(state, target, e.def.dmg, e.x, e.y);
+            hurt(state, target, e.def.dmg, e.x, e.y, !!e.stolen);
             G.audio.hit();
           }
         }
@@ -2240,16 +2934,41 @@
       } else if (kind === "kamikaze") {
         chase(state, e, target, spd, dt);
         if (d < e.def.range) {
-          explode(state, e.x, e.y, 52, e.def.dmg, "enemy");
+          explode(state, e.x, e.y, 52, e.def.dmg, e.stolen ? "player" : "enemy");
           e.hp = 0;
           G.audio.explosion();
         }
       } else if (kind === "healer") {
+        if (e.stolen) {
+          var woundedP = null;
+          var worstP = 1;
+          for (var hpi = 0; hpi < state.units.length; hpi++) {
+            var pal = state.units[hpi];
+            if (pal.hp <= 0 || pal.stowed) continue;
+            var ratioP = pal.hp / pal.maxHp;
+            if (ratioP < worstP) {
+              worstP = ratioP;
+              woundedP = pal;
+            }
+          }
+          if (woundedP && worstP < 0.95) {
+            moveTowards(e, woundedP.x, woundedP.y, spd, dt);
+            if (dist(e, woundedP) < 55 && e.cooldown <= 0) {
+              e.cooldown = 0.8;
+              woundedP.hp = Math.min(woundedP.maxHp, woundedP.hp + 10);
+              woundedP.healGlow = 0.7;
+              if (G.healFx) G.healFx(state, woundedP.x, woundedP.y);
+              G.burst(state, woundedP.x, woundedP.y, "#3dff7a", 8, 45);
+            }
+          } else {
+            chase(state, e, target, spd, dt);
+          }
+        } else {
         var wounded = null;
         var worst = 1;
         for (var h = 0; h < state.enemies.length; h++) {
           var ally = state.enemies[h];
-          if (ally.hp <= 0 || ally.id === e.id || ally.def.kind === "healer") continue;
+          if (ally.hp <= 0 || ally.id === e.id || ally.def.kind === "healer" || ally.stolen) continue;
           var ratio = ally.hp / ally.maxHp;
           if (ratio < worst) {
             worst = ratio;
@@ -2268,6 +2987,7 @@
         } else {
           moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
         }
+        }
       } else if (kind === "artillery") {
         var prefA = e.def.prefer || 250;
         if (e.rushMinion) prefA = 160;
@@ -2275,7 +2995,7 @@
         else if (d > prefA + 40) moveTowards(e, target.x, target.y, spd * 0.6, dt);
         if (e.cooldown <= 0 && (e.silenceT || 0) <= 0) {
           e.cooldown = 1 / e.def.fire;
-          state.warnings.push({ x: target.x, y: target.y, t: 0.85, max: 0.85, r: 42, dmg: e.def.dmg });
+          state.warnings.push({ x: target.x, y: target.y, t: 0.85, max: 0.85, r: 42, dmg: e.def.dmg, team: e.stolen ? "player" : "enemy" });
         }
       } else if (kind === "stealth") {
         if (d > 88) {
@@ -2287,7 +3007,7 @@
           if (d < e.def.range + target.def.size && e.cooldown <= 0) {
             e.cooldown = 0.32;
             if (isDecoy(e)) applyVeilNuisance(state, target, e);
-            else hurt(state, target, e.def.dmg, e.x, e.y);
+            else hurt(state, target, e.def.dmg, e.x, e.y, !!e.stolen);
           }
         }
       } else if (kind === "sniper") {
@@ -2415,6 +3135,21 @@
           enemyFire(state, e, target, "sting", { poison: true, speed: 200, r: 4 });
         }
       } else if (kind === "boss_burst") {
+        if (G.invasion && G.invasion.enterP2(state, e, "Kaska perde a carapaça")) {
+          e.shellOff = true;
+          e.shieldLockT = 0;
+          spawnDuskShields(state, e);
+          G.game.spawnAt(state, "kaska_sentry", e.x + 40, e.y, { noDrop: true });
+        }
+        if (e.invP2) {
+          if (G.invasion.countType(state, "kaska_sentry") < 1) {
+            e.sentryT = (e.sentryT == null ? 4 : e.sentryT) - dt;
+            if (e.sentryT <= 0) {
+              e.sentryT = 10;
+              G.game.spawnAt(state, "kaska_sentry", e.x + 36, e.y, { noDrop: true });
+            }
+          }
+        }
         if (e.shieldLockT > 0) e.shieldLockT -= dt;
         if (!e.shieldInited) {
           e.shieldInited = true;
@@ -2465,10 +3200,11 @@
           e.y -= Math.sin(cAng) * 40 * dt;
           G.clampPlay(e, state);
           if (e.chargeWindup <= 0) {
-            var cSp = 520;
+            var cSp = e.invP2 ? 720 : 520;
+            var end = rayExitPlay(G.playfield(state), e.x, e.y, Math.cos(cAng), Math.sin(cAng), 20);
             e.vx = Math.cos(cAng) * cSp;
             e.vy = Math.sin(cAng) * cSp;
-            e.cascaDashT = 0.48;
+            e.cascaDashT = e.invP2 ? Math.max(0.35, end.dist / cSp) : 0.48;
           }
         } else if ((e.cascaDashT || 0) > 0) {
           e.cascaDashT -= dt;
@@ -2652,6 +3388,43 @@
           }
         }
       } else if (kind === "boss_spawn") {
+        if (G.invasion && G.invasion.enterP2(state, e, "Fortilax · ninho aberto")) {
+          e.sentryT = 0.8;
+          e.cannonT = 1.4;
+          e.tpT = 3;
+        }
+        if (e.invP2) {
+          e.sentryT = (e.sentryT || 2.5) - dt;
+          e.cannonT = (e.cannonT || 1.8) - dt;
+          e.tpT = (e.tpT || 6) - dt;
+          if (e.sentryT <= 0) {
+            e.sentryT = 5.5;
+            var spot = pickPlay(state, 50);
+            G.game.spawnAt(state, "kaska_sentry", spot.x, spot.y, { noDrop: true });
+          }
+          if (e.cannonT <= 0 && target) {
+            e.cannonT = 2.2;
+            warnAt(state, { kind: "acid", x: target.x, y: target.y, t: 0.7, max: 0.7, r: 48, dmg: Math.round(e.def.dmg * 1.4), color: "#c45cff" });
+            warnAt(state, { kind: "acid", x: target.x + 50, y: target.y, t: 0.85, max: 0.85, r: 36, dmg: Math.round(e.def.dmg), color: "#ff7a2a" });
+          }
+          e.molotovT = (e.molotovT || 2.6) - dt;
+          if (e.molotovT <= 0 && target) {
+            e.molotovT = 3.5;
+            for (var mv = 0; mv < 3; mv++) {
+              var mx = target.x + (Math.random() - 0.5) * 90;
+              var my = target.y + (Math.random() - 0.5) * 90;
+              warnAt(state, { kind: "acid", x: mx, y: my, t: 0.55 + mv * 0.12, max: 0.7, r: 32, dmg: Math.round(e.def.dmg * 0.9), color: "#ff7a2a" });
+              pushZone(state, { kind: "napalm", x: mx, y: my, r: 34, t: 3.4, max: 3.4, dmg: 14, hurtPlayer: true });
+            }
+          }
+          if (e.tpT <= 0) {
+            e.tpT = 7;
+            var dest = pickPlay(state, 60);
+            warnAt(state, { kind: "mark", x: dest.x, y: dest.y, t: 0.35, max: 0.35, r: 40, dmg: 0, color: "#c45cff" });
+            e.x = dest.x;
+            e.y = dest.y;
+          }
+        }
         if (e.lastHitT > 4.8) {
           e.parked = true;
           e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.005 * dt);
@@ -2668,22 +3441,47 @@
         if (e.spawnT <= 0) {
           e.spawnT = 3;
           var any = G.ENEMY_POOL[(Math.random() * G.ENEMY_POOL.length) | 0];
-          G.game.spawnAt(state, any, e.x + (Math.random() - 0.5) * 70, e.y + (Math.random() - 0.5) * 70, { noDrop: true });
+          var spawned = G.game.spawnAt(state, any, e.x + (Math.random() - 0.5) * 70, e.y + (Math.random() - 0.5) * 70, { noDrop: true });
+          applyNestBuff(spawned);
+          var tag = spawned.nestBuff === "speed" ? "buff vel" : spawned.nestBuff === "dmg" ? "buff dano" : "buff tiro";
+          state.floaters.push(G.createFloater(spawned.x, spawned.y - 14, tag, "#ffd24a"));
+        }
+        e.fuseT = (e.fuseT == null ? 6.5 : e.fuseT) - dt;
+        if (e.fuseT <= 0) {
+          e.fuseT = 7.5;
+          fuseNestUnits(state, e);
         }
         if (e.cooldown <= 0 && d < e.def.range) {
           e.cooldown = 1 / e.def.fire;
           enemyFire(state, e, target);
         }
       } else if (kind === "boss_veil") {
+        if (e.type === "chefe_espectro" && !e.fake && e.inv) {
+          if (G.invasion && G.invasion.enterP2(state, e, "Moonlight permanente")) {
+            e.moonLock = true;
+            e.moonEnergy = 100;
+            e.veilAct = "sword";
+            e.swordT = 1.4;
+            e.sweepT = 5;
+          }
+          e.moonEnergy = 100;
+        }
         e.stealth = 0.45 + Math.sin(e.phase * 2) * 0.2;
         if (e.type === "chefe_espectro" && !e.fake && !e.helperOf) {
-          if (!e.veilClone60 && e.hp <= e.maxHp * 0.6) {
-            e.veilClone60 = true;
+          if (!e.veilClone50 && e.hp <= e.maxHp * 0.5) {
+            e.veilClone50 = true;
             spawnVeilClone(state, e, 0);
-          }
-          if (!e.veilClone30 && e.hp <= e.maxHp * 0.3) {
-            e.veilClone30 = true;
             spawnVeilClone(state, e, 1);
+            spawnVeilClone(state, e, 2);
+            state.banner = { text: "Trindade lunar", t: 1.8 };
+          }
+          e.moonEnergy = Math.min(100, (e.moonEnergy || 0) + dt * 7.2);
+          e.moonBurnT = (e.moonBurnT == null ? 2.8 : e.moonBurnT) - dt;
+          if (e.moonBurnT <= 0) {
+            e.moonBurnT = 3.6;
+            var spot = pickPlay(state, 70);
+            spawnMoonBurn(state, spot.x, spot.y);
+            warnAt(state, { kind: "mark", x: spot.x, y: spot.y, t: 0.45, max: 0.45, r: 46, dmg: 0, color: "#9ad8ff" });
           }
         }
         if ((e.tpWindup || 0) > 0) {
@@ -2700,13 +3498,67 @@
             }
             if (boomOn) {
               var fakeTp = !!(e.fake || e.decoy);
-              explode(state, e.x, e.y, fakeTp ? 96 : 124, fakeTp ? 0 : 42, "enemy", fakeTp ? "#c8b4ff" : "#ff4a62");
+              explode(state, e.x, e.y, fakeTp ? 96 : 124, fakeTp ? 22 : 42, "enemy", "#9ad8ff");
               G.audio.explosion();
             } else {
-              G.burst(state, e.x, e.y, "#c8a0ff", 16, 90);
+              G.burst(state, e.x, e.y, "#9ad8ff", 16, 90);
             }
             e.tpDest = null;
             e.tpBoom = false;
+          }
+        } else if (e.veilAct === "sweep") {
+          e.sweepWind = (e.sweepWind || 0) - dt;
+          if (e.sweepWind <= 0 && !e.sweepDid) {
+            e.sweepDid = true;
+            var bS = G.playfield(state);
+            var pad = 42;
+            var onEdge =
+              state.squad.x < bS.x0 + pad ||
+              state.squad.x > bS.x1 - pad ||
+              state.squad.y < bS.y0 + pad ||
+              state.squad.y > bS.y1 - pad;
+            if (!onEdge) hurtSquadArea(state, state.squad.x, state.squad.y, 90, Math.round(e.def.dmg * 2.6), e.x, e.y);
+            G.burst(state, (bS.x0 + bS.x1) / 2, (bS.y0 + bS.y1) / 2, "#9ad8ff", 36, 180);
+            state.shake = Math.max(state.shake || 0, 10);
+          }
+          if (e.sweepWind <= -0.35) {
+            e.veilAct = "sword";
+            e.swordT = 1.2;
+            e.swordDid = false;
+            e.sweepT = 7.5;
+          }
+        } else if (e.veilAct === "sword") {
+          e.swordT = (e.swordT || 0) - dt;
+          if (target) e.swordAng = Math.atan2(target.y - e.y, target.x - e.x);
+          e.rot = e.swordAng || e.rot;
+          if ((e.swordT || 0) <= 0.85 && !e.swordDid) {
+            e.swordDid = true;
+            fireMoonSlash(state, e, target);
+            e.swordVolley = 0.38;
+          }
+          if ((e.swordVolley || 0) > 0) {
+            e.swordVolley -= dt;
+            if (e.swordVolley <= 0) fireMoonSlash(state, e, target);
+          }
+          if ((e.swordT || 0) <= 0) {
+            if (e.moonLock) {
+              e.sweepT = (e.sweepT == null ? 6 : e.sweepT) - 1.2;
+              if (e.sweepT <= 0) {
+                e.veilAct = "sweep";
+                e.sweepWind = 1.15;
+                e.sweepDid = false;
+                state.banner = { text: "Fuja pras bordas", t: 1.8 };
+                state.floaters.push(G.createFloater(e.x, e.y - 26, "varredura lunar", "#9ad8ff"));
+              } else {
+                e.swordT = 1.2;
+                e.swordDid = false;
+                fireMoonWaves(state, e);
+              }
+            } else {
+              e.veilAct = "";
+              e.cooldown = 1.8;
+              e.moonEnergy = 0;
+            }
           }
         } else if (e.veilAct === "moon") {
           var mid = {
@@ -2726,23 +3578,19 @@
           }
           if (e.moonWind <= -0.5) {
             e.veilAct = "";
-            e.cooldown = 2.2;
+            e.cooldown = 2.0;
           }
         } else if (e.cooldown <= 0) {
-          if (!e.fake && !e.helperOf && (e.moonReady || 0) <= 0) {
-            e.moonReady = 11;
-            e.veilAct = "moon";
-            e.moonWind = 0.85;
-            e.moonDid = false;
-            var c = {
-              x: (G.playfield(state).x0 + G.playfield(state).x1) / 2,
-              y: (G.playfield(state).y0 + G.playfield(state).y1) / 2
-            };
-            pushZone(state, { kind: "moon_spot", x: c.x, y: c.y, r: 54, t: 2.4, max: 2.4 });
-            warnAt(state, { kind: "mark", x: c.x, y: c.y, t: 0.85, max: 0.85, r: 58, dmg: 0, color: "#9ad8ff" });
-            state.floaters.push(G.createFloater(e.x, e.y - 26, "luar", "#9ad8ff"));
+          if (!e.fake && !e.helperOf && (e.moonEnergy || 0) >= 100) {
+            e.veilAct = "sword";
+            e.swordT = 1.35;
+            e.swordDid = false;
+            e.moonEnergy = 100;
+            warnAt(state, { kind: "mark", x: e.x, y: e.y, t: 0.5, max: 0.5, r: 70, dmg: 0, color: "#9ad8ff" });
+            state.floaters.push(G.createFloater(e.x, e.y - 26, "Moonlight Sword", "#9ad8ff"));
+            state.banner = { text: "Moonlight Sword", t: 1.6 };
           } else {
-            e.cooldown = 2.4;
+            e.cooldown = e.fake ? 1.8 : 2.2;
             e.tpCount = (e.tpCount || 0) + 1;
             var boom = e.tpCount >= (e.nextBoom || 4);
             if (boom) {
@@ -2752,29 +3600,55 @@
               e.tpDest = dest;
               e.tpBoom = true;
               e.tpWindup = 0.72;
-              warnAt(state, { kind: "tp", x: dest.x, y: dest.y, t: 0.72, max: 0.72, r: 124, dmg: 0, color: e.fake ? "#c8b4ff" : "#ff4a62" });
-              warnAt(state, { kind: "tp", x: e.x, y: e.y, t: 0.72, max: 0.72, r: 70, dmg: 0, color: e.fake ? "#c8b4ff" : "#ff4a62" });
-              state.floaters.push(G.createFloater(e.x, e.y - 26, "salto", "#c8a0ff"));
+              warnAt(state, { kind: "tp", x: dest.x, y: dest.y, t: 0.72, max: 0.72, r: 124, dmg: 0, color: "#9ad8ff" });
+              warnAt(state, { kind: "tp", x: e.x, y: e.y, t: 0.72, max: 0.72, r: 70, dmg: 0, color: "#9ad8ff" });
+              state.floaters.push(G.createFloater(e.x, e.y - 26, "salto", "#9ad8ff"));
             } else {
               veilBlink(state, e, target, false);
             }
           }
         }
-        if (e.moonReady > 0) e.moonReady -= dt;
-        if (e.burstCd <= 0 && e.veilAct !== "moon" && (e.tpWindup || 0) <= 0) {
-          e.burstCd = 0.7;
-          enemyFire(state, e, target, "bullet", { fake: !!e.fake, r: 5 });
+        if (e.burstCd <= 0 && e.veilAct !== "moon" && e.veilAct !== "sword" && (e.tpWindup || 0) <= 0) {
+          e.burstCd = e.fake ? 0.55 : 0.62;
+          enemyFire(state, e, target, "moonwave", {
+            r: e.fake ? 8 : 9,
+            speed: 300,
+            dmg: Math.round(e.def.dmg * (e.fake ? 0.75 : 1)),
+            color: "#9ad8ff",
+            exposed: true,
+            life: 1.25
+          });
         }
       } else if (kind === "boss_invasao") {
         tickInvasao(state, e, target, dt, spd);
-      } else if (kind === "alien_rifle") {
+      } else if (kind === "alien_rifle" || kind === "alien_scout" || kind === "alien_pistol") {
         tickAlienRifle(state, e, target, dt, spd);
+      } else if (kind === "bonfire") {
+        tickBonfire(state, e, dt);
+      } else if (kind === "kaska_sentry") {
+        tickSentry(state, e, target, dt);
+      } else if (kind === "boss_princess") {
+        tickPrincess(state, e, target, dt, spd);
+      } else if (kind === "bee_nurse") {
+        tickNurse(state, e, dt, spd);
+      } else if (kind === "bee_architect") {
+        tickArchitect(state, e, dt);
+      } else if (kind === "hive_wall") {
+        e.vx = e.vy = 0;
+      } else if (kind === "mini_antlion") {
+        tickAntlion(state, e, target, dt, spd);
+      } else if (kind === "mini_bomber") {
+        tickBomber(state, e, target, dt, spd);
+      } else if (kind === "mini_mantis") {
+        tickMantis(state, e, target, dt, spd);
       } else if (kind === "boss_vulto") {
         tickVulto(state, e, target, dt, spd);
       } else if (kind === "boss_king") {
         tickKing(state, e, target, dt, spd);
       } else if (kind === "boss_worm") {
         tickWorm(state, e, target, dt);
+      } else if (kind === "sand_worm") {
+        tickSandWorm(state, e, target, dt, spd);
       } else if (kind === "pin_spike") {
         e.rot = (e.rot || 0) + dt * 0.5;
       } else if (kind === "boss_final") {
@@ -2861,7 +3735,14 @@
         }
       }
 
-      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && e.vultoAct !== "strafe" && e.wormAct !== "dive") G.clampPlay(e, state);
+      if (e.fused && target && (e.fuseCd || 0) <= 0 && d < (e.def.range || 140) + 40) {
+        e.fuseCd = 0.85;
+        enemyFire(state, e, target, e.fuseShot || "bullet", { r: 4, speed: 280, dmg: Math.round(e.def.dmg * 0.7) });
+      } else if (e.fused) {
+        e.fuseCd = (e.fuseCd || 0) - dt;
+      }
+
+      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && e.vultoAct !== "strafe" && e.wormAct !== "dive" && !e.buried) G.clampPlay(e, state);
     }
     separateBodies(state.enemies, state, true);
   }
@@ -2911,6 +3792,7 @@
         var t = list[j];
         if (!unitHittable(t) || p.hitIds[t.id]) continue;
         var rad = t.def.size + p.r;
+        if (p.kind === "moonslash") rad += 16;
         var dx = t.x - p.x;
         var dy = t.y - p.y;
         if (dx * dx + dy * dy <= rad * rad) {
@@ -2924,6 +3806,11 @@
         continue;
       }
       if (p.poison && hit.team === "player") hit.poisonT = 5;
+      if (p.exposed && hit.team === "player") {
+        var wasEx = hit.exposedT || 0;
+        hit.exposedT = Math.max(wasEx, 4);
+        if (wasEx <= 0.2) state.floaters.push(G.createFloater(hit.x, hit.y - 14, "exposto", "#ffe08a"));
+      }
       if (p.kind === "honey" && hit.team === "player") {
         state.honeyT = Math.max(state.honeyT || 0, 3.4);
         pushZone(state, { kind: "honey", x: hit.x, y: hit.y, r: 46, t: 4.5, max: 4.5, hurtPlayer: false });
@@ -3064,13 +3951,7 @@
     if (d.kind === "unit") {
       var kind = d.unitKind || "recruta";
       if (G.codex) G.codex.unlockUnit(kind);
-      if (G.soldierCount(state) < G.maxUnits()) {
-        var nu = G.createPlayerUnit(d.x, d.y, kind, state.run, G.save.data.perm);
-        state.units.push(nu);
-        state.floaters.push(G.createFloater(d.x, d.y, "+1", "#7ec8ff"));
-      } else {
-        bankDrop(state, kind, d.x, d.y);
-      }
+      G.merge.addArquivo(state, d.x, d.y);
       return true;
     }
     return false;
@@ -3093,7 +3974,7 @@
       var dx = state.squad.x - d.x;
       var dy = state.squad.y - d.y;
       var dist2 = dx * dx + dy * dy;
-      var mag = d.kind === "unit" ? 0 : d.kind === "hp" ? 40 : magnet;
+      var mag = d.kind === "hp" ? 40 : magnet;
       if (state.vacuumLoot) mag = 8000;
       var banner = G.tactics && G.tactics.inBanner && G.tactics.inBanner(state, d.x, d.y);
       if (banner) dist2 = 0;
@@ -3243,7 +4124,25 @@
         var hold = u.def.range;
         var rMul = u.kind === "lanca_chamas" ? 2 * sm : 1.85 * sm;
         u.def.range = hold * rMul;
-        flameAt(state, u, tgt, { burnMul: u.kind === "lanca_chamas" ? 2 * sm : 1 });
+        flameAt(state, u, tgt, { burnMul: u.kind === "lanca_chamas" ? 2 * sm : 1, napalm: true });
+        var nang = Math.atan2(tgt.y - u.y, tgt.x - u.x);
+        if (G.tactics && G.tactics.meltCone) {
+          G.tactics.meltCone(state, { chance: 1, unit: u, range: u.def.range, ang: nang });
+        }
+        var nrange = u.def.range * (1 + (state.run.flame || 0) * 0.12);
+        for (var np = 1; np <= 5; np++) {
+          var nd = nrange * (np / 5.6);
+          pushZone(state, {
+            kind: "napalm",
+            x: u.x + Math.cos(nang) * nd,
+            y: u.y + Math.sin(nang) * nd,
+            r: 18 + np * 3,
+            t: 2.6,
+            max: 2.6,
+            dmg: Math.round(u.def.dmg * 0.95 * dmgMul(state)),
+            whiteHot: true
+          });
+        }
         u.def.range = hold;
       } else if (id === "carpet") {
         var nMines = Math.max(6, Math.round(6 * sm));
@@ -3304,8 +4203,12 @@
         if (state.enemies[vt].hp > 0 && state.enemies[vt].type === "chefe_vulto") hasVulto = true;
       }
       if (!hasVulto) {
-        state.vultoDark = Math.max(0, (state.vultoDark || 0) - dt * 0.65);
-        if (state.vultoBlind > 0) state.vultoBlind = Math.max(0, state.vultoBlind - dt);
+        if (G.invasion && G.invasion.firesAlive(state)) {
+          state.vultoDark = Math.max(state.vultoDark || 0, 0.85);
+        } else {
+          state.vultoDark = Math.max(0, (state.vultoDark || 0) - dt * 0.65);
+          if (state.vultoBlind > 0) state.vultoBlind = Math.max(0, state.vultoBlind - dt);
+        }
       }
       if (state.defeat) {
         updateFx(state, dt);

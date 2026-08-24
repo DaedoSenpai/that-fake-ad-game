@@ -32,14 +32,22 @@
     "boss-chefe_arklan": "audio/boss-cidadela.ogg",
     "boss-chefe_fortaleza": "audio/boss-cidadela.ogg",
     "boss-chefe_espectro": "audio/boss-veu.ogg",
-    "boss-chefe_final": "audio/boss-nucleo.ogg"
+    "boss-chefe_final": "audio/boss-nucleo.ogg",
+    "boss-beeprincess": "audio/boss-beeprincess.mp3",
+    "boss-formiga_leao": "audio/boss-cidadela.ogg",
+    "boss-besouro_bombardeiro": "audio/boss-cidadela.ogg",
+    "boss-louva_deus": "audio/boss-cidadela.ogg"
   };
 
   var BOSS_PRIO = {
     chefe_final: 8,
-    chefe_espectro: 7,
+    beeprincess: 7,
+    chefe_espectro: 6,
     chefe_arklan: 6,
-    chefe_fortaleza: 5,
+    formiga_leao: 5,
+    besouro_bombardeiro: 5,
+    louva_deus: 5,
+    chefe_fortaleza: 4,
     chefe_vulto: 4,
     chefe_megatanque: 3,
     chefe_beeking: 2,
@@ -95,6 +103,30 @@
     shoot: function () {
       this.play(function (ctx) {
         tone(ctx, 720, 0.045, "square", 0.03);
+      });
+    },
+
+    toss: function () {
+      this.play(function (ctx) {
+        tone(ctx, 420, 0.12, "square", 0.028, 160);
+      });
+    },
+
+    thud: function () {
+      this.play(function (ctx) {
+        tone(ctx, 95, 0.14, "sawtooth", 0.05, 42);
+      });
+    },
+
+    bark: function () {
+      this.play(function (ctx) {
+        tone(ctx, 240, 0.09, "square", 0.04, 90);
+      });
+    },
+
+    horn: function () {
+      this.play(function (ctx) {
+        tone(ctx, 160, 0.16, "sawtooth", 0.04, 70);
       });
     },
 

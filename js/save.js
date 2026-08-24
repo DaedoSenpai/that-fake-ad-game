@@ -26,6 +26,8 @@
       vault: 0,
       bestStage: 0,
       perm: permDefaults(),
+      invasion: 0,
+      maxInvasion: 0,
       codex: { units: {}, enemies: {} }
     };
   }
@@ -66,6 +68,8 @@
       vault: raw.vault | 0,
       bestStage: raw.bestStage | 0,
       perm: normalizePerm(raw.perm),
+      invasion: clamp(raw.invasion, 8),
+      maxInvasion: clamp(raw.maxInvasion, 8),
       codex: {
         units: (raw.codex && raw.codex.units) || {},
         enemies: (raw.codex && raw.codex.enemies) || {}

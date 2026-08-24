@@ -42,3 +42,6 @@ Boss     Mariposa-Véu          Eerie Cyber World (loop)
 
 Boss     Núcleo da Enxame      They're Here (loop)
          audio/boss-nucleo.ogg https://soundimage.org/sci-fi/
+
+Boss     Beeprincess-09        Self Destruct Sequence
+         audio/boss-beeprincess.mp3  https://soundimage.org/action/

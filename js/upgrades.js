@@ -28,7 +28,7 @@
     { id: "berserk", title: "Último suspiro", desc: "Quanto menos HP, mais dano.", unique: true, apply: function (run) { run.berserk = true; } },
     { id: "regen", title: "Rações", desc: "O esquadrão regenera HP no combate.", apply: function (run) { run.regen = (run.regen || 0) + 0.006; } },
     { id: "boom", title: "Carga extra", desc: "Explosão (morte, míssil, granada) fica maior.", favor: { projectile: ["missile", "grenade"], explode: true }, apply: function (run) { run.boom = (run.boom || 0) + 10; } },
-    { id: "clone", title: "Cópia de guerra", desc: "Duplica o soldado de menor nível. Se o grupo lotou, vira arquivo de guerra.", apply: function (run, state) {
+    { id: "clone", title: "Cópia de guerra", desc: "Duplica o soldado de menor nível. Respeita o limite de 2 cópias (recruta livre). Se lotou, vira arquivo de guerra.", apply: function (run, state) {
       var soldiers = [];
       for (var i = 0; i < state.units.length; i++) {
         if (state.units[i].hp > 0 && !state.units[i].commander) soldiers.push(state.units[i]);
@@ -36,7 +36,7 @@
       if (!soldiers.length) return;
       var low = soldiers[0];
       for (var s = 1; s < soldiers.length; s++) if ((soldiers[s].gen || 0) < (low.gen || 0)) low = soldiers[s];
-      if (G.soldierCount(state) < G.maxUnits()) {
+      if (G.soldierCount(state) < G.maxUnits() && G.canAddKind(state, low.kind)) {
         state.units.push(G.createPlayerUnit(low.x + 12, low.y + 12, low.kind, state.run, G.save.data.perm));
       } else {
         G.merge.addArquivo(state, low.x, low.y);
@@ -173,9 +173,7 @@
       ficha: !!run.ficha,
       rerolls: run.rerolls | 0,
       intel: {
-        arquivo: (run.intel && run.intel.arquivo) | 0,
-        confidencial: (run.intel && run.intel.confidencial) | 0,
-        maximo: (run.intel && run.intel.maximo) | 0
+        arquivo: ((run.intel && run.intel.arquivo) | 0) + ((run.intel && run.intel.confidencial) | 0) * 2 + ((run.intel && run.intel.maximo) | 0) * 4
       }
     }));
   }
@@ -210,7 +208,7 @@
         rerolls: G.save.data.perm.rerolls | 0,
         ficha: false,
         reserve: [],
-        intel: { arquivo: 0, confidencial: 0, maximo: 0 },
+        intel: { arquivo: 0 },
         tempDmg: 1,
         tempSpeed: 1,
         tempShield: 0,

@@ -36,6 +36,66 @@
       hp: 42, dmg: 11, range: 165, fire: 0.95, speed: 108, size: 13, color: "#4aa36a", kind: "alien_rifle",
       blurb: "Soldado do Comandante da Invasão. Avança em formação e recua ferido."
     },
+    batedor_alien: {
+      name: "Batedor alienígena",
+      hp: 36, dmg: 10, range: 130, fire: 1.15, speed: 168, size: 11, color: "#8ad46a", kind: "alien_scout",
+      blurb: "Ponta de lança da colmeia. Corre na frente e abre o flanco."
+    },
+    pistoleiro_alien: {
+      name: "Pistoleiro alienígena",
+      hp: 40, dmg: 8, range: 110, fire: 1.35, speed: 142, size: 12, color: "#6ad49a", kind: "alien_pistol",
+      blurb: "Médico invertido. Pistola rápida e cura o Irwin perto dele."
+    },
+    fogueira: {
+      name: "Fogueira do vulto",
+      hp: 100, dmg: 0, range: 0, fire: 0, speed: 0, size: 16, color: "#ff7a22", kind: "bonfire",
+      blurb: "Queima no canto da arena. Enquanto existir, a escuridão não some."
+    },
+    kaska_sentry: {
+      name: "Sentry-casca",
+      hp: 90, dmg: 12, range: 240, fire: 1.4, speed: 0, size: 14, color: "#d4a024", kind: "kaska_sentry",
+      blurb: "Escudo fincado. Atira no esquadrão até cair."
+    },
+    beeprincess: {
+      name: "Beeprincess-09",
+      title: "A herdeira da colmeia",
+      hp: 1680, dmg: 28, range: 180, fire: 0.7, speed: 96, size: 28, color: "#f0c84a", kind: "boss_princess", boss: true, flying: true,
+      blurb: "Nobre guerreira. Rapier, cetro, coroa e capa. Entra quando a rainha e o rei caem."
+    },
+    abelha_enfermeira: {
+      name: "Abelha enfermeira",
+      hp: 120, dmg: 0, range: 80, fire: 0, speed: 90, size: 14, color: "#ffe08a", kind: "bee_nurse", flying: true,
+      blurb: "Leva a princesa pro canto oposto e cura ela."
+    },
+    abelha_arquiteta: {
+      name: "Abelha arquiteta",
+      hp: 140, dmg: 0, range: 0, fire: 0, speed: 70, size: 15, color: "#c4a06a", kind: "bee_architect", flying: true,
+      blurb: "Ergue três camadas de barreira em volta da princesa."
+    },
+    barreira_colmeia: {
+      name: "Barreira da colmeia",
+      hp: 160, dmg: 0, range: 0, fire: 0, speed: 0, size: 18, color: "#e8c46a", kind: "hive_wall",
+      blurb: "Parede viva. Três camadas. Tem que quebrar pra chegar na princesa.",
+      codexHide: true
+    },
+    formiga_leao: {
+      name: "Formiga-leão",
+      title: "O poço ambulante",
+      hp: 720, dmg: 22, range: 90, fire: 0.5, speed: 48, size: 26, color: "#8a5a28", kind: "mini_antlion", boss: true,
+      blurb: "Miniboss do Fortilax. Cava funil, enterra e cospe areia."
+    },
+    besouro_bombardeiro: {
+      name: "Besouro bombardeiro",
+      title: "O artilheiro alado",
+      hp: 680, dmg: 26, range: 220, fire: 0.55, speed: 62, size: 24, color: "#5a3a18", kind: "mini_bomber", boss: true, flying: true,
+      blurb: "Miniboss do Fortilax. Carpet de bombas, mergulho e cluster."
+    },
+    louva_deus: {
+      name: "Louva-deus assassino",
+      title: "A lâmina da folha",
+      hp: 640, dmg: 34, range: 70, fire: 1.1, speed: 130, size: 20, color: "#4a7a32", kind: "mini_mantis", boss: true,
+      blurb: "Miniboss do Fortilax. Some, corta e abre leque de foices."
+    },
     chefe_comandante: {
       name: "Kaska O Marechal do Avanço",
       title: "A ponta de lança do enxame",
@@ -72,6 +132,12 @@
       blurb: "Finca no chão e prende o esquadrão. Atira nele pra se soltar.",
       codexHide: true
     },
+    minhoca_deserto: {
+      name: "Minhoca do deserto",
+      hp: 48, dmg: 14, range: 26, fire: 0, speed: 96, size: 16, color: "#c4a06a", kind: "sand_worm",
+      blurb: "Cria menor do Arklan. Some na areia e explode perto do esquadrão.",
+      codexHide: true
+    },
     chefe_fortaleza: {
       name: "Fortilax o Ninho andarilho",
       title: "Fortaleza com patas",
@@ -82,7 +148,7 @@
       name: "Dusk a Mariposa Lunar",
       title: "A Dama Da Noite",
       hp: 1470, dmg: 26, range: 200, fire: 0.8, speed: 58, size: 40, color: "#c8a0ff", kind: "boss_veil", boss: true, flying: true,
-      blurb: "Furtiva. O que ela invoca é isca: atrapalha, não mata."
+      blurb: "Furtiva. Coleta energia lunar, clona a si mesma e corta com a Moonlight Sword."
     },
     chefe_final: {
       name: "Núcleo do Enxame",
@@ -103,8 +169,8 @@
     veu_clone: {
       name: "Mariposa Lunar",
       title: "A Dama Da Noite",
-      hp: 420, dmg: 0, range: 200, fire: 0.8, speed: 58, size: 40, color: "#c8a0ff", kind: "boss_veil", boss: true, fake: true, flying: true, codexHide: true,
-      blurb: "Cópia vazia da Mariposa. Atrasa, não mata."
+      hp: 280, dmg: 16, range: 200, fire: 0.9, speed: 62, size: 34, color: "#9ad8ff", kind: "boss_veil", boss: true, fake: true, flying: true, codexHide: true,
+      blurb: "Clone da Mariposa. Atira luar de verdade pra atrapalhar."
     }
   };
 
@@ -150,10 +216,10 @@
     E.criomante.active = { name: "Rajada fria", desc: "Cristais de gelo à distância." };
     E.chefe_invasao.passive = { name: "Espelho da resistência", desc: "Copia o comandante: dispara com duas pistolas, manda tropa pra cima e cura quem fica na aura." };
     E.chefe_invasao.skills = [
-      { type: "active", name: "Bomba de ácido", desc: "Marca o esquadrão e, depois do mesmo atraso do airstrike aliado, solta ácido no chão.", icon: "☢" },
-      { type: "active", name: "Fuzileiros", desc: "Invoca dois fuzileiros alienígenas. Eles avançam e recuam com a vida baixa.", icon: "🔫" },
+      { type: "active", name: "Bomba de ácido", desc: "Solta duas: uma no esquadrão e outra perto, pra cercar. Depois do atraso, ácido no chão.", icon: "☢" },
+      { type: "active", name: "Fuzileiros", desc: "Mantém até 5 soldados no campo, spawnando de novo quando alguém cai. Feridos recuam, curados voltam pra cima.", icon: "🔫" },
       { type: "active", name: "Aura verde", desc: "Cura o enxame perto dele enquanto a luta rola.", icon: "✚" },
-      { type: "active", name: "Reforço contínuo", desc: "A luta inteira chama inimigos comuns a cada 5–10s.", icon: "👁" }
+      { type: "active", name: "Reforço contínuo", desc: "A luta inteira chama inimigos até o cap de 5 soldados.", icon: "👁" }
     ];
     E.fuzileiro_alien.passive = { name: "Disciplina", desc: "Fecha no esquadrão. Com a vida baixa, recua." };
     E.fuzileiro_alien.active = { name: "Rajada", desc: "Tiro de fuzil orgânico." };
@@ -167,7 +233,7 @@
     ];
     E.chefe_vulto.passive = { name: "Apaga-luz", desc: "A arena escurece. Só as chamas dele devolvem a visão." };
     E.chefe_vulto.skills = [
-      { type: "active", name: "Razante de napalm", desc: "Marca a linha e atravessa a arena num dash absurdo — horizontal, vertical ou diagonal. Deixa o chão queimando por 5s. Em 50% de vida cobre três linhas.", icon: "✈" },
+      { type: "active", name: "Razante de napalm", desc: "Vem de qualquer direção — e de direções diferentes ao mesmo tempo. O caminho pode ser torto. Deixa o chão queimando. Em 50% de vida cobre três linhas.", icon: "✈" },
       { type: "active", name: "Laser de fogo", desc: "Aviso fino no chão, depois um tiro de chama bem estreito que atravessa a arena quase inteira.", icon: "🔥" },
       { type: "active", name: "Escuridão", desc: "Por 5s a arena quase some. Só as chamas dele devolvem um pouco de visão. Não causa dano.", icon: "🌑" }
     ];
@@ -187,23 +253,25 @@
     E.chefe_megatanque.skills.push({ type: "active", name: "Enrage da colmeia", desc: "Se o rei cair, ela fica vermelha, cobra mais rápido, chama mais abelhas e joga mel pra atrasar o passo.", icon: "😡" });
     E.chefe_arklan.passive = { name: "Planeta abaixo", desc: "A câmera abre. O corpo inteiro aparece quando ele sai da areia." };
     E.chefe_arklan.skills = [
-      { type: "active", name: "Mergulho", desc: "Enterra, rasga a areia de A pra B pra C e explode do outro lado. O corpo fica exposto no caminho e acerta quem pisar.", icon: "🪱" },
-      { type: "active", name: "Espirar e girar", desc: "Vai ao centro. O jato nasce no norte e gira devagar no horário ou anti-horário. Em 50% viram dois jatos.", icon: "🌪" },
-      { type: "active", name: "Espinhos", desc: "Não ferem: fincam e prendem. Atira nos espinhos pra se mover de novo.", icon: "📌" }
+      { type: "active", name: "Mergulho", desc: "Enterra rápido, rasga a areia bem longe e explode do outro lado. O corpo grosso fica no caminho e acerta quem pisar.", icon: "🪱" },
+      { type: "active", name: "Espirar e girar", desc: "Vai ao centro. Jatos de areia largos giram no horário ou anti-horário. Em 50% viram dois jatos.", icon: "🌪" },
+      { type: "active", name: "Espinhos", desc: "Não ferem: fincam e prendem. Atira nos espinhos pra se mover de novo.", icon: "📌" },
+      { type: "active", name: "Ninhada", desc: "Durante a luta spawna minhocas menores pra encher o saco.", icon: "🪱" }
     ];
     E.chefe_fortaleza.passive = { name: "Muralha ambulante", desc: "Anda devagar e vomita reforço. Os minions dela não largam ouro nem reforço." };
     E.chefe_fortaleza.skills = [
-      { type: "active", name: "Portão", desc: "A cada 3s invoca qualquer unidade da colmeia — menos chefes.", icon: "🏕" },
+      { type: "active", name: "Portão", desc: "A cada 3s invoca qualquer unidade da colmeia — menos chefes — com buff de velocidade, dano ou cadência.", icon: "🏕" },
       { type: "active", name: "Fortificar", desc: "Se ninguém acerta ela por um tempo, estaciona, levanta escudo e cura 0,5%/s nela e nos aliados perto.", icon: "✚" },
+      { type: "active", name: "Fusão", desc: "Fundir duas unidades invocadas, misturando as habilidades delas num híbrido mais grosso.", icon: "🧬" },
       { type: "active", name: "Guarnição final", desc: "Ao cair, solta 10 inimigos aleatórios.", icon: "👁" }
     ];
-    E.chefe_espectro.passive = { name: "Entre os tiros", desc: "Fica semitransparente. Sem marca no chão: clone e verdadeira parecem iguais." };
+    E.chefe_espectro.passive = { name: "Energia lunar", desc: "A luta inteira ela coleta luar. Em 100% puxa a Moonlight Sword e corta a arena." };
     E.chefe_espectro.skills = [
       { type: "active", name: "Passo atrás", desc: "Teleporta sempre atrás do esquadrão, considerando o movimento pra não nascer no meio deles.", icon: "🌫" },
-      { type: "active", name: "Estouro do véu", desc: "A cada 3 a 6 saltos, o teleporte explode. O dano e a cor quente são só dela. Clone explode lilás e não fere.", icon: "💥" },
-      { type: "active", name: "Sósia", desc: "A 60% de HP invoca um clone idêntico. A 30%, outro. Clones não dão dano: só distraem.", icon: "👥" },
-      { type: "active", name: "Tiro verdadeiro", desc: "Pra achar a verdadeira, olha a cor do tiro (vermelho) e da explosão. Clone atira e explode em lilás.", icon: "🔫" },
-      { type: "active", name: "Feixe do luar", desc: "Holofote azul no centro. Ela absorve a lua e dispara ondas de luz lunar — o mesmo corte da Moonlight Greatsword.", icon: "🌙" }
+      { type: "active", name: "Estouro do véu", desc: "A cada 3 a 6 saltos, o teleporte explode em luar. Clones também ferem.", icon: "💥" },
+      { type: "active", name: "Trindade", desc: "Ao chegar em 50% de HP invoca 3 clones. Eles atiram luar de verdade.", icon: "👥" },
+      { type: "active", name: "Moonlight Sword", desc: "Com a barra cheia, invoca uma espada gigante de luar e dispara slashes largos no esquadrão.", icon: "⚔" },
+      { type: "active", name: "Poças de luar", desc: "Áreas de moonlight queimam e deixam o esquadrão exposto.", icon: "🌙" }
     ];
     E.chefe_final.passive = { name: "Três camadas", desc: "Fase 1: a Colmeia protege. Fase 2: a Mariposa esconde. Fase 3: o núcleo exposto." };
     E.chefe_final.skills = [
@@ -214,6 +282,39 @@
     ];
     E.mini_beemote.passive = { name: "Ferrão", desc: "Tiro envenena. 5% da vida máxima em 5s, dano verdadeiro." };
     E.mini_beemote.active = { name: "Aguilhão", desc: "Projétil lento que aplica veneno." };
+    E.batedor_alien.passive = { name: "Flanco", desc: "Corre na frente do fuzileiro e abre o lado." };
+    E.batedor_alien.active = { name: "Disparada", desc: "Fecha rápido no esquadrão." };
+    E.pistoleiro_alien.passive = { name: "Médico invertido", desc: "Cura o Irwin se estiver perto." };
+    E.pistoleiro_alien.active = { name: "Pistola", desc: "Tiro curto e rápido." };
+    E.fogueira.passive = { name: "Brasa", desc: "Ilumina o canto. 100 de vida fixa." };
+    E.fogueira.active = { name: "Fogueira", desc: "Enquanto existir, a escuridão não some." };
+    E.kaska_sentry.passive = { name: "Fincada", desc: "Não anda. Atira no esquadrão." };
+    E.kaska_sentry.active = { name: "Rajada", desc: "Tiro de casca dourada." };
+    E.beeprincess.passive = { name: "Herdeira", desc: "Entra quando a rainha e o rei caem. Rapier, cetro, coroa e capa." };
+    E.beeprincess.skills = [
+      { type: "active", name: "Perfuração real", desc: "Charge rápido. Deixa mel no caminho e um AoE de mel no fim que prende.", icon: "👑" },
+      { type: "active", name: "Combo de estocadas", desc: "Aproxima e corta em várias direções. Os slashes avisam no chão.", icon: "⚔" },
+      { type: "active", name: "Cavalaria real", desc: "Enfermeira leva ela pro canto oposto e cura. Arquiteta ergue 3 barreiras.", icon: "🐝" },
+      { type: "active", name: "Final Flash", desc: "20 cortes na arena. Depois ela ajoelha 5s no centro, fraca.", icon: "✨" }
+    ];
+    E.formiga_leao.passive = { name: "Funil", desc: "Cava um poço que puxa o esquadrão." };
+    E.formiga_leao.skills = [
+      { type: "active", name: "Poço", desc: "Funil de areia puxa e fere quem fica no meio.", icon: "🕳" },
+      { type: "active", name: "Emboscada", desc: "Enterra e explode pra fora embaixo do esquadrão.", icon: "🪱" },
+      { type: "active", name: "Cuspe", desc: "Rajada de areia à distância.", icon: "🌪" }
+    ];
+    E.besouro_bombardeiro.passive = { name: "Artilharia", desc: "Voa e satura o chão de bombas." };
+    E.besouro_bombardeiro.skills = [
+      { type: "active", name: "Tapete", desc: "Bombas em linha sob o esquadrão.", icon: "💣" },
+      { type: "active", name: "Mergulho", desc: "Cai em cima e explode.", icon: "💥" },
+      { type: "active", name: "Cluster", desc: "Um ovo que parte em várias bombas.", icon: "🥚" }
+    ];
+    E.louva_deus.passive = { name: "Assassino", desc: "Some, corta, some de novo." };
+    E.louva_deus.skills = [
+      { type: "active", name: "Pulo-corte", desc: "Teleporta no flanco e rasga.", icon: "🗡" },
+      { type: "active", name: "Camuflagem", desc: "Fica invisível e persegue.", icon: "🌫" },
+      { type: "active", name: "Leque", desc: "Três foices em arco na frente.", icon: "☽" }
+    ];
   })();
 
   G.maxUnits = function () {
@@ -226,6 +327,63 @@
       if (state.units[i].hp > 0 && !state.units[i].commander) n++;
     }
     return n;
+  };
+
+  G.KIND_COPY_CAP = 2;
+
+  G.kindCopyCap = function (kind) {
+    if (!kind || kind === "recruta" || kind === "comandante") return 99;
+    return G.KIND_COPY_CAP;
+  };
+
+  G.countKind = function (state, kind) {
+    if (!state || !state.units) return 0;
+    var n = 0;
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].hp > 0 && state.units[i].kind === kind) n++;
+    }
+    return n;
+  };
+
+  G.canAddKind = function (state, kind) {
+    return G.countKind(state, kind) < G.kindCopyCap(kind);
+  };
+
+  G.resolutionInfo = function (state) {
+    var w = (state && state.W) || (typeof innerWidth !== "undefined" ? innerWidth : 1280);
+    var h = (state && state.H) || (typeof innerHeight !== "undefined" ? innerHeight : 720);
+    var diag = Math.hypot(w, h);
+    var t = (diag - 1400) / 1400;
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    return {
+      diag: diag,
+      t: t,
+      spawnInterval: 0.38 - t * 0.24,
+      concurrent: Math.round(6 + t * 12),
+      waveMul: 2
+    };
+  };
+
+  G.portraitImgs = {};
+
+  G.preloadPortraits = function () {
+    var kinds = (G.unitList && G.unitList()) || ["comandante", "recruta", "fuzileiro", "pistoleiro", "batedor"];
+    if (G.ENEMY_DEFS) {
+      Object.keys(G.ENEMY_DEFS).forEach(function (k) {
+        var d = G.ENEMY_DEFS[k];
+        if (d && d.boss && !d.codexHide && !d.fake) kinds.push(k);
+      });
+      var extra = ["fuzileiro_alien", "batedor_alien", "pistoleiro_alien", "fogueira", "kaska_sentry", "abelha_enfermeira", "abelha_arquiteta"];
+      for (var ei = 0; ei < extra.length; ei++) kinds.push(extra[ei]);
+    }
+    for (var i = 0; i < kinds.length; i++) {
+      var k = kinds[i];
+      if (G.portraitImgs[k]) continue;
+      var img = new Image();
+      img.src = "img/portrait-" + k + ".png";
+      G.portraitImgs[k] = img;
+    }
   };
 
   G.playfield = function (state) {
@@ -506,11 +664,45 @@
     ctx.closePath();
   }
 
+  function teslaBattBar(ctx, u) {
+    var batt = u.teslaBatt == null ? 1 : u.teslaBatt;
+    var live = batt > 0.02;
+    var s = u.def.size;
+    var lift = u.held ? 6 : (u.leapZ || 0);
+    var h = Math.max(18, s * 1.45);
+    var w = 5;
+    var bx = u.x + s + 5;
+    var by = u.y - lift - h * 0.55;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.75)";
+    ctx.fillRect(bx - 1.2, by - 1.2, w + 2.4, h + 2.4);
+    ctx.fillStyle = "#142028";
+    ctx.fillRect(bx, by, w, h);
+    var fh = h * Math.max(0, Math.min(1, batt));
+    ctx.fillStyle = !live ? "#4a5560" : batt < 0.28 ? "#ff8a4a" : "#7af7ff";
+    if (live && batt < 1) {
+      ctx.shadowColor = batt < 0.28 ? "#ff8a4a" : "#7af7ff";
+      ctx.shadowBlur = 6;
+    }
+    ctx.fillRect(bx, by + h - fh, w, fh);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = live ? "rgba(168,246,255,0.9)" : "rgba(120,140,160,0.45)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx - 0.5, by - 0.5, w + 1, h + 1);
+    ctx.fillStyle = live ? "#a8f6ff" : "#6a7480";
+    ctx.font = "bold 8px Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText("⚡", bx + w / 2, by - 1);
+    ctx.restore();
+  }
+
   function hpBar(ctx, e) {
     if (e.def.boss) return;
     if ((e.stealth || 0) > 0.2 && (e.revealT || 0) <= 0) return;
     var glow = e.healGlow || 0;
-    if (e.hp >= e.maxHp * 0.98 && glow <= 0) return;
+    var stolen = !!e.stolen;
+    if (e.hp >= e.maxHp * 0.98 && glow <= 0 && !stolen) return;
     var w = Math.max(16, e.def.size * 2);
     var bx = e.x - w / 2;
     var by = e.y - e.def.size - 10;
@@ -521,8 +713,14 @@
     }
     ctx.fillStyle = "rgba(0,0,0,0.55)";
     ctx.fillRect(bx, by, w, 4);
-    ctx.fillStyle = glow > 0 ? "#b8ffc8" : (e.team === "player" ? "#6cff7a" : "#ff5a5a");
+    ctx.fillStyle = glow > 0 ? "#b8ffc8" : (e.team === "player" || stolen ? "#6cff7a" : "#ff5a5a");
     ctx.fillRect(bx, by, w * Math.max(0, Math.min(1, e.hp / e.maxHp)), 4);
+    if (stolen) {
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(bx, by + 5, w, 3);
+      ctx.fillStyle = "#c86a3a";
+      ctx.fillRect(bx, by + 5, w * Math.max(0, Math.min(1, (e.stolenT || 0) / (e.stolenMax || 30))), 3);
+    }
     if (glow > 0) {
       ctx.strokeStyle = "rgba(92, 255, 138," + Math.min(1, glow) + ")";
       ctx.lineWidth = 1.6;
@@ -771,6 +969,8 @@
     var popS = u.popT > 0 ? 0.42 + 0.58 * (1 - Math.min(1, u.popT / 0.16)) : 1;
     if (packS !== 1 || popS !== 1) ctx.scale(packS * popS, packS * popS);
     if (u.flash > 0) ctx.globalAlpha = 0.65;
+    var teslaOff = role === "tesla" && !u.preview && (u.teslaBatt == null ? 1 : u.teslaBatt) <= 0.02;
+    if (teslaOff) ctx.globalAlpha *= 0.42;
     if (falling) ctx.globalAlpha *= 0.92;
     ctx.fillStyle = "rgba(0,0,0," + (falling ? 0.42 : 0.32) + ")";
     ctx.beginPath();
@@ -915,16 +1115,19 @@
       barrel(ctx, s * 0.55, 0, s * 0.95, 7, "#0b1a33");
     } else if (role === "tank" || role === "minitank") {
       var scr = wheel * 18;
+      var punch = Math.max(0, Math.min(1, (u.throwT || 0) / 0.34));
+      punch = punch * punch;
       drawTreads(ctx, -s * 1.05, -s * 0.62, s * 2.1, s * 0.28, scr);
       drawTreads(ctx, -s * 1.05, s * 0.34, s * 2.1, s * 0.28, scr);
       ctx.save();
-      ctx.translate(0, Math.sin(timeN * 2.8 + idOff) * 0.6);
+      ctx.translate(-punch * 6, Math.sin(timeN * 2.8 + idOff) * 0.6 - punch * 3);
+      ctx.rotate(-punch * 0.2);
       fillRound(ctx, -s * 0.82, -s * 0.38, s * 1.64, s * 0.76, 5, dimCol(col, 0.55));
       fillRound(ctx, -s * 0.7, -s * 0.28, s * 1.4, s * 0.56, 5, col);
       gleam(ctx, -s * 0.28, -s * 0.16, s * 0.32, s * 0.1, 0.16);
       oval(ctx, s * 0.05, -s * 0.04, s * 0.38, s * 0.32, dimCol(col, 0.75));
       visor(ctx, s * 0.02, -s * 0.16, s * 0.36, s * 0.22, acc);
-      barrel(ctx, s * 0.28, 0, s * 1.05, kind === "tanque" ? 7 : 5, acc);
+      barrel(ctx, s * 0.28 + punch * s * 0.32, -punch * 2, s * 1.05 + punch * s * 0.38, kind === "tanque" ? 7 : 5, acc);
       ctx.restore();
     } else if (role === "truck" || role === "bunker") {
       drawWheel(ctx, -s * 0.62, -s * 0.52, s * 0.28, wheel, "#4a5568");
@@ -969,13 +1172,15 @@
       gleam(ctx, -s * 0.1, -s * 0.18, s * 0.22, s * 0.1, 0.2);
       visor(ctx, s * 0.12, -s * 0.16, s * 0.32, s * 0.3, acc);
       if (role === "tesla") {
-        ctx.strokeStyle = acc;
-        ctx.globalAlpha = 0.55 + Math.sin(timeN * 18) * 0.35;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.arc(-s * 0.15, 0, s * 0.38 + Math.sin(timeN * 12) * 2, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        if (!teslaOff) {
+          ctx.strokeStyle = acc;
+          ctx.globalAlpha = 0.55 + Math.sin(timeN * 18) * 0.35;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(-s * 0.15, 0, s * 0.38 + Math.sin(timeN * 12) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
       } else {
         fillRound(ctx, -s * 0.55, -s * 0.22, s * 0.55, 5, 2, acc);
         fillRound(ctx, -s * 0.55, s * 0.12, s * 0.55, 5, 2, acc);
@@ -1210,7 +1415,17 @@
       ctx.arc(0, 0, s + 11, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (u.exposedT > 0) {
+      ctx.strokeStyle = "rgba(255, 230, 140, 0.8)";
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(0, 0, s + 14, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     ctx.restore();
+    if (u.kind === "tesla") teslaBattBar(ctx, u);
     if (u.preview) return;
     if (!falling) {
       ctx.save();
@@ -1631,6 +1846,277 @@
       ctx.fillRect(s * 0.45, -2.4, s * 0.85, 4.8);
       ctx.fillStyle = "#8ad422";
       ctx.fillRect(s * 1.15, -1.5, s * 0.22, 3);
+    } else if (t === "batedor_alien") {
+      insectLegs(ctx, s * 1.12, 3, "#1a3018");
+      oval(ctx, -s * 0.15, 0, s * 0.58, s * 0.32, "#2a5a30");
+      oval(ctx, s * 0.38, 0, s * 0.42, s * 0.34, "#8ad46a");
+      eye(ctx, s * 0.5, -s * 0.08, s * 0.09, "#0a2010");
+      eye(ctx, s * 0.5, s * 0.08, s * 0.09, "#0a2010");
+      mandibles(ctx, s * 0.58, "#143018");
+      ctx.fillStyle = "#1a3018";
+      ctx.fillRect(s * 0.42, -1.8, s * 0.7, 3.6);
+      ctx.fillStyle = "#c8ff6a";
+      ctx.fillRect(s * 0.95, -1.1, s * 0.18, 2.2);
+    } else if (t === "pistoleiro_alien") {
+      insectLegs(ctx, s, 2, "#1a3018");
+      oval(ctx, -s * 0.12, 0, s * 0.55, s * 0.4, "#2a6a48");
+      oval(ctx, s * 0.32, 0, s * 0.4, s * 0.36, "#6ad49a");
+      eye(ctx, s * 0.44, -s * 0.08, s * 0.09, "#0a2010");
+      eye(ctx, s * 0.44, s * 0.08, s * 0.09, "#0a2010");
+      ctx.fillStyle = "#e8ffe8";
+      ctx.fillRect(-2, -s * 0.42, 4, 10);
+      ctx.fillRect(-5, -s * 0.32, 10, 4);
+      ctx.fillStyle = "#143018";
+      ctx.fillRect(s * 0.38, -s * 0.28, s * 0.55, 3.2);
+      ctx.fillRect(s * 0.38, s * 0.08, s * 0.55, 3.2);
+      ctx.fillStyle = "#8ad422";
+      ctx.fillRect(s * 0.82, -s * 0.26, 4, 2.4);
+      ctx.fillRect(s * 0.82, s * 0.1, 4, 2.4);
+    } else if (t === "fogueira") {
+      ctx.fillStyle = "#3a2010";
+      ctx.fillRect(-s * 0.7, s * 0.15, s * 1.4, s * 0.35);
+      ctx.fillStyle = "#5a3010";
+      ctx.save();
+      ctx.rotate(-0.4);
+      ctx.fillRect(-s * 0.8, 0, s * 1.5, 5);
+      ctx.restore();
+      ctx.save();
+      ctx.rotate(0.35);
+      ctx.fillRect(-s * 0.75, 2, s * 1.4, 5);
+      ctx.restore();
+      var flick = 0.85 + Math.sin(ph * 14) * 0.2;
+      ctx.globalCompositeOperation = "lighter";
+      oval(ctx, 0, -s * 0.35 * flick, s * 0.42, s * 0.7 * flick, "rgba(255, 90, 20, 0.75)");
+      oval(ctx, 0, -s * 0.5 * flick, s * 0.22, s * 0.45 * flick, "rgba(255, 220, 80, 0.9)");
+      ctx.globalCompositeOperation = "source-over";
+    } else if (t === "kaska_sentry") {
+      ctx.fillStyle = "#5a3010";
+      ctx.fillRect(-4, s * 0.2, 8, s * 0.7);
+      oval(ctx, 0, -s * 0.1, s * 0.85, s * 0.95, "#c48a20");
+      ctx.strokeStyle = "#ffe08a";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, -s * 0.1, s * 0.72, -0.4, Math.PI + 0.4);
+      ctx.stroke();
+      oval(ctx, s * 0.15, -s * 0.15, s * 0.22, s * 0.22, "#1a0808");
+      ctx.fillStyle = "#3a2010";
+      ctx.fillRect(s * 0.2, -s * 0.28, s * 0.85, 5);
+      ctx.fillStyle = "#ffd24a";
+      ctx.fillRect(s * 0.9, -s * 0.22, 6, 3);
+    } else if (t === "beeprincess") {
+      if ((e.kneelT || 0) > 0) ctx.translate(0, s * 0.2);
+      var capeP = Math.sin(ph * 3.8) * s * 0.14;
+      ctx.fillStyle = "#4a2208";
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.05, -s * 0.12);
+      ctx.quadraticCurveTo(-s * 1.55 + capeP, s * 0.08, -s * 0.55, s * 1.22);
+      ctx.lineTo(s * 0.12, s * 0.18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#f0c84a";
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.06);
+      ctx.quadraticCurveTo(-s * 1.18 + capeP, s * 0.06, -s * 0.38, s * 0.98);
+      ctx.lineTo(s * 0.1, s * 0.12);
+      ctx.closePath();
+      ctx.fill();
+      var flap = 0.55 + Math.sin(ph * 46) * 0.4;
+      ctx.save();
+      ctx.globalAlpha *= 0.55;
+      ctx.fillStyle = "rgba(220, 245, 255, 0.75)";
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.08, -s * 0.52, s * 0.95, s * (0.16 + flap * 0.22), -0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.08, s * 0.52, s * 0.95, s * (0.16 + flap * 0.22), 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.28, -s * 0.38, s * 0.62, s * (0.1 + flap * 0.14), -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.28, s * 0.38, s * 0.62, s * (0.1 + flap * 0.14), 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = "#2a1408";
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.18, s * 0.55);
+      ctx.lineTo(-s * 0.12, s * 0.92);
+      ctx.moveTo(-s * 0.02, s * 0.55);
+      ctx.lineTo(s * 0.06, s * 0.9);
+      ctx.stroke();
+      oval(ctx, s * 0.18, -s * 0.02, s * 0.34, s * 0.42, "#d4a024");
+      oval(ctx, s * 0.22, -s * 0.16, s * 0.2, s * 0.18, "#ffe08a");
+      oval(ctx, s * 0.22, s * 0.14, s * 0.2, s * 0.18, "#ffe08a");
+      oval(ctx, s * 0.24, -s * 0.16, s * 0.1, s * 0.08, "rgba(255,244,200,0.55)");
+      oval(ctx, s * 0.24, s * 0.14, s * 0.1, s * 0.08, "rgba(255,244,200,0.55)");
+      ctx.fillStyle = "#8a5a18";
+      ctx.fillRect(s * 0.02, -s * 0.28, s * 0.38, 4);
+      oval(ctx, s * 0.12, 0, s * 0.12, s * 0.12, "#7af7ff");
+      oval(ctx, -s * 0.12, s * 0.06, s * 0.22, s * 0.2, "#c48a20");
+      oval(ctx, -s * 0.22, s * 0.38, s * 0.16, s * 0.32, "#3a2208");
+      oval(ctx, -s * 0.08, s * 0.4, s * 0.15, s * 0.3, "#5a3010");
+      oval(ctx, -s * 0.2, s * 0.38, s * 0.1, s * 0.24, "#f0b42a");
+      oval(ctx, -s * 0.06, s * 0.4, s * 0.09, s * 0.22, "#f0b42a");
+      ctx.fillStyle = "#1a0c04";
+      ctx.fillRect(-s * 0.28, s * 0.22, 3.2, s * 0.28);
+      ctx.fillRect(-s * 0.14, s * 0.24, 3.2, s * 0.26);
+      ctx.fillStyle = "#c8fff0";
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.48, s * 0.02);
+      ctx.lineTo(-s * 0.72, -0.5);
+      ctx.lineTo(-s * 0.88, s * 0.04);
+      ctx.lineTo(-s * 0.72, s * 0.08);
+      ctx.closePath();
+      ctx.fill();
+      oval(ctx, s * 0.58, 0, s * 0.28, s * 0.3, "#3a2208");
+      oval(ctx, s * 0.62, 0, s * 0.22, s * 0.24, "#c48a20");
+      eye(ctx, s * 0.72, -s * 0.08, s * 0.1, "#fff4c4");
+      eye(ctx, s * 0.72, s * 0.08, s * 0.1, "#fff4c4");
+      mandibles(ctx, s * 0.78, "#1a0c04");
+      ctx.strokeStyle = "#1a0c04";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.62, -s * 0.18);
+      ctx.quadraticCurveTo(s * 0.95, -s * 0.72, s * 0.72, -s * 0.92);
+      ctx.moveTo(s * 0.62, s * 0.18);
+      ctx.quadraticCurveTo(s * 0.95, s * 0.72, s * 0.72, s * 0.92);
+      ctx.stroke();
+      ctx.fillStyle = "#c47820";
+      ctx.beginPath();
+      ctx.ellipse(s * 0.48, -s * 0.38, s * 0.28, s * 0.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffd24a";
+      ctx.beginPath();
+      ctx.ellipse(s * 0.48, -s * 0.42, s * 0.26, s * 0.11, 0, 0, Math.PI * 2);
+      ctx.fill();
+      var jewels = [-0.18, 0, 0.18];
+      for (var jc = 0; jc < jewels.length; jc++) {
+        var jx = s * 0.48 + jewels[jc] * s;
+        ctx.fillStyle = "#ffd24a";
+        ctx.beginPath();
+        ctx.moveTo(jx - s * 0.06, -s * 0.44);
+        ctx.lineTo(jx, -s * (jc === 1 ? 0.88 : 0.74));
+        ctx.lineTo(jx + s * 0.06, -s * 0.44);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = jc === 1 ? "#7af7ff" : "#ffe08a";
+        ctx.beginPath();
+        ctx.arc(jx, -s * (jc === 1 ? 0.78 : 0.66), 2.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = "#3a2010";
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.32, s * 0.22);
+      ctx.lineTo(s * 0.85, s * 0.42);
+      ctx.stroke();
+      ctx.strokeStyle = "#c8d8e8";
+      ctx.lineWidth = 1.7;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(s * 0.42, s * 0.12);
+      ctx.lineTo(s * 1.72, 0);
+      ctx.stroke();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.5, s * 0.1);
+      ctx.lineTo(s * 1.62, 0.02);
+      ctx.stroke();
+      ctx.strokeStyle = "#d4a024";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(s * 0.46, s * 0.12, 4.2, 0.4, Math.PI * 1.6);
+      ctx.stroke();
+      ctx.fillStyle = "#e8f0ff";
+      ctx.beginPath();
+      ctx.moveTo(s * 1.86, 0);
+      ctx.lineTo(s * 1.68, -2.2);
+      ctx.lineTo(s * 1.68, 2.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#8a5a18";
+      ctx.lineWidth = 2.8;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.05, s * 0.28);
+      ctx.lineTo(-s * 0.55, -s * 0.62);
+      ctx.stroke();
+      oval(ctx, -s * 0.62, -s * 0.7, 5.6, 5.6, "#ffe08a");
+      oval(ctx, -s * 0.62, -s * 0.7, 2.6, 2.6, "#7af7ff");
+    } else if (t === "abelha_enfermeira") {
+      buzzWings(ctx, s, ph, 1);
+      oval(ctx, 0, 0, s * 0.55, s * 0.4, "#ffe08a");
+      ctx.fillStyle = "#c02020";
+      ctx.fillRect(-2, -s * 0.35, 4, 10);
+      ctx.fillRect(-5, -s * 0.22, 10, 4);
+      eye(ctx, s * 0.28, -s * 0.08, 2.4, "#3a2010");
+    } else if (t === "abelha_arquiteta") {
+      buzzWings(ctx, s, ph, 1);
+      oval(ctx, 0, 0, s * 0.58, s * 0.42, "#c4a06a");
+      ctx.fillStyle = "#3a2010";
+      ctx.beginPath();
+      for (var hx = 0; hx < 6; hx++) {
+        var ha = (Math.PI / 3) * hx;
+        var fn = hx ? ctx.lineTo : ctx.moveTo;
+        fn.call(ctx, Math.cos(ha) * s * 0.28, Math.sin(ha) * s * 0.28);
+      }
+      ctx.closePath();
+      ctx.fill();
+    } else if (t === "barreira_colmeia") {
+      ctx.fillStyle = "#e8c46a";
+      ctx.beginPath();
+      for (var hw = 0; hw < 6; hw++) {
+        var hwa = (Math.PI / 3) * hw;
+        var fnw = hw ? ctx.lineTo : ctx.moveTo;
+        fnw.call(ctx, Math.cos(hwa) * s, Math.sin(hwa) * s);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#5a3a10";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else if (t === "formiga_leao") {
+      insectLegs(ctx, s * 1.1, 3, "#3a2010");
+      oval(ctx, -s * 0.2, 0, s * 0.95, s * 0.7, "#6a3a18");
+      oval(ctx, s * 0.45, 0, s * 0.55, s * 0.48, "#8a5a28");
+      ctx.fillStyle = "#c4a06a";
+      ctx.beginPath();
+      ctx.moveTo(s * 0.7, -s * 0.22);
+      ctx.lineTo(s * 1.45, -s * 0.55);
+      ctx.lineTo(s * 0.85, -s * 0.05);
+      ctx.moveTo(s * 0.7, s * 0.22);
+      ctx.lineTo(s * 1.45, s * 0.55);
+      ctx.lineTo(s * 0.85, s * 0.05);
+      ctx.fill();
+      eye(ctx, s * 0.55, -s * 0.12, s * 0.12, "#1a0808");
+      eye(ctx, s * 0.55, s * 0.12, s * 0.12, "#1a0808");
+    } else if (t === "besouro_bombardeiro") {
+      insectLegs(ctx, s * 0.7, 2, "#3a2010");
+      oval(ctx, -s * 0.15, 0, s * 0.9, s * 0.62, "#3a2410");
+      oval(ctx, s * 0.35, 0, s * 0.5, s * 0.45, "#5a3a18");
+      ctx.fillStyle = "#c45a22";
+      ctx.beginPath();
+      ctx.arc(-s * 0.55, 0, s * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      eye(ctx, s * 0.5, -s * 0.1, s * 0.1, "#ffd24a");
+      eye(ctx, s * 0.5, s * 0.1, s * 0.1, "#ffd24a");
+    } else if (t === "louva_deus") {
+      ctx.strokeStyle = "#2a4a18";
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.1, -s * 0.1);
+      ctx.lineTo(-s * 0.55, -s * 0.85);
+      ctx.lineTo(s * 0.15, -s * 1.05);
+      ctx.moveTo(-s * 0.1, s * 0.1);
+      ctx.lineTo(-s * 0.55, s * 0.85);
+      ctx.lineTo(s * 0.15, s * 1.05);
+      ctx.stroke();
+      oval(ctx, 0, 0, s * 0.42, s * 0.7, "#4a7a32");
+      oval(ctx, s * 0.35, 0, s * 0.32, s * 0.28, "#6aaa44");
+      eye(ctx, s * 0.48, -s * 0.1, s * 0.1, "#1a0808");
+      eye(ctx, s * 0.48, s * 0.1, s * 0.1, "#1a0808");
     } else if (t === "chefe_vulto") {
       var flap = 0.7 + Math.sin(ph * 14) * 0.28;
       ctx.fillStyle = "#1a0808";
@@ -1695,6 +2181,25 @@
         ctx.ellipse(s * 0.62, 0, s * 0.18, s * 0.2, 0, 0, Math.PI * 2);
         ctx.fill();
       }
+    } else if (t === "minhoca_deserto") {
+      if (e.buried) {
+        ctx.fillStyle = "rgba(160, 120, 60, 0.5)";
+        ctx.beginPath();
+        ctx.ellipse(0, s * 0.15, s * 1.05, s * 0.38, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        oval(ctx, -s * 0.7, 0, s * 0.95, s * 0.48, "#6a4a22");
+        oval(ctx, -s * 0.7, 0, s * 0.8, s * 0.38, "#c4a06a");
+        oval(ctx, s * 0.28, 0, s * 0.5, s * 0.5, "#5a3818");
+        ctx.fillStyle = "#1a0c08";
+        ctx.beginPath();
+        ctx.ellipse(s * 0.42, 0, s * 0.28, s * 0.32, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#ff6a3a";
+        ctx.beginPath();
+        ctx.ellipse(s * 0.48, 0, s * 0.12, s * 0.14, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
     } else if (t === "arklan_spike") {
       ctx.fillStyle = "#5a3414";
       ctx.beginPath();
@@ -1723,9 +2228,14 @@
     } else if (t === "chefe_comandante") {
       insectLegs(ctx, s, 3, "#3a2208");
       oval(ctx, -s * 0.35, 0, s * 0.95, s * 0.7, "#3a2208");
-      oval(ctx, -s * 0.35, 0, s * 0.82, s * 0.58, "#c48a20");
-      ctx.fillStyle = "#5a3010";
-      for (var sg = 0; sg < 4; sg++) ctx.fillRect(-s * 0.9 + sg * s * 0.28, -s * 0.5, 5, s);
+      if (e.shellOff) {
+        oval(ctx, -s * 0.35, 0, s * 0.72, s * 0.48, "#5a3010");
+        oval(ctx, -s * 0.28, 0, s * 0.58, s * 0.38, "#8a4a18");
+      } else {
+        oval(ctx, -s * 0.35, 0, s * 0.82, s * 0.58, "#c48a20");
+        ctx.fillStyle = "#5a3010";
+        for (var sg = 0; sg < 4; sg++) ctx.fillRect(-s * 0.9 + sg * s * 0.28, -s * 0.5, 5, s);
+      }
       oval(ctx, s * 0.35, 0, s * 0.55, s * 0.5, "#8a5a18");
       oval(ctx, s * 0.85, 0, s * 0.42, s * 0.38, "#d4a024");
       eye(ctx, s * 1.02, -s * 0.12, s * 0.14, "#1a0808");
@@ -2087,7 +2597,8 @@
     if (stealth && !revealed) return;
     var pulse = 0.62 + Math.sin((e.phase || 0) * 5.5) * 0.22;
     var decoy = !!(e.decoy || e.fake);
-    var col = decoy ? "#d8b0ff" : (e.def.boss ? "#ffe08a" : "#ff6a5a");
+    var stolen = !!e.stolen;
+    var col = stolen ? "#7cffb0" : (decoy ? "#d8b0ff" : (e.def.boss ? "#ffe08a" : "#ff6a5a"));
     ctx.save();
     if (!stealth) {
       ctx.globalAlpha = 0.28 * pulse;
@@ -2096,9 +2607,9 @@
       ctx.ellipse(e.x, e.y + s * 0.92, s * 1.05, s * 0.34, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.globalAlpha = stealth ? 0.95 : (decoy ? 0.9 : 0.62);
+    ctx.globalAlpha = stealth ? 0.95 : (stolen ? 0.95 : (decoy ? 0.9 : 0.62));
     ctx.strokeStyle = col;
-    ctx.lineWidth = stealth || decoy ? 2.2 : 1.7;
+    ctx.lineWidth = stealth || decoy || stolen ? 2.2 : 1.7;
     ctx.beginPath();
     ctx.arc(e.x, e.y, s + 6, 0, Math.PI * 2);
     ctx.stroke();
@@ -2112,6 +2623,13 @@
     ctx.lineTo(e.x - 4.5, py);
     ctx.closePath();
     ctx.fill();
+    if (stolen) {
+      ctx.font = "bold 10px Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = "#ffe8c8";
+      ctx.fillText(String(Math.max(0, Math.ceil(e.stolenT || 0))), e.x, py - 8);
+    }
     ctx.restore();
   }
 
@@ -2147,6 +2665,39 @@
   G.drawProjectile = function (ctx, p) {
     ctx.save();
     if (p.z) ctx.translate(0, -p.z);
+    if (p.blackhole) {
+      var spin = ((p.arc && p.arc.t) || 0) * 9;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.globalCompositeOperation = "lighter";
+      var glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 18);
+      glow.addColorStop(0, "rgba(255, 236, 210, 0.95)");
+      glow.addColorStop(0.22, "rgba(255, 150, 70, 0.72)");
+      glow.addColorStop(0.5, "rgba(130, 90, 255, 0.42)");
+      glow.addColorStop(1, "rgba(62, 192, 255, 0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "#05020c";
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 224, 170, 0.95)";
+      ctx.lineWidth = 1.9;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(130, 210, 255, 0.85)";
+      ctx.lineWidth = 1.15;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 10, 3.4, spin, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.restore();
+      return;
+    }
     drawDarkShotGlow(ctx, p);
     if (p.kind === "flame") {
       ctx.save();
@@ -2258,6 +2809,28 @@
       ctx.arc(-2, 0, 18, -0.9, 0.9);
       ctx.stroke();
       ctx.restore();
+    } else if (p.kind === "moonslash") {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(Math.atan2(p.vy, p.vx));
+      var len = p.slashLen || 86;
+      var grd = ctx.createLinearGradient(-len * 0.2, 0, len, 0);
+      grd.addColorStop(0, "rgba(220, 240, 255, 0.15)");
+      grd.addColorStop(0.35, "rgba(160, 210, 255, 0.85)");
+      grd.addColorStop(1, "rgba(80, 140, 255, 0.05)");
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.moveTo(-8, -((p.r || 14) * 0.35));
+      ctx.lineTo(len, -(p.r || 14));
+      ctx.lineTo(len + 10, 0);
+      ctx.lineTo(len, (p.r || 14));
+      ctx.lineTo(-8, (p.r || 14) * 0.35);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(240, 250, 255, 0.9)";
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.restore();
     } else if (p.kind === "lance") {
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -2318,20 +2891,34 @@
   G.drawMine = function (ctx, m) {
     ctx.save();
     ctx.translate(m.x, m.y);
-    ctx.fillStyle = m.arm > 0 ? "#888" : "#f0c422";
+    ctx.fillStyle = "rgba(0,0,0,0.32)";
     ctx.beginPath();
-    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+    ctx.ellipse(1, 4, 8, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    var top = m.arm > 0 ? "#8a8a8a" : "#f0c422";
+    var rim = m.arm > 0 ? "#4a4a4a" : "#8a6a12";
+    ctx.fillStyle = rim;
+    ctx.beginPath();
+    ctx.arc(0, 0, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = top;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = "#111";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.moveTo(-5, 0);
-    ctx.lineTo(5, 0);
-    ctx.moveTo(0, -5);
-    ctx.lineTo(0, 5);
+    ctx.moveTo(-4.5, 0);
+    ctx.lineTo(4.5, 0);
+    ctx.moveTo(0, -4.5);
+    ctx.lineTo(0, 4.5);
     ctx.stroke();
+    ctx.fillStyle = m.arm > 0 ? "#555" : "#ff4a2a";
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+    ctx.fill();
     if (m.arm <= 0) {
-      ctx.strokeStyle = "rgba(255,80,40,0.45)";
+      ctx.strokeStyle = "rgba(255,80,40,0.4)";
       ctx.beginPath();
       ctx.arc(0, 0, m.r, 0, Math.PI * 2);
       ctx.stroke();
@@ -2558,15 +3145,44 @@
           ctx.fill();
           ctx.fillStyle = "#8a6030";
           ctx.fillRect(-sr * 0.55, -sr * 0.42, 6, sr * 0.84);
+          if (e.invP2) {
+            ctx.fillStyle = "#ffd24a";
+            ctx.beginPath();
+            ctx.arc(sr * 0.25, -sr * 0.18, 3.2, 0, Math.PI * 2);
+            ctx.arc(sr * 0.25, sr * 0.18, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#1a0808";
+            ctx.beginPath();
+            ctx.arc(sr * 0.32, -sr * 0.18, 1.4, 0, Math.PI * 2);
+            ctx.arc(sr * 0.32, sr * 0.18, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
           ctx.restore();
         }
+      }
+      if (e.type === "chefe_arklan" && e.wormAct === "suck") {
+        var suckLeft = e.suckLeft || 0;
+        var pulse = 0.35 + Math.sin((state.time || 0) * 7) * 0.12;
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        ctx.strokeStyle = "rgba(196, 160, 106, " + (0.22 + pulse) + ")";
+        ctx.lineWidth = 2;
+        for (var sk = 1; sk <= 3; sk++) {
+          var rr = 40 + sk * 38 + (1 - Math.min(1, suckLeft / 4.5)) * 18;
+          ctx.beginPath();
+          ctx.arc(0, 0, rr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
       }
       if (e.type === "chefe_arklan" && e.wormAct === "spin") {
         var telling = (e.spinTell || 0) > 0;
         var firing = (e.wormSpinT || 0) > 0;
         if (telling || firing) {
           var jets = e.wormJets || 1;
-          var jlen = Math.hypot((G.playfield(state).x1 - G.playfield(state).x0), (G.playfield(state).y1 - G.playfield(state).y0)) * 0.55;
+          var jlen = firing
+            ? Math.hypot((G.playfield(state).x1 - G.playfield(state).x0), (G.playfield(state).y1 - G.playfield(state).y0)) * 0.78
+            : 96;
           for (var j = 0; j < jets; j++) {
             var ja = (e.wormSpinAng || -Math.PI / 2) + (j ? Math.PI : 0);
             ctx.save();
@@ -2574,39 +3190,70 @@
             ctx.rotate(ja);
             var grd = ctx.createLinearGradient(0, 0, jlen, 0);
             if (telling) {
-              grd.addColorStop(0, "rgba(232, 192, 96, 0.22)");
-              grd.addColorStop(1, "rgba(180, 130, 50, 0.02)");
-              ctx.setLineDash([16, 10]);
+              grd.addColorStop(0, "rgba(196, 150, 80, 0.28)");
+              grd.addColorStop(1, "rgba(140, 100, 40, 0)");
             } else {
-              grd.addColorStop(0, "rgba(232, 192, 96, 0.62)");
-              grd.addColorStop(1, "rgba(180, 130, 50, 0.06)");
+              grd.addColorStop(0, "rgba(232, 192, 96, 0.5)");
+              grd.addColorStop(1, "rgba(180, 130, 50, 0.04)");
             }
             ctx.fillStyle = grd;
-            ctx.fillRect(28, -14, jlen - 28, 28);
-            ctx.strokeStyle = telling ? "rgba(255, 230, 160, 0.55)" : "rgba(255, 230, 160, 0.85)";
-            ctx.lineWidth = 2.4;
-            ctx.strokeRect(28, -14, jlen - 28, 28);
-            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(22, telling ? -10 : -28);
+            ctx.lineTo(jlen, telling ? -18 : -32);
+            ctx.lineTo(jlen, telling ? 18 : 32);
+            ctx.lineTo(22, telling ? 10 : 28);
+            ctx.closePath();
+            ctx.fill();
             ctx.restore();
           }
-          var dir = e.wormSpinDir || 1;
+        }
+      }
+      if (e.type === "chefe_espectro" && !e.fake && ((e.moonEnergy || 0) > 0 || e.veilAct === "sword")) {
+        var en = Math.max(0, Math.min(1, (e.moonEnergy || 0) / 100));
+        ctx.save();
+        ctx.translate(e.x, e.y - (e.def.size || 40) - 18);
+        ctx.fillStyle = "rgba(8, 16, 32, 0.7)";
+        ctx.fillRect(-22, -5, 44, 7);
+        ctx.fillStyle = "#9ad8ff";
+        ctx.fillRect(-21, -4, 42 * en, 5);
+        ctx.strokeStyle = "rgba(180, 220, 255, 0.8)";
+        ctx.strokeRect(-22, -5, 44, 7);
+        ctx.restore();
+        if (e.veilAct === "sword" || (e.swordT || 0) > 0) {
+          var sa = e.swordAng != null ? e.swordAng : (e.rot || 0);
           ctx.save();
           ctx.translate(e.x, e.y);
-          ctx.strokeStyle = "rgba(255, 220, 140, 0.85)";
-          ctx.lineWidth = 3;
+          ctx.rotate(sa);
+          var pulse = 0.55 + Math.sin((e.phase || 0) * 10) * 0.25;
+          var grdS = ctx.createLinearGradient(18, 0, 118, 0);
+          grdS.addColorStop(0, "rgba(220, 240, 255, " + pulse + ")");
+          grdS.addColorStop(0.5, "rgba(140, 190, 255, 0.85)");
+          grdS.addColorStop(1, "rgba(80, 140, 255, 0.05)");
+          ctx.fillStyle = grdS;
           ctx.beginPath();
-          ctx.arc(0, 0, 86, -0.9, 0.9);
-          ctx.stroke();
-          ctx.rotate(dir > 0 ? 0.9 : -0.9);
-          ctx.beginPath();
-          ctx.moveTo(86, 0);
-          ctx.lineTo(74, -12);
-          ctx.lineTo(74, 12);
+          ctx.moveTo(16, -7);
+          ctx.lineTo(122, -16);
+          ctx.lineTo(128, 0);
+          ctx.lineTo(122, 16);
+          ctx.lineTo(16, 7);
           ctx.closePath();
-          ctx.fillStyle = "rgba(255, 220, 140, 0.9)";
           ctx.fill();
+          ctx.strokeStyle = "rgba(240, 250, 255, 0.9)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = "#c8e8ff";
+          ctx.fillRect(4, -10, 16, 20);
           ctx.restore();
         }
+      }
+      if (e.nestBuff || e.fused) {
+        ctx.save();
+        ctx.strokeStyle = e.fused ? "rgba(196, 92, 255, 0.7)" : "rgba(255, 210, 74, 0.55)";
+        ctx.lineWidth = e.fused ? 3 : 2;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, (e.def.size || 12) + 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
     }
   };
@@ -2623,11 +3270,16 @@
       var e = state.enemies[ei];
       if (e.hp <= 0) continue;
       if (e.type === "chefe_vulto") lights.push({ x: e.x, y: e.y, r: 96 + Math.sin((e.phase || 0) * 6) * 12, glow: "#ff6a18" });
+      if (e.type === "fogueira") lights.push({ x: e.x, y: e.y, r: 78 + Math.sin((e.phase || 0) * 8) * 10, glow: "#ff9a2a" });
     }
     for (var z = 0; z < (state.zones || []).length; z++) {
       var zn = state.zones[z];
       if (zn.kind === "napalm" || zn.kind === "fire") lights.push({ x: zn.x, y: zn.y, r: (zn.r || 28) * 2.2, glow: "#ff7a22" });
-      if (zn.kind === "moon_spot") lights.push({ x: zn.x, y: zn.y, r: 130, glow: "#9ad8ff" });
+      if (zn.kind === "moon_spot" || zn.kind === "moon_burn") lights.push({ x: zn.x, y: zn.y, r: 130, glow: "#9ad8ff" });
+    }
+    for (var fw = 0; fw < (state.firewaves || []).length; fw++) {
+      var wave = state.firewaves[fw];
+      lights.push({ x: wave.x, y: wave.y, r: (wave.r || 40) + 36, glow: "#fff4c8" });
     }
     if (blind <= 0) lights.push({ x: state.squad.x, y: state.squad.y, r: 58, glow: "" });
     ctx.save();
@@ -2662,19 +3314,50 @@
       fade = d.life > 3 ? 1 : Math.max(0, d.life / 3);
     }
     ctx.globalAlpha *= fade;
-    ctx.translate(d.x, d.y + Math.sin(d.t * 6) * 3);
+    var bob = Math.sin((d.t || 0) * 6) * 2.4;
+    ctx.translate(d.x, d.y + bob);
     if (d.kind === "coin") {
-      ctx.fillStyle = "#ffd24a";
+      ctx.save();
+      ctx.fillStyle = "rgba(20, 12, 0, 0.35)";
       ctx.beginPath();
-      ctx.arc(0, 0, 7, 0, Math.PI * 2);
+      ctx.ellipse(1.5, 6.5, 8, 3.2, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.scale(1, 0.62);
+      var coin = ctx.createRadialGradient(-3, -4, 1, 0, 0, 11);
+      coin.addColorStop(0, "#fff4b0");
+      coin.addColorStop(0.35, "#ffd24a");
+      coin.addColorStop(0.75, "#c48a12");
+      coin.addColorStop(1, "#6a4208");
+      ctx.fillStyle = coin;
+      ctx.beginPath();
+      ctx.arc(0, 0, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(90, 50, 0, 0.7)";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.fillStyle = "#8a5a00";
       ctx.font = "bold 10px Segoe UI, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("$", 0, 1);
+      ctx.fillStyle = "rgba(255, 255, 220, 0.45)";
+      ctx.beginPath();
+      ctx.ellipse(-3, -3.5, 3.2, 1.6, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     } else if (d.kind === "hp") {
-      ctx.fillStyle = "#7cffb0";
+      ctx.save();
+      ctx.fillStyle = "rgba(0, 30, 16, 0.3)";
+      ctx.beginPath();
+      ctx.ellipse(1, 7, 8, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      var hpG = ctx.createRadialGradient(-2, -3, 1, 0, 0, 10);
+      hpG.addColorStop(0, "#d8ffe8");
+      hpG.addColorStop(0.45, "#7cffb0");
+      hpG.addColorStop(1, "#146038");
+      ctx.fillStyle = hpG;
       ctx.beginPath();
       ctx.arc(0, 0, 8, 0, Math.PI * 2);
       ctx.fill();
@@ -2683,16 +3366,64 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("+", 0, 1);
+      ctx.restore();
     } else {
-      ctx.fillStyle = "#4da6ff";
+      ctx.save();
+      ctx.fillStyle = "rgba(8, 20, 40, 0.35)";
       ctx.beginPath();
-      ctx.arc(0, 0, 9, 0, Math.PI * 2);
+      ctx.ellipse(2, 8, 10, 3.4, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.translate(0, -1);
+      ctx.fillStyle = "#1a3a68";
+      ctx.beginPath();
+      ctx.moveTo(-8, 2);
+      ctx.lineTo(-8, 9);
+      ctx.lineTo(0, 13);
+      ctx.lineTo(8, 9);
+      ctx.lineTo(8, 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#3a7ad4";
+      ctx.beginPath();
+      ctx.moveTo(-8, 2);
+      ctx.lineTo(0, -4);
+      ctx.lineTo(8, 2);
+      ctx.lineTo(0, 7);
+      ctx.closePath();
+      ctx.fill();
+      var lid = ctx.createLinearGradient(-6, -4, 8, 4);
+      lid.addColorStop(0, "#9ad0ff");
+      lid.addColorStop(0.45, "#4da6ff");
+      lid.addColorStop(1, "#1a5aa8");
+      ctx.fillStyle = lid;
+      ctx.beginPath();
+      ctx.moveTo(-8, 2);
+      ctx.lineTo(0, -4);
+      ctx.lineTo(8, 2);
+      ctx.lineTo(0, 6.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(20, 40, 80, 0.65)";
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(0, -4);
+      ctx.lineTo(0, 6.2);
+      ctx.moveTo(-8, 2);
+      ctx.lineTo(8, 2);
+      ctx.stroke();
       ctx.fillStyle = "#fff";
       ctx.font = "bold 11px Segoe UI, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText("+", 0, 1);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.beginPath();
+      ctx.moveTo(-5, 1);
+      ctx.lineTo(0, -3);
+      ctx.lineTo(-1, 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
     ctx.restore();
   };
@@ -2718,6 +3449,34 @@
       ctx.textBaseline = "middle";
       ctx.fillText("?", w / 2, h / 2);
       return;
+    }
+    if (key && G.portraitImgs) {
+      G.preloadPortraits();
+      var face = G.portraitImgs[key];
+      if (face && face.complete && face.naturalWidth) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        var pad = 10;
+        var dw = w - pad * 2;
+        var dh = h - pad * 2;
+        var iw = face.naturalWidth;
+        var ih = face.naturalHeight;
+        var s = Math.max(dw / iw, dh / ih);
+        var dw2 = iw * s;
+        var dh2 = ih * s;
+        ctx.drawImage(face, pad + (dw - dw2) / 2, pad + (dh - dh2) / 2 - 4, dw2, dh2);
+        ctx.restore();
+        var rim = ctx.createLinearGradient(0, 0, 0, h);
+        if (team === "player") {
+          rim.addColorStop(0, "rgba(255, 224, 138, 0.18)");
+        } else {
+          rim.addColorStop(0, "rgba(255, 90, 70, 0.22)");
+        }
+        rim.addColorStop(0.7, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = rim;
+        ctx.fillRect(8, 8, w - 16, h - 16);
+        return;
+      }
     }
     var dummy;
     if (team === "player") {

@@ -119,7 +119,11 @@
     for (var i = 0; i < wave.length; i++) {
       var pack = wave[i];
       var n = pack.n;
-      if (pack.type.indexOf("chefe") !== 0) n = Math.max(n + 2, Math.round(n * 1.7));
+      if (pack.type.indexOf("chefe") !== 0) {
+        n = Math.max(n + 2, Math.round(n * 1.7));
+        n = Math.max(1, Math.round(n * ((G.resolutionInfo(state).waveMul) || 2)));
+        if (G.invasion) n = Math.max(1, Math.round(n * G.invasion.spawnMul((state.run && state.run.invasion) | 0)));
+      }
       for (var k = 0; k < n; k++) {
         state.spawnQueue.push(pack.type);
       }
@@ -151,6 +155,7 @@
   G.game = {
     spawnAt: function (state, type, x, y, extra) {
       var e = G.createEnemy(type, x, y, scaleFor(state.stageIndex));
+      if (G.invasion) G.invasion.stamp(state, e);
       if (extra) {
         Object.keys(extra).forEach(function (k) {
           e[k] = extra[k];
@@ -182,6 +187,7 @@
     startRun: function (state) {
       var perm = G.save.data.perm;
       state.run = G.upgrades.defaultRun();
+      state.run.invasion = (G.save.data && G.save.data.invasion) | 0;
       state.history = [];
       state.stageIndex = 0;
       state.units = [];
@@ -211,11 +217,13 @@
       G.codex.unlockUnit(firstKind);
       state.run.rerolls = perm.rerolls | 0;
       state.run.reserve = [];
-      state.run.intel = { arquivo: 0, confidencial: 0, maximo: 0 };
+      state.run.intel = { arquivo: 0 };
       state.paused = false;
       state.userPaused = false;
       state.pendingMerge = null;
+      state.archiveMenu = false;
       state.vfx = [];
+      state.firewaves = [];
       state.cmdOrders = { crate: 0, recruit: 0, strike: 0 };
       state.cmdRecruitUsed = 0;
       state.guerrillaDraw = null;
@@ -254,6 +262,7 @@
       state.squad.lx = state.squad.x;
       state.squad.ly = state.squad.y;
       state.zones = [];
+      state.firewaves = [];
       state.minions = [];
       state.drones = [];
       state.deploys = [];
@@ -302,12 +311,25 @@
         state.camZoom = state.camZoomTo;
       }
       if (!state.defeat && state.spawnQueue.length) {
-        state.spawnTimer -= dt;
-        if (state.spawnTimer <= 0) {
-          var type = state.spawnQueue.shift();
-          var p = edgePoint(state);
-          G.game.spawnAt(state, type, p.x, p.y);
-          state.spawnTimer = type.indexOf("chefe") === 0 ? 0.55 : 0.22;
+        var res = G.resolutionInfo(state);
+        var nextType = state.spawnQueue[0];
+        var nextBoss = nextType.indexOf("chefe") === 0;
+        var living = 0;
+        if (!nextBoss) {
+          for (var le = 0; le < state.enemies.length; le++) {
+            if (state.enemies[le].hp > 0 && !state.enemies[le].stolen && !(state.enemies[le].def && state.enemies[le].def.boss)) living++;
+          }
+        }
+        if (!nextBoss && living >= res.concurrent) {
+          /* espera: monitor menor segura menos bicho na tela */
+        } else {
+          state.spawnTimer -= dt;
+          if (state.spawnTimer <= 0) {
+            var type = state.spawnQueue.shift();
+            var p = edgePoint(state);
+            G.game.spawnAt(state, type, p.x, p.y);
+            state.spawnTimer = type.indexOf("chefe") === 0 ? 0.55 : res.spawnInterval;
+          }
         }
       }
 
@@ -315,14 +337,15 @@
       if (!state.defeat) G.audio.sync(state, dt);
       if (state.defeat) return "play";
 
-      if (!state.pendingMerge) {
-        var promo = G.merge.tryReservePromote(state);
-        if (promo) state.pendingPromote = promo;
-      }
-
-      if (!state.spawnQueue.length && state.enemies.length === 0 && !state.waitingClear && !state.stageOutro) {
+      if (!state.spawnQueue.length && !state.waitingClear && !state.stageOutro) {
+        var hostilesLeft = 0;
+        for (var he = 0; he < state.enemies.length; he++) {
+          if (state.enemies[he].hp > 0 && !state.enemies[he].stolen) hostilesLeft++;
+        }
+        if (hostilesLeft === 0) {
         state.waitingClear = true;
         state.clearTimer = 0.7;
+        }
       }
       if (state.waitingClear) {
         state.clearTimer -= dt;
@@ -333,7 +356,7 @@
             state.waveIndex++;
             queueWave(state);
           } else {
-            if (state.pendingPromote || state.pendingMerge) {
+            if (state.pendingMerge || state.archiveMenu) {
               state.waitingClear = true;
               state.clearTimer = 0.25;
               return "play";
@@ -405,4 +428,5 @@
   };
 
   G.preloadStageBgs();
+  G.preloadPortraits();
 })(window.TFAG = window.TFAG || {});

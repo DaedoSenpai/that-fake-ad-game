@@ -51,11 +51,13 @@
   }
 
   function emptyIntel() {
-    return { arquivo: 0, confidencial: 0, maximo: 0 };
+    return { arquivo: 0 };
   }
 
   function ensureIntel(run) {
     if (!run.intel) run.intel = emptyIntel();
+    var a = (run.intel.arquivo | 0) + ((run.intel.confidencial | 0) * 2) + ((run.intel.maximo | 0) * 4);
+    run.intel = { arquivo: a };
     if (run.reserve && run.reserve.length) {
       run.intel.arquivo += run.reserve.length;
       run.reserve = [];
@@ -63,35 +65,15 @@
     return run.intel;
   }
 
-  function compact(state, x, y) {
-    var intel = ensureIntel(state.run);
-    var px = x != null ? x : state.squad.x;
-    var py = y != null ? y : state.squad.y;
-    var fused = false;
-    while (intel.arquivo >= 2) {
-      intel.arquivo -= 2;
-      intel.confidencial += 1;
-      fused = true;
-      state.floaters.push(G.createFloater(px, py - 12, "Informação confidencial", "#b8e0ff"));
-    }
-    while (intel.confidencial >= 2) {
-      intel.confidencial -= 2;
-      intel.maximo += 1;
-      fused = true;
-      state.floaters.push(G.createFloater(px, py - 28, "Segurança máxima", "#ffd24a"));
-    }
-    return fused;
+  function promoteCost(gen) {
+    var g = Math.max(0, gen | 0);
+    return 2 << g;
   }
 
-  function pickUnit(state, pred) {
-    var best = null;
-    for (var i = 0; i < state.units.length; i++) {
-      var u = state.units[i];
-      if (u.hp <= 0 || u.commander || !canEvolve(u)) continue;
-      if (!pred(u.gen | 0)) continue;
-      if (!best || (u.gen | 0) < (best.gen | 0)) best = u;
-    }
-    return best;
+  function addArquivo(state, x, y) {
+    var intel = ensureIntel(state.run);
+    intel.arquivo += 1;
+    state.floaters.push(G.createFloater(x, y - 8, "Arquivo de guerra", "#ffd24a"));
   }
 
   G.merge = {
@@ -101,22 +83,52 @@
     ensureIntel: ensureIntel,
 
     addArquivo: function (state, x, y) {
-      var intel = ensureIntel(state.run);
-      intel.arquivo += 1;
-      if (!compact(state, x, y)) {
-        state.floaters.push(G.createFloater(x, y - 8, "Arquivo de guerra", "#ffd24a"));
-      }
+      addArquivo(state, x, y);
     },
 
     intelLine: function (run) {
       var intel = ensureIntel(run);
-      return "Arq " + intel.arquivo + " · Conf " + intel.confidencial + " · Máx " + intel.maximo;
+      return "Arquivos " + intel.arquivo + " · R";
     },
 
-    tokenName: function (token) {
-      if (token === "maximo") return "segurança máxima";
-      if (token === "confidencial") return "informação confidencial";
+    tokenName: function () {
       return "arquivo de guerra";
+    },
+
+    promoteCost: promoteCost,
+
+    listRoster: function (state) {
+      var list = [];
+      for (var i = 0; i < state.units.length; i++) {
+        var u = state.units[i];
+        if (u.hp <= 0 || u.commander || u.stowed) continue;
+        list.push(u);
+      }
+      list.sort(function (a, b) {
+        var ga = a.gen | 0;
+        var gb = b.gen | 0;
+        if (ga !== gb) return ga - gb;
+        return (a.id | 0) - (b.id | 0);
+      });
+      return list;
+    },
+
+    beginPromote: function (state, u) {
+      if (!u || u.hp <= 0 || u.commander || !canEvolve(u)) return null;
+      var intel = ensureIntel(state.run);
+      var cost = promoteCost(u.gen | 0);
+      if (intel.arquivo < cost) return null;
+      intel.arquivo -= cost;
+      return {
+        a: u,
+        b: null,
+        fromBank: true,
+        token: "arquivo",
+        cost: cost,
+        x: u.x,
+        y: u.y,
+        options: u.def.merge.slice()
+      };
     },
 
     begin: function (state, x, y) {
@@ -174,33 +186,6 @@
         state.floaters.push(G.createFloater(pending.x, pending.y - 34, "Compêndio: " + nu.def.name, "#ffe08a"));
       }
       return nu;
-    },
-
-    tryReservePromote: function (state) {
-      if (state.pendingMerge) return null;
-      compact(state);
-      var intel = ensureIntel(state.run);
-      var u = null;
-      var token = null;
-      if (intel.maximo > 0) {
-        u = pickUnit(state, function (gen) { return gen === 2; });
-        if (u) token = "maximo";
-      }
-      if (!u && intel.confidencial > 0) {
-        u = pickUnit(state, function (gen) { return gen <= 1; });
-        if (u) token = "confidencial";
-      }
-      if (!u) return null;
-      intel[token] -= 1;
-      return {
-        a: u,
-        b: null,
-        fromBank: true,
-        token: token,
-        x: u.x,
-        y: u.y,
-        options: u.def.merge.slice()
-      };
     }
   };
 })(window.TFAG = window.TFAG || {});
