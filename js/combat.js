@@ -3888,8 +3888,19 @@
       var m = state.mines[i];
       m.arm -= dt;
       m.life -= dt;
+      if (m.retiring) {
+        m.retireT -= dt;
+        if (m.retireT <= 0) state.mines.splice(i, 1);
+        continue;
+      }
       if (m.life <= 0) {
-        state.mines.splice(i, 1);
+        if (G.tactics && G.tactics.beginRetire) G.tactics.beginRetire(state, m, 0.5);
+        else {
+          m.retiring = true;
+          m.retireT = 0.5;
+          m.retireMax = 0.5;
+          G.burst(state, m.x, m.y, "#f0c422", 7, 36);
+        }
         continue;
       }
       if (m.arm > 0) continue;
@@ -4176,7 +4187,7 @@
         var chMul = 1.4 * sm;
         for (var sc = 0; sc < state.mines.length; sc++) {
           var mine = state.mines[sc];
-          if (mine.team !== "player" || mine.charged) continue;
+          if (mine.team !== "player" || mine.charged || mine.retiring) continue;
           mine.charged = true;
           mine.r = (mine.r || 36) * chMul;
           mine.dmg = Math.round((mine.dmg || 20) * chMul);

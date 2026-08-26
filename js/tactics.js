@@ -118,6 +118,116 @@
     }
   }
 
+  function beginRetire(state, obj, dur) {
+    if (!obj || obj.retiring) return;
+    obj.retiring = true;
+    obj.retireT = dur || 0.72;
+    obj.retireMax = obj.retireT;
+    if (!state || obj.x == null) return;
+    var col = obj.color || "#e8e4d8";
+    G.burst(state, obj.x, obj.y, col, 8, 42);
+    if (state.particles) {
+      for (var i = 0; i < 6; i++) {
+        var a = Math.random() * Math.PI * 2;
+        state.particles.push({
+          x: obj.x + (Math.random() - 0.5) * 10,
+          y: obj.y + (Math.random() - 0.5) * 6,
+          vx: Math.cos(a) * (12 + Math.random() * 28),
+          vy: -18 - Math.random() * 36,
+          life: 0.32 + Math.random() * 0.22,
+          max: 0.52,
+          size: 2 + Math.random() * 2.6,
+          color: i % 2 ? col : "#f4f0e8"
+        });
+      }
+    }
+  }
+
+  function tickRetire(obj, dt) {
+    if (!obj || !obj.retiring) return false;
+    obj.retireT -= dt;
+    return obj.retireT <= 0;
+  }
+
+  function retireK(obj) {
+    if (!obj || !obj.retiring) return 0;
+    return 1 - Math.max(0, obj.retireT) / Math.max(0.01, obj.retireMax || 0.58);
+  }
+
+  function zoneRetires(z) {
+    if (!z) return false;
+    var k = z.kind;
+    return k === "heal" || k === "smoke" || k === "fire" || k === "napalm" || k === "anchor" || k === "standard" || k === "obsmark" || k === "spot" || k === "beacon" || k === "phalanx" || k === "cmd_aura";
+  }
+
+  function applyRetirePose(ctx, k, mode) {
+    if (k <= 0) return;
+    if (mode === "sink") {
+      ctx.translate(0, k * 16);
+      ctx.scale(1 - k * 0.1, Math.max(0.18, 1 - k * 0.52));
+    } else if (mode === "pop") {
+      var bounce = k < 0.32 ? k / 0.32 : 1 - (k - 0.32) / 0.68;
+      ctx.translate(0, k * 5);
+      ctx.scale(1 + bounce * 0.28, Math.max(0.25, 1 + bounce * 0.12 - k * 0.45));
+    } else if (mode === "puff") {
+      ctx.scale(1 + k * 0.48, 1 + k * 0.22);
+    } else {
+      ctx.translate(k * 6, k * 8);
+      ctx.rotate(k * 0.7);
+      ctx.scale(1 + k * 0.1, Math.max(0.22, 1 - k * 0.4));
+    }
+  }
+
+  function drawRetireBits(ctx, k, pal) {
+    if (k <= 0.02 || k >= 0.98) return;
+    pal = pal || ["#fff4d0", "#d8e0e8", "#c8d4c0"];
+    var i;
+    ctx.save();
+    for (i = 0; i < 5; i++) {
+      var a = i * 1.256 + k * 2.4;
+      var d = 7 + k * (14 + i * 3.5);
+      ctx.globalAlpha = (1 - k) * 0.5;
+      ctx.fillStyle = "rgba(214, 218, 226, 0.92)";
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d * 0.42 - k * 11 - i * 1.8, 4.2 + k * 5, 2.5 + k * 3.2, a * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = "lighter";
+    for (i = 0; i < 7; i++) {
+      var a2 = i * 0.9 - k * 3.4;
+      var d2 = 5 + k * 20;
+      ctx.globalAlpha = (1 - k) * 0.88;
+      ctx.fillStyle = pal[i % pal.length];
+      ctx.beginPath();
+      ctx.arc(Math.cos(a2) * d2, -8 - k * 16 + Math.sin(a2) * d2 * 0.28, 1.15 + (1 - k) * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.globalAlpha = (1 - k) * 0.5;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 3, 7 + k * 20, 2.8 + k * 8, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function zoneRetireMode(z) {
+    var k = z && z.kind;
+    if (k === "smoke" || k === "fire" || k === "napalm") return "puff";
+    return "sink";
+  }
+
+  function zoneRetirePal(z) {
+    var k = z && z.kind;
+    if (k === "heal" || k === "cmd_aura") return ["#b8ffd0", "#7cffb0", "#e8ffe8"];
+    if (k === "fire" || k === "napalm") return ["#ffe060", "#ff6a20", "#fff4d0"];
+    if (k === "smoke") return ["#c8d0d8", "#8a949e", "#e8eef4"];
+    if (k === "obsmark" || k === "spot") return ["#7ad8ff", "#e8ffff", "#4aa3ff"];
+    if (k === "beacon") return ["#ff6a4a", "#ffd24a", "#ff9080"];
+    if (k === "phalanx") return ["#e8c878", "#c4a45a", "#fff4d0"];
+    return ["#ffe9a0", "#fff8d8", "#c8b070"];
+  }
+
   function healAlliesPct(state, pct, ox, oy, r) {
     function healOne(u) {
       if (!u || u.hp <= 0 || !u.maxHp) return;
@@ -152,7 +262,7 @@
     var i;
     for (i = 0; i < state.zones.length; i++) {
       var z = state.zones[i];
-      if (z.kind !== "fire" || !z.fromInferno) continue;
+      if (z.kind !== "fire" || !z.fromInferno || z.retiring) continue;
       if (hypot(z.x - x, z.y - y) < 32) {
         z.t = Math.max(z.t, 5);
         z.max = Math.max(z.max || 5, 5);
@@ -165,14 +275,14 @@
     var oldestT = 99;
     var count = 0;
     for (i = 0; i < state.zones.length; i++) {
-      if (state.zones[i].kind !== "fire" || !state.zones[i].fromInferno) continue;
+      if (state.zones[i].kind !== "fire" || !state.zones[i].fromInferno || state.zones[i].retiring) continue;
       count++;
       if (state.zones[i].t < oldestT) {
         oldestT = state.zones[i].t;
         oldest = i;
       }
     }
-    if (count >= INFERNO_PUDDLE_CAP && oldest >= 0) state.zones.splice(oldest, 1);
+    if (count >= INFERNO_PUDDLE_CAP && oldest >= 0) beginRetire(state, state.zones[oldest], 0.48);
     zone(state, { kind: "fire", fromInferno: true, x: x, y: y, r: 28, t: 5, max: 5, dmg: dmg });
   }
 
@@ -534,7 +644,7 @@
       }
       if (!cmd || cmd.hp <= 0) return false;
       for (var zi = state.zones.length - 1; zi >= 0; zi--) {
-        if (state.zones[zi].kind === "cmd_aura") state.zones.splice(zi, 1);
+        if (state.zones[zi].kind === "cmd_aura") beginRetire(state, state.zones[zi], 0.5);
       }
       zone(state, {
         kind: "cmd_aura",
@@ -671,7 +781,11 @@
       dmg: Math.round(u.def.dmg * C().dmgMul(state)),
       team: "player"
     });
-    if (state.mines.length > cap) state.mines.shift();
+    if (state.mines.length > cap) {
+      var oldest = state.mines[0];
+      if (oldest && !oldest.retiring) beginRetire(state, oldest, 0.48);
+      else state.mines.shift();
+    }
   }
 
   function selectedUnit(state) {
@@ -934,7 +1048,7 @@
     var p = clampAim(u, aim(state), u.def.range || 300);
     var coils = [];
     for (var i = 0; i < state.deploys.length; i++) {
-      if (state.deploys[i].kind === "coil_tower") coils.push(state.deploys[i]);
+      if (state.deploys[i].kind === "coil_tower" && !state.deploys[i].retiring) coils.push(state.deploys[i]);
     }
     var fieldR = 128;
     if (coils.length < 2) {
@@ -1019,7 +1133,7 @@
     if ((state.honeyT || 0) > 0) mul *= 0.42;
     for (var i = 0; i < (state.zones || []).length; i++) {
       var z = state.zones[i];
-      if (z.kind === "beacon" && hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r) mul *= 1.08;
+      if (!z.retiring && z.kind === "beacon" && hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r) mul *= 1.08;
     }
     if (state.tacticsAura && state.tacticsAura.speed) mul *= 1 + state.tacticsAura.speed;
     return mul;
@@ -1038,6 +1152,7 @@
     var a = { shield: 0, fire: 0, dmg: 0, speed: 0 };
     for (var i = 0; i < (state.zones || []).length; i++) {
       var z = state.zones[i];
+      if (z.retiring) continue;
       if (hypot(state.squad.x - z.x, state.squad.y - z.y) > (z.r || 0)) continue;
       if (z.kind === "anchor") a.shield = Math.max(a.shield, z.shield || 0.35);
       if (z.kind === "beacon") {
@@ -2084,7 +2199,7 @@
     r = r || 40;
     for (var i = 0; i < state.zones.length; i++) {
       var z = state.zones[i];
-      if (z.kind !== "phalanx") continue;
+      if (z.kind !== "phalanx" || z.retiring) continue;
       var guards = phalanxGuards(z);
       for (var k = 0; k < guards.length; k++) {
         if (guards[k].hp <= 0) continue;
@@ -2503,7 +2618,7 @@
     G.burst(state, x, y, "#9ad4ff", 7, 55);
     if (gen.hp <= 0) {
       gen.hp = 0;
-      gen.t = 0;
+      beginRetire(state, gen, 0.64);
       G.burst(state, gen.x, gen.y, "#7ad4ff", 22, 140);
       G.burst(state, gen.x, gen.y, "#fff4c4", 10, 80);
       state.floaters.push(G.createFloater(gen.x, gen.y - 18, "escudo estourado", "#7aa0c8"));
@@ -2515,7 +2630,7 @@
   function radioShieldAt(state, x, y) {
     for (var i = 0; i < (state.deploys || []).length; i++) {
       var t = state.deploys[i];
-      if (t.kind !== "shield_gen" || t.hp <= 0 || t.airborne) continue;
+      if (t.kind !== "shield_gen" || t.hp <= 0 || t.airborne || t.retiring) continue;
       if (hypot(x - t.x, y - t.y) <= (t.range || 86) + 6) return t;
     }
     return null;
@@ -2567,7 +2682,15 @@
   }
 
   function tickMechDog(state, m, dt, idx) {
+    if (m.retiring) {
+      if (tickRetire(m, dt)) state.minions.splice(idx, 1);
+      return;
+    }
     m.t -= dt;
+    if ((!m.immortal && m.hp <= 0) || m.t <= 0) {
+      beginRetire(state, m, 0.68);
+      return;
+    }
     m.lureT = Math.max(0, (m.lureT || 0) - dt);
     m.barkCd = (m.barkCd || 0) - dt;
     m.clawCd = (m.clawCd || 0) - dt;
@@ -2622,10 +2745,6 @@
       }
     }
     G.clampPlay(m, state);
-    if ((!m.immortal && m.hp <= 0) || m.t <= 0) {
-      G.burst(state, m.x, m.y, "#8a9098", 12, 70);
-      state.minions.splice(idx, 1);
-    }
   }
 
   function dropSupplyPack(state) {
@@ -3087,15 +3206,19 @@
     var teslaN = nKind(state, "tesla");
     for (var i = state.deploys.length - 1; i >= 0; i--) {
       var t = state.deploys[i];
+      if (t.retiring) {
+        if (tickRetire(t, dt)) state.deploys.splice(i, 1);
+        continue;
+      }
       if (t.kind === "coil_tower") {
         if (!teslaAlive && !t.pack) {
-          state.deploys.splice(i, 1);
+          beginRetire(state, t, 0.55);
           continue;
         }
         if (t.pack) {
           t.t -= dt;
           if (t.t <= 0 || t.hp <= 0) {
-            state.deploys.splice(i, 1);
+            beginRetire(state, t, 0.55);
             continue;
           }
         }
@@ -3197,7 +3320,7 @@
         }
       }
       if (t.hp <= 0 || t.t <= 0) {
-        state.deploys.splice(i, 1);
+        beginRetire(state, t, t.kind === "megaphone" || t.kind === "shield_gen" ? 0.64 : 0.56);
         continue;
       }
       if (t.kind === "shield_gen") {
@@ -3368,7 +3491,7 @@
   function listCoils(state) {
     var list = [];
     for (var i = 0; i < state.deploys.length; i++) {
-      if (state.deploys[i].kind === "coil_tower") list.push(state.deploys[i]);
+      if (state.deploys[i].kind === "coil_tower" && !state.deploys[i].retiring) list.push(state.deploys[i]);
     }
     return list;
   }
@@ -3471,7 +3594,7 @@
     }
     for (var ci = 0; ci < state.deploys.length; ci++) {
       var coil = state.deploys[ci];
-      if (coil.kind !== "coil_tower") continue;
+      if (coil.kind !== "coil_tower" || coil.retiring) continue;
       if (coil.fieldHit && coil.fieldTick) shockSplash(state, coil.fieldHit, coil.fieldTick);
       if (!coil.zaps || !coil.zaps.length) continue;
       for (var zi = 0; zi < coil.zaps.length; zi++) {
@@ -3787,6 +3910,22 @@
     var still = hypot(state.squad.vx || 0, state.squad.vy || 0) < 28;
     for (var i = state.zones.length - 1; i >= 0; i--) {
       var z = state.zones[i];
+      if (z.retiring) {
+        if (tickRetire(z, dt)) {
+          if (z.kind === "phalanx") releasePhalanxActive(state);
+          if (z.kind === "standard") {
+            for (var bi = 0; bi < state.units.length; bi++) {
+              var bu = state.units[bi];
+              if (bu.hp <= 0 || !bu.def.active) continue;
+              if (bu.def.active.id !== "standard" && bu.def.active.id !== "magnet") continue;
+              bu.activeHeld = false;
+              bu.activeCd = bu.def.active.cd || 12;
+            }
+          }
+          state.zones.splice(i, 1);
+        }
+        continue;
+      }
       if (z.kind === "cmd_aura") {
         var host = lead(state, "comandante");
         if (!host || host.hp <= 0) {
@@ -3817,17 +3956,27 @@
         z.y += (state.squad.y - z.y) * Math.min(1, dt * 1.15);
       }
       if (z.kind === "blackhole") {
-        for (var bh = 0; bh < state.enemies.length; bh++) {
-          var be = state.enemies[bh];
-          if (be.hp <= 0) continue;
-          var bdx = z.x - be.x;
-          var bdy = z.y - be.y;
-          var bd = hypot(bdx, bdy);
-          if (bd > z.r + (be.def.size || 10) || bd < 1) continue;
-          var pull = 220 * dt;
-          be.x += (bdx / bd) * pull;
-          be.y += (bdy / bd) * pull;
-          C().hurt(state, be, (z.dmg || 24) * dt, z.x, z.y, true, { trueDmg: true });
+        if (z.t <= 0.78 && !z.collapseFx) {
+          z.collapseFx = true;
+        }
+        if (z.t <= 0.18 && !z.flashFx) {
+          z.flashFx = true;
+          G.burst(state, z.x, z.y, "#ffffff", 16, 60);
+          G.burst(state, z.x, z.y, "#e8f4ff", 8, 36);
+        }
+        if (z.t > 0.78) {
+          for (var bh = 0; bh < state.enemies.length; bh++) {
+            var be = state.enemies[bh];
+            if (be.hp <= 0) continue;
+            var bdx = z.x - be.x;
+            var bdy = z.y - be.y;
+            var bd = hypot(bdx, bdy);
+            if (bd > z.r + (be.def.size || 10) || bd < 1) continue;
+            var pull = 220 * dt;
+            be.x += (bdx / bd) * pull;
+            be.y += (bdy / bd) * pull;
+            C().hurt(state, be, (z.dmg || 24) * dt, z.x, z.y, true, { trueDmg: true });
+          }
         }
       }
       if (z.kind === "bubble") {
@@ -3959,6 +4108,10 @@
         z.t = 0;
       }
       if (z.t <= 0) {
+        if (zoneRetires(z)) {
+          beginRetire(state, z, z.kind === "phalanx" ? 0.7 : 0.55);
+          continue;
+        }
         if (z.kind === "phalanx") releasePhalanxActive(state);
         if (z.kind === "standard") {
           for (var bi = 0; bi < state.units.length; bi++) {
@@ -4251,7 +4404,7 @@
             C().explode(state, ar.tx, ar.ty, 80, p.dmg, p.team, "#7ad8ff");
             G.burst(state, ar.tx, ar.ty, "#c060ff", 16, 150);
             G.burst(state, ar.tx, ar.ty, "#ffd080", 10, 90);
-            zone(state, { kind: "blackhole", x: ar.tx, y: ar.ty, r: 300, t: 1.6, max: 1.6, dmg: p.dmg, seed: Math.random() * 80 });
+            zone(state, { kind: "blackhole", x: ar.tx, y: ar.ty, r: 300, t: 2.38, max: 2.38, dmg: p.dmg, seed: Math.random() * 80 });
           } else {
             C().explode(state, ar.tx, ar.ty, p.boomR || 62, p.dmg, p.team);
             if (p.cluster || ar.land === "cluster") spawnCluster(state, ar.tx, ar.ty, p.dmg);
@@ -4634,7 +4787,7 @@
     if (id === "magnet" || id === "standard") {
       var m = aim(state);
       for (var zi = state.zones.length - 1; zi >= 0; zi--) {
-        if (state.zones[zi].kind === "standard") state.zones.splice(zi, 1);
+        if (state.zones[zi].kind === "standard") beginRetire(state, state.zones[zi], 0.5);
       }
       for (var ui = 0; ui < state.units.length; ui++) {
         var ou = state.units[ui];
@@ -4820,6 +4973,11 @@
     var squash = dp.landSquash || 0;
     ctx.save();
     ctx.translate(dx, dy);
+    var rk = retireK(dp);
+    if (rk > 0) {
+      applyRetirePose(ctx, rk, "slump");
+      ctx.globalAlpha *= Math.max(0.18, 1 - rk * 0.7);
+    }
     var v = dp.variant || "cannon";
     var shA = toss ? 0.16 + 0.22 * (1 - Math.min(1, z / 90)) : 0.38;
     groundShadow(ctx, 11 + z * 0.12, 4 + z * 0.05, shA);
@@ -4896,7 +5054,8 @@
       isoCyl(ctx, 3.2, 18, "#2a3040", "#121828");
     }
     ctx.restore();
-    if (!toss) drawHpPip(ctx, dp.hp, dp.maxHp, 8);
+    if (!toss && rk <= 0) drawHpPip(ctx, dp.hp, dp.maxHp, 8);
+    if (rk > 0) drawRetireBits(ctx, rk, v === "flame" ? ["#ffe060", "#ff9a2a", "#fff4d0"] : v === "jolt" ? ["#a8f6ff", "#e8ffff", "#7ad8ff"] : ["#ffe08a", "#c8b45a", "#fff4d0"]);
     ctx.restore();
   }
 
@@ -4908,7 +5067,12 @@
     var fed = live && (!!dp.fed || !!dp.linked);
     ctx.save();
     ctx.translate(dp.x, dp.y);
-    ctx.globalAlpha = live ? 1 : 0.42;
+    var rk = retireK(dp);
+    if (rk > 0) {
+      applyRetirePose(ctx, rk, "slump");
+      ctx.globalAlpha *= Math.max(0.15, 1 - rk * 0.75);
+      fieldR *= Math.max(0.08, 1 - rk);
+    }
     ctx.fillStyle = live ? (fed ? "rgba(120, 240, 255, 0.14)" : "rgba(70, 190, 230, 0.08)") : "rgba(50, 70, 80, 0.05)";
     circle(ctx, 0, 0, fieldR);
     ctx.fill();
@@ -4943,7 +5107,7 @@
     var bw = 4;
     var bx = 16;
     var by = -24;
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = rk > 0 ? Math.max(0.15, 1 - rk * 0.75) : 1;
     ctx.fillStyle = "rgba(0,0,0,0.72)";
     ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
     ctx.fillStyle = "#1a2830";
@@ -4954,6 +5118,7 @@
     ctx.strokeStyle = live ? "rgba(168,246,255,0.85)" : "rgba(120,140,160,0.45)";
     ctx.lineWidth = 1;
     ctx.strokeRect(bx - 0.5, by - 0.5, bw + 1, bh + 1);
+    if (rk > 0) drawRetireBits(ctx, rk, ["#a8f6ff", "#e8ffff", "#7ad8ff"]);
     ctx.restore();
   }
 
@@ -5189,43 +5354,56 @@
   function drawBlackHole(ctx, z, time) {
     var r = z.r || 300;
     var life = Math.max(0, z.t);
-    var max = z.max || 1.6;
+    var max = z.max || 2.38;
     var born = Math.max(0, max - life);
-    var fade = Math.min(1, born / 0.16) * Math.min(1, life / 0.28);
+    var collapseDur = 0.78;
+    var dying = life < collapseDur ? 1 - life / collapseDur : 0;
+    var starPull = Math.min(1, dying / 0.4);
+    starPull = starPull * starPull * (3 - 2 * starPull);
+    var selfK = dying > 0.38 ? Math.min(1, (dying - 0.38) / 0.34) : 0;
+    selfK = selfK * selfK;
+    var flashK = dying > 0.66 ? Math.min(1, (dying - 0.66) / 0.34) : 0;
+    var fade = Math.min(1, born / 0.16);
+    if (flashK > 0.72) fade *= Math.max(0, (1 - flashK) / 0.28);
     var pulse = 0.5 + Math.sin(time * 7.4) * 0.1;
     var spin = time * 2.2 + (z.seed || 0);
-    var coreR = Math.max(15, r * 0.105);
-    var diskR = coreR * 2.45;
+    var baseCore = Math.max(15, r * 0.105);
+    var coreR = Math.max(1.2, baseCore * (1 - selfK * 0.92));
+    var visR = r * (1 - selfK * 0.9);
+    var diskR = baseCore * 2.45 * (1 - selfK * 0.8);
+    var holeA = fade * (1 - Math.min(1, flashK / 0.35));
     var i;
     var ang;
     var rad;
 
     ctx.save();
     ctx.translate(z.x, z.y);
-    ctx.globalAlpha = fade;
 
-    var well = ctx.createRadialGradient(0, 0, coreR * 0.4, 0, 0, r);
-    well.addColorStop(0, "rgba(2, 0, 10, 0.88)");
-    well.addColorStop(0.1, "rgba(18, 4, 48, 0.42)");
-    well.addColorStop(0.28, "rgba(48, 16, 96, 0.18)");
-    well.addColorStop(0.55, "rgba(62, 80, 180, 0.08)");
-    well.addColorStop(0.82, "rgba(62, 192, 255, 0.06)");
-    well.addColorStop(1, "rgba(62, 192, 255, 0)");
-    ctx.fillStyle = well;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fill();
+    if (holeA > 0.02) {
+      ctx.globalAlpha = holeA;
+      var well = ctx.createRadialGradient(0, 0, coreR * 0.4, 0, 0, visR);
+      well.addColorStop(0, "rgba(2, 0, 10, 0.88)");
+      well.addColorStop(0.1, "rgba(18, 4, 48, 0.42)");
+      well.addColorStop(0.28, "rgba(48, 16, 96, 0.18)");
+      well.addColorStop(0.55, "rgba(62, 80, 180, 0.08)");
+      well.addColorStop(0.82, "rgba(62, 192, 255, 0.06)");
+      well.addColorStop(1, "rgba(62, 192, 255, 0)");
+      ctx.fillStyle = well;
+      ctx.beginPath();
+      ctx.arc(0, 0, visR, 0, Math.PI * 2);
+      ctx.fill();
 
-    ctx.strokeStyle = "rgba(160, 220, 255," + (0.28 + pulse * 0.22) + ")";
-    ctx.lineWidth = 1.7;
-    ctx.setLineDash([11, 9]);
-    ctx.lineDashOffset = -time * 48;
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 0.988, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+      ctx.strokeStyle = "rgba(160, 220, 255," + (0.28 + pulse * 0.22) * (1 - selfK) + ")";
+      ctx.lineWidth = 1.7;
+      ctx.setLineDash([11, 9]);
+      ctx.lineDashOffset = -time * 48;
+      ctx.beginPath();
+      ctx.arc(0, 0, visR * 0.988, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
-    if (born < 0.42) {
+    if (born < 0.42 && dying <= 0) {
       var sk = born / 0.42;
       ctx.globalCompositeOperation = "lighter";
       ctx.strokeStyle = "rgba(220, 240, 255," + (1 - sk) * 0.9 + ")";
@@ -5242,121 +5420,218 @@
     }
 
     ctx.globalCompositeOperation = "lighter";
-    for (i = 0; i < 3; i++) {
-      ctx.strokeStyle = i === 1 ? "rgba(255, 196, 130, 0.2)" : "rgba(150, 130, 255, 0.16)";
-      ctx.lineWidth = i === 1 ? 2.1 : 1.3;
-      ctx.beginPath();
-      ctx.arc(0, 0, r * (0.2 + i * 0.12) + Math.sin(time * 5.4 + i) * 4, 0, Math.PI * 2);
-      ctx.stroke();
+    if (dying <= 0) {
+      ctx.globalAlpha = fade;
+      for (i = 0; i < 3; i++) {
+        ctx.strokeStyle = i === 1 ? "rgba(255, 196, 130, 0.2)" : "rgba(150, 130, 255, 0.16)";
+        ctx.lineWidth = i === 1 ? 2.1 : 1.3;
+        ctx.beginPath();
+        ctx.arc(0, 0, r * (0.2 + i * 0.12) + Math.sin(time * 5.4 + i) * 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
-    for (i = 0; i < 32; i++) {
+    var starN = dying > 0 ? 48 : 32;
+    for (i = 0; i < starN; i++) {
       var u = (time * 0.62 + i * 0.181 + (z.seed || 0) * 0.013) % 1;
       ang = spin * 0.72 + i * 0.54 + u * 6.5;
-      rad = r * (0.95 - Math.pow(u, 0.7) * 0.88);
+      var homeRad = r * (0.95 - Math.pow(u, 0.7) * 0.88);
+      if (dying > 0 && i >= 32) {
+        homeRad = r * (0.72 + ((i - 32) / 16) * 0.24);
+        ang = spin * 0.2 + (i - 32) * 0.393 + (z.seed || 0);
+      }
+      var pull = starPull;
+      if (dying > 0) {
+        var delay = (i % 10) / 10 * 0.18;
+        pull = Math.min(1, Math.max(0, (starPull - delay) / (1 - delay * 0.4)));
+        pull = pull * pull;
+      }
+      if (pull > 0.97) continue;
+      rad = homeRad * (1 - pull) + baseCore * 1.05 * pull;
       var px = Math.cos(ang) * rad;
       var py = Math.sin(ang) * rad;
-      var a = (1 - u) * 0.95;
-      var sz = 0.7 + (1 - u) * 2.6;
+      var cr;
+      var cg;
+      var cb;
       if (i % 5 === 0) {
-        ctx.fillStyle = "rgba(255, 214, 150," + a + ")";
-        sz *= 1.4;
+        cr = 255; cg = 214; cb = 150;
       } else if (i % 3 === 0) {
-        ctx.fillStyle = "rgba(186, 130, 255," + a + ")";
+        cr = 186; cg = 130; cb = 255;
       } else {
-        ctx.fillStyle = "rgba(210, 240, 255," + a + ")";
+        cr = 210; cg = 240; cb = 255;
       }
-      ctx.beginPath();
-      ctx.arc(px, py, sz, 0, Math.PI * 2);
-      ctx.fill();
-      if (i % 2 === 0 && u > 0.12) {
-        ctx.strokeStyle = ctx.fillStyle;
-        ctx.globalAlpha = fade * a * 0.4;
+      var a = dying > 0 ? 0.75 + (1 - pull) * 0.25 : (1 - u) * 0.95;
+      var sz = dying > 0 ? (1.6 + (1 - pull) * 2.2) * (1 - pull * 0.55) : 0.7 + (1 - u) * 2.6;
+      if (i % 5 === 0) sz *= 1.2;
+      ctx.globalAlpha = fade;
+      if (dying > 0.02 && pull > 0.04) {
+        var streak = (26 + homeRad * 0.07) * (1 - pull);
+        streak = Math.max(4 * (1 - pull), streak);
+        var tailRad = Math.min(homeRad, rad + streak);
+        var tailAng = ang - 0.16 * (1 - pull);
+        var ox = Math.cos(tailAng) * tailRad;
+        var oy = Math.sin(tailAng) * tailRad;
+        var mx = Math.cos(ang - 0.07 * (1 - pull)) * (tailRad * 0.48 + rad * 0.52);
+        var my = Math.sin(ang - 0.07 * (1 - pull)) * (tailRad * 0.48 + rad * 0.52);
+        var trail = ctx.createLinearGradient(ox, oy, px, py);
+        trail.addColorStop(0, "rgba(" + cr + "," + cg + "," + cb + ",0)");
+        trail.addColorStop(0.4, "rgba(" + cr + "," + cg + "," + cb + "," + (0.12 * (1 - pull)) + ")");
+        trail.addColorStop(0.78, "rgba(" + cr + "," + cg + "," + cb + "," + (0.4 + (1 - pull) * 0.2) + ")");
+        trail.addColorStop(1, "rgba(" + cr + "," + cg + "," + cb + "," + (0.7 + (1 - pull) * 0.25) + ")");
+        ctx.strokeStyle = trail;
+        ctx.lineCap = "round";
+        ctx.lineWidth = Math.max(0.6, (2.8 + sz * 0.35) * (1 - pull * 0.7));
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.quadraticCurveTo(mx, my, px, py);
+        ctx.stroke();
+        ctx.lineWidth = Math.max(0.35, (0.8 + sz * 0.12) * (1 - pull * 0.65));
+        ctx.strokeStyle = "rgba(255,255,255," + (0.22 + (1 - pull) * 0.35) + ")";
+        ctx.beginPath();
+        ctx.moveTo(ox * 0.22 + px * 0.78, oy * 0.22 + py * 0.78);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+      } else if (i % 2 === 0 && u > 0.12) {
+        ctx.strokeStyle = "rgba(" + cr + "," + cg + "," + cb + "," + (a * 0.4) + ")";
         ctx.lineWidth = 1.05;
+        ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(Math.cos(ang - 0.2) * rad * 1.1, Math.sin(ang - 0.2) * rad * 1.1);
         ctx.lineTo(px, py);
         ctx.stroke();
-        ctx.globalAlpha = fade;
+      }
+      var glow = ctx.createRadialGradient(px, py, 0, px, py, sz * 2.4);
+      glow.addColorStop(0, "rgba(255,255,255," + (dying > 0 ? 0.95 : 0.55) + ")");
+      glow.addColorStop(0.35, "rgba(" + cr + "," + cg + "," + cb + "," + a + ")");
+      glow.addColorStop(1, "rgba(" + cr + "," + cg + "," + cb + ",0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(px, py, sz * 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255," + (dying > 0 ? 0.9 : 0.7) + ")";
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(0.45, sz * 0.35), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = holeA;
+
+    if (holeA > 0.02 && selfK < 0.95) {
+      ctx.save();
+      ctx.rotate(0.16);
+      ctx.scale(1, 0.4);
+      ctx.rotate(spin * 0.32);
+      var disk = ctx.createRadialGradient(0, 0, coreR * 0.85, 0, 0, Math.max(4, diskR * 1.6));
+      disk.addColorStop(0, "rgba(0,0,0,0)");
+      disk.addColorStop(0.3, "rgba(0,0,0,0)");
+      disk.addColorStop(0.4, "rgba(255, 70, 36, 0.5)");
+      disk.addColorStop(0.55, "rgba(255, 196, 100, 0.95)");
+      disk.addColorStop(0.72, "rgba(140, 180, 255, 0.62)");
+      disk.addColorStop(0.88, "rgba(90, 50, 200, 0.22)");
+      disk.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = disk;
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.max(2, diskR * 1.6), 0, Math.PI * 2);
+      ctx.arc(0, 0, Math.max(1, coreR * 1.02), 0, Math.PI * 2, true);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 244, 210, 0.55)";
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = "round";
+      for (i = 0; i < 5; i++) {
+        var a0 = spin * 1.15 + i * 1.256;
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(2, diskR * (0.68 + (i % 2) * 0.2)), a0, a0 + 1.05);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.strokeStyle = "rgba(255, 236, 205, 0.95)";
+      ctx.lineWidth = 3.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, coreR * 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(130, 210, 255, 0.8)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, coreR * 1.36, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "#000000";
+      ctx.beginPath();
+      ctx.arc(0, 0, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      var hole = ctx.createRadialGradient(-coreR * 0.22, -coreR * 0.28, 0, 0, 0, coreR);
+      hole.addColorStop(0, "rgba(18, 10, 36, 0.55)");
+      hole.addColorStop(0.55, "rgba(0, 0, 0, 0)");
+      hole.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = hole;
+      ctx.beginPath();
+      ctx.arc(0, 0, coreR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = "rgba(255, 168, 80, 0.8)";
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.ellipse(0, coreR * 0.06, coreR * 1.52, coreR * 0.38, 0, 0.12, Math.PI - 0.12);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(190, 220, 255, 0.55)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.ellipse(0, -coreR * 0.04, coreR * 1.42, coreR * 0.32, 0, Math.PI + 0.18, -0.18);
+      ctx.stroke();
+
+      if (dying < 0.2) {
+        ctx.globalAlpha = holeA * (0.28 + pulse * 0.12) * (dying > 0 ? 1 - dying / 0.2 : 1);
+        var jet = ctx.createLinearGradient(0, -coreR * 4.2, 0, coreR * 4.2);
+        jet.addColorStop(0, "rgba(140, 200, 255, 0)");
+        jet.addColorStop(0.38, "rgba(170, 140, 255, 0.45)");
+        jet.addColorStop(0.5, "rgba(255, 255, 255, 0.2)");
+        jet.addColorStop(0.62, "rgba(170, 140, 255, 0.45)");
+        jet.addColorStop(1, "rgba(140, 200, 255, 0)");
+        ctx.fillStyle = jet;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, coreR * 0.22, coreR * 4.1, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
-    ctx.save();
-    ctx.rotate(0.16);
-    ctx.scale(1, 0.4);
-    ctx.rotate(spin * 0.32);
-    var disk = ctx.createRadialGradient(0, 0, coreR * 0.85, 0, 0, diskR * 1.6);
-    disk.addColorStop(0, "rgba(0,0,0,0)");
-    disk.addColorStop(0.3, "rgba(0,0,0,0)");
-    disk.addColorStop(0.4, "rgba(255, 70, 36, 0.5)");
-    disk.addColorStop(0.55, "rgba(255, 196, 100, 0.95)");
-    disk.addColorStop(0.72, "rgba(140, 180, 255, 0.62)");
-    disk.addColorStop(0.88, "rgba(90, 50, 200, 0.22)");
-    disk.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = disk;
-    ctx.beginPath();
-    ctx.arc(0, 0, diskR * 1.6, 0, Math.PI * 2);
-    ctx.arc(0, 0, coreR * 1.02, 0, Math.PI * 2, true);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 244, 210, 0.55)";
-    ctx.lineWidth = 2.4;
-    ctx.lineCap = "round";
-    for (i = 0; i < 5; i++) {
-      var a0 = spin * 1.15 + i * 1.256;
+    if (flashK > 0) {
+      var flashLen;
+      var flashH;
+      var flashA;
+      if (flashK < 0.28) {
+        flashLen = 18 + (flashK / 0.28) * 150;
+        flashH = 2.2 + (flashK / 0.28) * 5.5;
+        flashA = flashK / 0.28;
+      } else if (flashK < 0.48) {
+        flashLen = 168;
+        flashH = 7.7;
+        flashA = 1;
+      } else {
+        var out = (flashK - 0.48) / 0.52;
+        flashLen = 168 * (1 - out * 0.15);
+        flashH = 7.7 * (1 - out);
+        flashA = 1 - out;
+      }
+      flashH = Math.max(0.35, flashH);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = fade * flashA;
+      var flash = ctx.createLinearGradient(-flashLen, 0, flashLen, 0);
+      flash.addColorStop(0, "rgba(255,255,255,0)");
+      flash.addColorStop(0.28, "rgba(255,255,255,0.55)");
+      flash.addColorStop(0.5, "rgba(255,255,255,1)");
+      flash.addColorStop(0.72, "rgba(255,255,255,0.55)");
+      flash.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = flash;
       ctx.beginPath();
-      ctx.arc(0, 0, diskR * (0.68 + (i % 2) * 0.2), a0, a0 + 1.05);
-      ctx.stroke();
+      ctx.ellipse(0, 0, flashLen, flashH * 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.98)";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, flashLen * 0.92, Math.max(0.4, flashH * 0.22), 0, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.restore();
-
-    ctx.strokeStyle = "rgba(255, 236, 205, 0.95)";
-    ctx.lineWidth = 3.6;
-    ctx.beginPath();
-    ctx.arc(0, 0, coreR * 1.2, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(130, 210, 255, 0.8)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, coreR * 1.36, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "#000000";
-    ctx.beginPath();
-    ctx.arc(0, 0, coreR, 0, Math.PI * 2);
-    ctx.fill();
-    var hole = ctx.createRadialGradient(-coreR * 0.22, -coreR * 0.28, 0, 0, 0, coreR);
-    hole.addColorStop(0, "rgba(18, 10, 36, 0.55)");
-    hole.addColorStop(0.55, "rgba(0, 0, 0, 0)");
-    hole.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = hole;
-    ctx.beginPath();
-    ctx.arc(0, 0, coreR, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.globalCompositeOperation = "lighter";
-    ctx.strokeStyle = "rgba(255, 168, 80, 0.8)";
-    ctx.lineWidth = 2.4;
-    ctx.beginPath();
-    ctx.ellipse(0, coreR * 0.06, coreR * 1.52, coreR * 0.38, 0, 0.12, Math.PI - 0.12);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(190, 220, 255, 0.55)";
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.ellipse(0, -coreR * 0.04, coreR * 1.42, coreR * 0.32, 0, Math.PI + 0.18, -0.18);
-    ctx.stroke();
-
-    ctx.globalAlpha = fade * (0.28 + pulse * 0.12);
-    var jet = ctx.createLinearGradient(0, -coreR * 4.2, 0, coreR * 4.2);
-    jet.addColorStop(0, "rgba(140, 200, 255, 0)");
-    jet.addColorStop(0.38, "rgba(170, 140, 255, 0.45)");
-    jet.addColorStop(0.5, "rgba(255, 255, 255, 0.2)");
-    jet.addColorStop(0.62, "rgba(170, 140, 255, 0.45)");
-    jet.addColorStop(1, "rgba(140, 200, 255, 0)");
-    ctx.fillStyle = jet;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, coreR * 0.22, coreR * 4.1, 0, 0, Math.PI * 2);
-    ctx.fill();
 
     ctx.restore();
   }
@@ -5418,8 +5693,13 @@
 
   function drawMechDog(ctx, m, time) {
     var z = m.leapZ || 0;
+    var rk = retireK(m);
     ctx.save();
     ctx.translate(m.x, m.y);
+    if (rk > 0) {
+      applyRetirePose(ctx, rk, "slump");
+      ctx.globalAlpha *= Math.max(0.12, 1 - rk * 0.78);
+    }
     groundShadow(ctx, 11 + z * 0.1, 4.2, 0.32 * (1 - Math.min(0.55, z / 50)));
     ctx.translate(0, -z);
     ctx.save();
@@ -5451,7 +5731,7 @@
     ctx.fillStyle = "#e8eef4";
     ctx.fillRect(9, -2.2, 6, 1.8);
     ctx.fillRect(9, 0.8, 5, 1.5);
-    if ((m.barkFlash || 0) > 0) {
+    if ((m.barkFlash || 0) > 0 && rk <= 0) {
       ctx.globalAlpha = Math.min(1, m.barkFlash * 3.2);
       ctx.strokeStyle = "#ffb070";
       ctx.lineWidth = 2.2;
@@ -5464,18 +5744,26 @@
       ctx.globalAlpha = 1;
     }
     ctx.restore();
-    if (m.immortal) drawHpPip(ctx, m.t, m.maxT || 15, 9, "#ffd24a");
-    else drawHpPip(ctx, m.hp, m.maxHp, 9);
+    if (rk <= 0) {
+      if (m.immortal) drawHpPip(ctx, m.t, m.maxT || 15, 9, "#ffd24a");
+      else drawHpPip(ctx, m.hp, m.maxHp, 9);
+    }
+    if (rk > 0) drawRetireBits(ctx, rk, ["#d8e0e8", "#7af0ff", "#fff4d0"]);
     ctx.restore();
   }
 
   function drawShieldGen(ctx, dp, time) {
     var pos = deployDrawPos(dp);
     var squash = dp.landSquash || 0;
+    var rk = retireK(dp);
     ctx.save();
     ctx.translate(pos.x, pos.y);
-    var r = dp.range || 86;
-    if (!dp.toss && dp.hp > 0) {
+    if (rk > 0) {
+      applyRetirePose(ctx, rk, "slump");
+      ctx.globalAlpha *= Math.max(0.12, 1 - rk * 0.78);
+    }
+    var r = (dp.range || 86) * (rk > 0 ? Math.max(0.08, 1 - rk) : 1);
+    if (!dp.toss && (dp.hp > 0 || rk > 0)) {
       var pulse = 0.5 + Math.sin((time + (dp.pulse || 0)) * 3.2) * 0.14;
       var a = 0.1 + pulse * 0.1;
       ctx.fillStyle = "rgba(90, 190, 255," + a + ")";
@@ -5502,26 +5790,34 @@
     ctx.beginPath();
     ctx.ellipse(0, -22, 9, 3.4, 0, 0, Math.PI * 2);
     ctx.fill();
-    if (!dp.toss) drawHpPip(ctx, dp.hp, dp.maxHp, 10);
+    if (!dp.toss && rk <= 0) drawHpPip(ctx, dp.hp, dp.maxHp, 10);
+    if (rk > 0) drawRetireBits(ctx, rk, ["#9ad4ff", "#e8f8ff", "#7ad4ff"]);
     ctx.restore();
   }
 
   function drawMegaphone(ctx, dp, time) {
     var pos = deployDrawPos(dp);
     var squash = dp.landSquash || 0;
+    var rk = retireK(dp);
     ctx.save();
     ctx.translate(pos.x, pos.y);
-    var rings = dp.rings || [];
-    for (var i = 0; i < rings.length; i++) {
-      var rk = 1 - rings[i].t / (rings[i].max || 0.42);
-      ctx.globalAlpha = (1 - rk) * 0.55;
-      ctx.strokeStyle = "#ffc060";
-      ctx.lineWidth = 2.6;
-      ctx.beginPath();
-      ctx.arc(0, 0, 14 + rk * (dp.range || 216), 0, Math.PI * 2);
-      ctx.stroke();
+    if (rk > 0) {
+      applyRetirePose(ctx, rk, "slump");
+      ctx.globalAlpha *= Math.max(0.12, 1 - rk * 0.78);
     }
-    ctx.globalAlpha = 1;
+    var rings = dp.rings || [];
+    if (rk <= 0) {
+      for (var i = 0; i < rings.length; i++) {
+        var ringK = 1 - rings[i].t / (rings[i].max || 0.42);
+        ctx.globalAlpha = (1 - ringK) * 0.55;
+        ctx.strokeStyle = "#ffc060";
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14 + ringK * (dp.range || 216), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = rk > 0 ? Math.max(0.12, 1 - rk * 0.78) : 1;
     groundShadow(ctx, 12 + pos.z * 0.08, 4.5, dp.toss ? 0.18 : 0.38);
     ctx.translate(0, -pos.z);
     if (pos.spin) ctx.rotate(pos.spin);
@@ -5548,10 +5844,11 @@
     ctx.ellipse(15, 0, 1.4, 7, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    if (!dp.toss) {
+    if (!dp.toss && rk <= 0) {
       if (dp.immortal) drawHpPip(ctx, dp.t, dp.maxT || 15, 9, "#ffd24a");
       else drawHpPip(ctx, dp.hp, dp.maxHp, 9);
     }
+    if (rk > 0) drawRetireBits(ctx, rk, ["#ffc060", "#ffb24a", "#fff4d0"]);
     ctx.restore();
   }
 
@@ -5561,6 +5858,17 @@
     for (i = 0; i < state.zones.length; i++) {
       var z = state.zones[i];
       ctx.save();
+      var rk = retireK(z);
+      if (rk > 0) {
+        if (z.kind === "beacon" && z.global) {
+          ctx.globalAlpha *= Math.max(0.04, 1 - rk);
+        } else {
+          ctx.translate(z.x, z.y);
+          applyRetirePose(ctx, rk, zoneRetireMode(z));
+          ctx.globalAlpha *= Math.max(0.06, 1 - rk * (zoneRetireMode(z) === "puff" ? 0.95 : 0.7));
+          ctx.translate(-z.x, -z.y);
+        }
+      }
       if (z.kind === "trail") {
         ctx.fillStyle = "rgba(255, 211, 106, 0.22)";
         circle(ctx, z.x, z.y, z.r);
@@ -5736,6 +6044,12 @@
         drawBanner3d(ctx, z, state.time || 0);
       } else if (z.kind === "crate" || z.kind === "supply_drop") {
         drawCrate3d(ctx, z);
+      }
+      if (rk > 0 && !(z.kind === "beacon" && z.global)) {
+        ctx.save();
+        ctx.translate(z.x, z.y);
+        drawRetireBits(ctx, rk, zoneRetirePal(z));
+        ctx.restore();
       }
       ctx.restore();
     }
@@ -6266,7 +6580,7 @@
   function inBanner(state, x, y) {
     for (var i = 0; i < (state.zones || []).length; i++) {
       var z = state.zones[i];
-      if (z.kind !== "standard") continue;
+      if (z.kind !== "standard" || z.retiring) continue;
       if (hypot(x - z.x, y - z.y) < z.r) return true;
     }
     return false;
@@ -6342,6 +6656,10 @@
     guerrillaHud: guerrillaHud,
     recruitWithArquivo: recruitWithArquivo,
     listStatus: listStatus,
+    beginRetire: beginRetire,
+    retireK: retireK,
+    applyRetirePose: applyRetirePose,
+    drawRetireBits: drawRetireBits,
     has: has
   };
 })(window.TFAG = window.TFAG || {});

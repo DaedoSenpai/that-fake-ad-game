@@ -2891,6 +2891,11 @@
   G.drawMine = function (ctx, m) {
     ctx.save();
     ctx.translate(m.x, m.y);
+    var rk = (G.tactics && G.tactics.retireK) ? G.tactics.retireK(m) : (m.retiring ? 1 - Math.max(0, m.retireT) / Math.max(0.01, m.retireMax || 0.5) : 0);
+    if (rk > 0 && G.tactics && G.tactics.applyRetirePose) {
+      G.tactics.applyRetirePose(ctx, rk, "pop");
+      ctx.globalAlpha *= Math.max(0.1, 1 - rk * 0.82);
+    }
     ctx.fillStyle = "rgba(0,0,0,0.32)";
     ctx.beginPath();
     ctx.ellipse(1, 4, 8, 3.2, 0, 0, Math.PI * 2);
@@ -2917,12 +2922,13 @@
     ctx.beginPath();
     ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
     ctx.fill();
-    if (m.arm <= 0) {
+    if (m.arm <= 0 && rk <= 0) {
       ctx.strokeStyle = "rgba(255,80,40,0.4)";
       ctx.beginPath();
       ctx.arc(0, 0, m.r, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (rk > 0 && G.tactics && G.tactics.drawRetireBits) G.tactics.drawRetireBits(ctx, rk, ["#f0c422", "#ff4a2a", "#fff4d0"]);
     ctx.restore();
   };
 
