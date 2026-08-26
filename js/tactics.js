@@ -724,6 +724,7 @@
     state.moveDir = { x: dx / len, y: dy / len };
     state.dashCoast = true;
     state.dashHit = {};
+    state.dashSlideT = 0;
     state.run.smokeT = Math.max(state.run.smokeT || 0, Math.max(dur || 0.5, dashDur));
     if (G.combat && G.combat.spawnDashBurst) G.combat.spawnDashBurst(state, "#ffe08a");
     else G.burst(state, state.squad.x, state.squad.y, "#ffe08a", 12, 120);
@@ -915,6 +916,7 @@
     state.dashDir = { x: Math.cos(a), y: Math.sin(a) };
     state.dashCoast = false;
     state.dashCd = Math.max(state.dashCd || 0, 0.3);
+    state.dashSlideT = 0;
     state.run.smokeT = Math.max(state.run.smokeT || 0, 0.28);
     if (G.combat && G.combat.spawnDashBurst) G.combat.spawnDashBurst(state, "#7ad0ff");
     else G.burst(state, state.squad.x, state.squad.y, "#7ad0ff", 14, 140);

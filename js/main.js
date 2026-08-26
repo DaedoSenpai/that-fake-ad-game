@@ -636,6 +636,7 @@
   }
 
   function openMerge(pending) {
+    if (!pending || !pending.options || !pending.options.length) return;
     state.pendingMerge = pending;
     syncFreeze();
     var intel = pending.fromBank;
@@ -662,7 +663,7 @@
         showMergePreview(kind, btn);
       };
       btn.onclick = function () {
-        G.merge.confirm(state, kind, pending);
+        if (!G.merge.confirm(state, kind, pending)) return;
         closeMerge();
       };
       box.appendChild(btn);
@@ -728,12 +729,212 @@
       var intel = G.merge.ensureIntel(state.run);
       intel.arquivo = (intel.arquivo | 0) + (pending.cost | 0);
     }
-    var reopen = !!(pending && pending.fromBank && state.archiveMenu && state.mode === "play" && !state.defeat);
+    var reopen = !!(pending && (pending.fromBank || pending.fromBoard) && state.archiveMenu && state.mode === "play" && !state.defeat);
     state.pendingMerge = null;
     document.getElementById("merge-modal").classList.add("hidden");
     document.getElementById("merge-preview").classList.add("empty");
     syncFreeze();
     if (reopen) openArchive();
+  }
+
+  var archiveDrag = null;
+
+  function archiveUnitById(id) {
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].id === id) return state.units[i];
+    }
+    return null;
+  }
+
+  function setArchiveHint(msg) {
+    var el = document.getElementById("archive-board-hint");
+    if (el) el.textContent = msg || "Arrasta duas peças iguais uma em cima da outra.";
+  }
+
+  function archiveRing(i, n) {
+    var angle = -Math.PI / 2 + (i / Math.max(1, n)) * Math.PI * 2;
+    var r = 0.32 + Math.max(0, n - 3) * 0.022;
+    return { x: 50 + Math.cos(angle) * r * 100, y: 50 + Math.sin(angle) * r * 100 };
+  }
+
+  function clearArchiveDrag() {
+    if (archiveDrag && archiveDrag.el) {
+      archiveDrag.el.classList.remove("lift");
+      archiveDrag.el.style.left = archiveDrag.homeX + "%";
+      archiveDrag.el.style.top = archiveDrag.homeY + "%";
+    }
+    archiveDrag = null;
+    var board = document.getElementById("archive-board");
+    if (!board) return;
+    board.querySelectorAll(".archive-piece").forEach(function (el) {
+      el.classList.remove("merge-ok", "merge-hover", "lift");
+    });
+  }
+
+  function archivePieceAt(clientX, clientY, skipId) {
+    var board = document.getElementById("archive-board");
+    if (!board) return null;
+    var best = null;
+    var bestD = 40;
+    var nodes = board.querySelectorAll(".archive-piece:not(.empty):not(.cmd)");
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var id = el.dataset.id | 0;
+      if (id === skipId) continue;
+      var r = el.getBoundingClientRect();
+      var dx = clientX - (r.left + r.width / 2);
+      var dy = clientY - (r.top + r.height / 2);
+      var d = Math.hypot(dx, dy);
+      if (d < bestD) {
+        best = el;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  function renderArchiveBoard() {
+    var board = document.getElementById("archive-board");
+    if (!board) return;
+    clearArchiveDrag();
+    board.innerHTML = "";
+    var cmd = null;
+    var soldiers = [];
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.hp <= 0) continue;
+      if (u.commander) cmd = u;
+      else soldiers.push(u);
+    }
+    soldiers.sort(function (a, b) {
+      var ga = a.gen | 0;
+      var gb = b.gen | 0;
+      if (ga !== gb) return ga - gb;
+      return (a.id | 0) - (b.id | 0);
+    });
+
+    function placePiece(unit, x, y, extraClass) {
+      var el = document.createElement("button");
+      el.type = "button";
+      el.className = "archive-piece" + (extraClass ? " " + extraClass : "");
+      el.style.left = x + "%";
+      el.style.top = y + "%";
+      if (unit) {
+        el.dataset.id = String(unit.id);
+        var art = document.createElement("canvas");
+        art.width = 72;
+        art.height = 72;
+        G.drawPortrait(art, "player", unit.kind, false);
+        el.appendChild(art);
+        el.title = unit.def.name + (unit.commander ? " · comandante" : " · Nv. " + (unit.gen | 0));
+      } else {
+        el.title = "vaga";
+      }
+      board.appendChild(el);
+      return el;
+    }
+
+    if (cmd) placePiece(cmd, 50, 50, "cmd");
+    var cap = G.maxUnits();
+    var n = Math.max(soldiers.length, cap);
+    var s;
+    for (s = 0; s < n; s++) {
+      var pos = archiveRing(s, n);
+      if (s < soldiers.length) placePiece(soldiers[s], pos.x, pos.y, "");
+      else placePiece(null, pos.x, pos.y, "empty");
+    }
+    setArchiveHint("Arrasta duas peças iguais uma em cima da outra.");
+  }
+
+  function onArchiveBoardDown(ev) {
+    if (!state.archiveMenu || state.pendingMerge) return;
+    var piece = ev.target.closest && ev.target.closest(".archive-piece");
+    if (!piece || piece.classList.contains("cmd") || piece.classList.contains("empty")) return;
+    var unit = archiveUnitById(piece.dataset.id | 0);
+    if (!unit || unit.hp <= 0 || unit.commander) return;
+    ev.preventDefault();
+    archiveDrag = {
+      unit: unit,
+      el: piece,
+      id: unit.id,
+      homeX: parseFloat(piece.style.left) || 50,
+      homeY: parseFloat(piece.style.top) || 50,
+      pointer: ev.pointerId
+    };
+    piece.classList.add("lift");
+    var board = document.getElementById("archive-board");
+    if (!board) return;
+    if (board.setPointerCapture) {
+      try { board.setPointerCapture(ev.pointerId); } catch (err) {}
+    }
+    board.querySelectorAll(".archive-piece:not(.empty):not(.cmd)").forEach(function (el) {
+      var other = archiveUnitById(el.dataset.id | 0);
+      if (!other || other.id === unit.id) return;
+      if (
+        other.kind === unit.kind &&
+        G.merge.canEvolve(unit) &&
+        G.merge.canEvolve(other) &&
+        G.merge.openOptions(state, unit.def.merge).length
+      ) {
+        el.classList.add("merge-ok");
+      }
+    });
+    if (!G.merge.canEvolve(unit)) setArchiveHint(unit.def.name + " já está no topo da pirâmide.");
+    else if (!G.merge.openOptions(state, unit.def.merge).length) setArchiveHint("Já tem 2 de cada evolução possível.");
+    else setArchiveHint("Solta em cima de outro " + unit.def.name + " pra merge.");
+  }
+
+  function onArchiveBoardMove(ev) {
+    if (!archiveDrag) return;
+    var board = document.getElementById("archive-board");
+    if (!board) return;
+    var r = board.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return;
+    var x = ((ev.clientX - r.left) / r.width) * 100;
+    var y = ((ev.clientY - r.top) / r.height) * 100;
+    archiveDrag.el.style.left = Math.max(8, Math.min(92, x)) + "%";
+    archiveDrag.el.style.top = Math.max(8, Math.min(92, y)) + "%";
+    board.querySelectorAll(".archive-piece.merge-hover").forEach(function (el) {
+      el.classList.remove("merge-hover");
+    });
+    var over = archivePieceAt(ev.clientX, ev.clientY, archiveDrag.id);
+    if (over && over.classList.contains("merge-ok")) {
+      over.classList.add("merge-hover");
+      var other = archiveUnitById(over.dataset.id | 0);
+      if (other) setArchiveHint("Solta pra fundir dois " + other.def.name + ".");
+    }
+  }
+
+  function onArchiveBoardUp(ev) {
+    if (!archiveDrag) return;
+    var over = archivePieceAt(ev.clientX, ev.clientY, archiveDrag.id);
+    var a = archiveDrag.unit;
+    var b = over ? archiveUnitById(over.dataset.id | 0) : null;
+    var pending = G.merge.pairPending(state, a, b, { fromBoard: true });
+    clearArchiveDrag();
+    if (pending) {
+      G.audio.ui();
+      document.getElementById("archive-modal").classList.add("hidden");
+      openMerge(pending);
+      return;
+    }
+    if (over && a && b && a.kind === b.kind) {
+      setArchiveHint("Já tem 2 de cada evolução possível, ou esses não sobem mais.");
+    } else if (over && a && b) {
+      setArchiveHint("Merge só com o mesmo tipo.");
+    } else {
+      setArchiveHint("Arrasta duas peças iguais uma em cima da outra.");
+    }
+  }
+
+  function bindArchiveBoard() {
+    var board = document.getElementById("archive-board");
+    if (!board || board.dataset.bound) return;
+    board.dataset.bound = "1";
+    board.addEventListener("pointerdown", onArchiveBoardDown);
+    board.addEventListener("pointermove", onArchiveBoardMove);
+    board.addEventListener("pointerup", onArchiveBoardUp);
+    board.addEventListener("pointercancel", onArchiveBoardUp);
   }
 
   function renderArchiveList() {
@@ -782,10 +983,12 @@
       ok: canHire,
       onclick: function () {
         if (!G.tactics.recruitWithArquivo(state)) {
+          renderArchiveBoard();
           renderArchiveList();
           return;
         }
         G.audio.ui();
+        renderArchiveBoard();
         renderArchiveList();
       }
     });
@@ -799,15 +1002,17 @@
       return;
     }
     roster.forEach(function (u) {
-      var can = G.merge.canEvolve(u);
+      var can = G.merge.canEvolve(u) && G.merge.openOptions(state, u.def.merge).length > 0;
       var cost = G.merge.promoteCost(u.gen | 0);
       var afford = n >= cost;
       addRow({
         kind: u.kind,
         name: u.def.name,
-        sub: can
-          ? "Nível " + (u.gen | 0) + " · " + G.unitStatsLine(u.def)
-          : "Nível " + (u.gen | 0) + " · no topo da pirâmide",
+        sub: !G.merge.canEvolve(u)
+          ? "Nível " + (u.gen | 0) + " · no topo da pirâmide"
+          : !can
+            ? "Nível " + (u.gen | 0) + " · já tem 2 de cada evolução"
+            : "Nível " + (u.gen | 0) + " · " + G.unitStatsLine(u.def),
         price: !can ? "—" : afford ? cost + " arq." : "faltam " + (cost - n),
         ok: can && afford,
         onclick: function () {
@@ -828,11 +1033,14 @@
     if (state.mode !== "play" || state.defeat || state.userPaused || state.pendingMerge) return;
     state.archiveMenu = true;
     syncFreeze();
+    bindArchiveBoard();
+    renderArchiveBoard();
     renderArchiveList();
     document.getElementById("archive-modal").classList.remove("hidden");
   }
 
   function closeArchive() {
+    clearArchiveDrag();
     state.archiveMenu = false;
     var modal = document.getElementById("archive-modal");
     if (modal) modal.classList.add("hidden");
@@ -1083,18 +1291,7 @@
     ev.preventDefault();
     G.audio.ensure();
     state.pointer.down = true;
-    var target = G.merge.unitAt(state, p.x, p.y);
-    var canMerge =
-      state.mergeSlow &&
-      target &&
-      !target.commander &&
-      G.merge.canEvolve(target) &&
-      state.units.some(function (other) {
-        return other.id !== target.id && other.hp > 0 && other.kind === target.kind;
-      });
-    if (canMerge && G.merge.begin(state, p.x, p.y)) {
-      state.pointer.moveSquad = false;
-    } else if (state.pointer.touch) {
+    if (state.pointer.touch) {
       state.pointer.moveSquad = true;
       var b = G.playfield(state);
       state.squad.x = Math.max(b.x0, Math.min(b.x1, p.x));
@@ -1118,8 +1315,7 @@
     }
     if (!state.pointer.down || state.mode !== "play" || state.paused || state.stageOutro) return;
     ev.preventDefault();
-    if (state.held) G.merge.move(state, p.x, p.y);
-    else if (state.pointer.moveSquad) {
+    if (state.pointer.moveSquad) {
       var b = G.playfield(state);
       state.squad.x = Math.max(b.x0, Math.min(b.x1, p.x));
       state.squad.y = Math.max(b.y0, Math.min(b.y1, p.y));
@@ -1147,9 +1343,7 @@
       state.pointer.moveSquad = false;
       return;
     }
-    if (state.held) {
-      // Confirmação do merge é soltar o Q, não o mouse.
-    } else if (state.pointer.fireHold && G.tactics) {
+    if (state.pointer.fireHold && G.tactics) {
       G.tactics.onFireUp(state);
     }
     state.pointer.down = false;
@@ -1585,6 +1779,7 @@
       }
       for (var p = 0; p < state.projectiles.length; p++) G.drawProjectile(ctx, state.projectiles[p]);
       if (G.tactics && G.tactics.draw) G.tactics.draw(ctx, state);
+      if (G.drawIncomingArrows) G.drawIncomingArrows(ctx, state);
       ctx.restore();
     }
     if (G.drawArenaDark) G.drawArenaDark(ctx, state);
@@ -1661,21 +1856,6 @@
       }
     }
 
-    if (state.mergeHint && state.held) {
-      ctx.strokeStyle = "#7cff8a";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(state.mergeHint.x, state.mergeHint.y, state.mergeHint.def.size + 10, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (state.mergeSlow && state.mode === "play" && !state.paused) {
-      var pbSlow = G.playfield(state);
-      ctx.fillStyle = "rgba(40, 90, 160, 0.12)";
-      ctx.fillRect(pbSlow.x0, pbSlow.y0, pbSlow.x1 - pbSlow.x0, pbSlow.y1 - pbSlow.y0);
-      ctx.strokeStyle = "rgba(140, 200, 255, 0.35)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(pbSlow.x0 + 4, pbSlow.y0 + 4, pbSlow.x1 - pbSlow.x0 - 8, pbSlow.y1 - pbSlow.y0 - 8);
-    }
     for (var ai = 0; ai < state.enemies.length; ai++) {
       var ae = state.enemies[ai];
       if (ae.hp <= 0) continue;
@@ -1808,9 +1988,7 @@
     if (state.mode === "play") {
       if (state.banner) state.banner.t -= dt;
       if (!state.paused) {
-        var simDt = dt;
-        if (state.mergeSlow) simDt *= 0.22;
-        var result = G.game.update(state, simDt);
+        var result = G.game.update(state, dt);
         if (result === "dead") beginDefeat();
         else if (result === "stageClear") {
           if (state.debugFight) finishDebug();
@@ -2022,10 +2200,6 @@
         ev.preventDefault();
       }
       if (ev.key === "Shift" && !ev.repeat && !state.paused && !state.defeat) G.combat.tryDash(state);
-      if ((ev.code === "KeyQ" || ev.key === "q" || ev.key === "Q") && !ev.repeat && !state.paused && !state.defeat && !state.pendingMerge) {
-        ev.preventDefault();
-        state.mergeSlow = true;
-      }
     }
     if (state.mode !== "play" || state.paused) return;
     var n = ev.key === "1" || ev.key === "2" || ev.key === "3" || ev.key === "4" || ev.key === "5" || ev.key === "6" || ev.key === "7" || ev.key === "8" || ev.key === "9"
@@ -2042,21 +2216,9 @@
   });
   window.addEventListener("keyup", function (ev) {
     if (state.keys) state.keys[ev.code] = false;
-    if (ev.code === "KeyQ" || ev.key === "q" || ev.key === "Q") {
-      if (state.mergeSlow && state.mode === "play" && !state.paused && !state.pendingMerge) {
-        var pending = G.merge.end(state);
-        if (pending) openMerge(pending);
-      } else if (state.held) {
-        state.held.held = false;
-        state.held = null;
-        state.mergeHint = null;
-      }
-      state.mergeSlow = false;
-    }
   });
   window.addEventListener("blur", function () {
     state.keys = {};
-    state.mergeSlow = false;
     if (state.held) {
       state.held.held = false;
       state.held = null;
@@ -2176,19 +2338,39 @@
   window.addEventListener("touchend", onUp, { passive: false });
   window.addEventListener("resize", resize);
 
+  function applySaveAudio() {
+    G.audio.muted = !!G.save.muted;
+    G.audio.setVolume(G.save.volume == null ? 0.8 : G.save.volume);
+    G.audio.applyMute();
+    syncVolumeUi();
+  }
+
+  var unveiled = false;
+  function unveil() {
+    if (unveiled) return;
+    unveiled = true;
+    var boot = document.getElementById("boot-veil");
+    if (boot) boot.classList.add("done");
+    overlay.classList.remove("boot-wait");
+  }
+
   G.save.load();
-  G.audio.muted = !!G.save.muted;
-  G.audio.setVolume(G.save.volume == null ? 0.8 : G.save.volume);
-  G.audio.applyMute();
-  syncVolumeUi();
+  applySaveAudio();
   resize();
   refreshMenu();
   overlay.classList.add("boot-wait");
   showScreen("menu");
   requestAnimationFrame(loop);
-  setTimeout(function () {
-    var boot = document.getElementById("boot-veil");
-    if (boot) boot.classList.add("done");
-    overlay.classList.remove("boot-wait");
-  }, 780);
+  if (G.save.sync) {
+    G.save.sync().then(function (changed) {
+      if (changed) {
+        applySaveAudio();
+        refreshMenu();
+      }
+      unveil();
+    });
+  } else {
+    unveil();
+  }
+  setTimeout(unveil, 1800);
 })(window.TFAG = window.TFAG || {});

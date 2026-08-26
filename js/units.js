@@ -2,6 +2,7 @@
   function u(def) {
     def.kind = def.kind;
     def.merge = def.merge || [];
+    if (def.range > 0) def.range += 100;
     return def;
   }
 

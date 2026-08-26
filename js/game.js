@@ -108,6 +108,22 @@
     return { x: b.x1 + 22, y: b.y0 + Math.random() * (b.y1 - b.y0) };
   }
 
+  function spawnTypeOf(item) {
+    return typeof item === "string" ? item : (item && item.type) || "";
+  }
+
+  function spawnPosOf(state, item) {
+    if (item && typeof item === "object" && item.x != null && item.y != null) {
+      return { x: item.x, y: item.y };
+    }
+    return edgePoint(state);
+  }
+
+  function queueSpawn(state, type) {
+    var p = edgePoint(state);
+    state.spawnQueue.push({ type: type, x: p.x, y: p.y });
+  }
+
   function scaleFor(stageIndex) {
     return 1 + stageIndex * 0.16;
   }
@@ -123,9 +139,10 @@
         n = Math.max(n + 2, Math.round(n * 1.7));
         n = Math.max(1, Math.round(n * ((G.resolutionInfo(state).waveMul) || 2)));
         if (G.invasion) n = Math.max(1, Math.round(n * G.invasion.spawnMul((state.run && state.run.invasion) | 0)));
+        n = Math.max(1, Math.round(n * 1.3));
       }
       for (var k = 0; k < n; k++) {
-        state.spawnQueue.push(pack.type);
+        queueSpawn(state, pack.type);
       }
     }
     state.spawnTimer = 0.15;
@@ -327,7 +344,8 @@
       }
       if (!state.debugFight) G.save.noteStage(state.stageIndex + 1);
       if (customBoss) {
-        state.spawnQueue = [customBoss];
+        state.spawnQueue = [];
+        queueSpawn(state, customBoss);
         state.spawnTimer = 0.15;
         G.audio.wave();
       } else {
@@ -347,7 +365,7 @@
       }
       if (!state.defeat && state.spawnQueue.length) {
         var res = G.resolutionInfo(state);
-        var nextType = state.spawnQueue[0];
+        var nextType = spawnTypeOf(state.spawnQueue[0]);
         var nextBoss = nextType.indexOf("chefe") === 0;
         var living = 0;
         if (!nextBoss) {
@@ -360,9 +378,10 @@
         } else {
           state.spawnTimer -= dt;
           if (state.spawnTimer <= 0) {
-            var type = state.spawnQueue.shift();
-            var p = edgePoint(state);
-            G.game.spawnAt(state, type, p.x, p.y);
+            var item = state.spawnQueue.shift();
+            var type = spawnTypeOf(item);
+            var p = spawnPosOf(state, item);
+            G.game.spawnAt(state, type, p.x, p.y, { edgeWarn: true });
             state.spawnTimer = type.indexOf("chefe") === 0 ? 0.55 : res.spawnInterval;
           }
         }

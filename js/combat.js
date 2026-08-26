@@ -2418,9 +2418,10 @@
   }
 
   var SQUAD_SPEED = 210;
-  var DASH_SPEED = 640;
-  var DASH_DUR = 0.3;
+  var DASH_BOOST = 3.5;
+  var DASH_DUR = 0.34;
   var DASH_CD = 1.05;
+  var DASH_SLIDE = 0.22;
   var AIM_SNAP = 64;
 
   function aimPoint(state) {
@@ -2490,22 +2491,40 @@
     state.dashDir = { x: dx, y: dy };
     state.moveDir = { x: dx, y: dy };
     state.dashCoast = false;
+    state.dashSlideT = 0;
     spawnDashBurst(state, "#7ec8ff");
     return true;
   }
 
-  function dashMul(state) {
-    if (state.dashCoast) return 1;
+  function squadSpeedMul(state) {
+    var speedMul = state.run.speed * (1 + (G.save.data.perm.speed | 0) * 0.06) * (state.run.tempSpeed || 1);
+    if (state.aura) speedMul *= 1 + state.aura.speed;
+    if (state.aura && state.aura.slowSquad) speedMul *= Math.max(0.55, 1 - state.aura.slowSquad);
+    if (G.tactics && G.tactics.speedMul) speedMul *= G.tactics.speedMul(state);
+    if ((state.honeyT || 0) > 0) speedMul *= 0.42;
+    return speedMul;
+  }
+
+  function dashWalkFactor(state) {
+    if (state.dashCoast) return DASH_BOOST;
     var max = state.dashTMax || DASH_DUR;
-    var k = Math.max(0, Math.min(1, (state.dashT || 0) / max));
-    var p = 1 - k;
-    if (p < 0.12) {
-      var t = p / 0.12;
-      return 0.28 + 0.72 * t * t;
+    var p = 1 - Math.max(0, Math.min(1, (state.dashT || 0) / max));
+    var peak = DASH_BOOST;
+    var bite = peak * 1.16;
+    if (p < 0.15) {
+      var a = p / 0.15;
+      a *= a;
+      return 1.2 + (peak - 1.2) * a;
     }
-    if (p < 0.6) return 1;
-    var u = (p - 0.6) / 0.4;
-    return Math.max(0.16, 1 - 0.84 * u * u);
+    if (p < 0.52) return peak;
+    if (p < 0.66) {
+      var b = (p - 0.52) / 0.14;
+      b = b * b * (3 - 2 * b);
+      return peak + (bite - peak) * b;
+    }
+    var c = (p - 0.66) / 0.34;
+    c = 1 - (1 - c) * (1 - c) * (1 - c);
+    return bite + (1 - bite) * c;
   }
 
   function spawnDashBurst(state, color) {
@@ -2562,46 +2581,71 @@
     if (state.stageOutro) {
       state.dashActive = false;
       state.dashT = 0;
+      state.dashSlideT = 0;
       return;
     }
     var b = G.playfield(state);
     if (state.pointer && state.pointer.moveSquad && (state.dashT || 0) <= 0) {
       state.dashActive = false;
+      state.dashSlideT = 0;
       return;
     }
-    var speedMul = state.run.speed * (1 + (G.save.data.perm.speed | 0) * 0.06) * (state.run.tempSpeed || 1);
-    if (state.aura) speedMul *= 1 + state.aura.speed;
-    if (state.aura && state.aura.slowSquad) speedMul *= Math.max(0.55, 1 - state.aura.slowSquad);
-    if (G.tactics && G.tactics.speedMul) speedMul *= G.tactics.speedMul(state);
-    if ((state.honeyT || 0) > 0) speedMul *= 0.42;
+    var speedMul = squadSpeedMul(state);
     if ((state.honeyPin || 0) > 0) {
       state.honeyPin = Math.max(0, state.honeyPin - dt);
       speedMul *= 0.12;
     }
     if (squadPinned(state)) {
       state.dashT = 0;
+      state.dashSlideT = 0;
       state.dashActive = false;
       state.squad.vx = 0;
       state.squad.vy = 0;
       return;
     }
+    var walkSp = SQUAD_SPEED * speedMul;
     var vx = 0;
     var vy = 0;
     state.dashStep = null;
     state.dashActive = false;
     if ((state.dashT || 0) > 0) {
       var dir = state.dashDir || { x: 0, y: -1 };
-      var sp = DASH_SPEED * dashMul(state);
+      var sp = walkSp * dashWalkFactor(state);
       vx = dir.x * sp;
       vy = dir.y * sp;
       state.dashActive = true;
       spawnDashTrail(state, dt);
       state.dashT = Math.max(0, state.dashT - dt);
+      if (state.dashT <= 0 && !state.dashCoast) {
+        var mdEnd = readMoveDir(state);
+        if (!mdEnd.moving) {
+          state.dashSlideT = DASH_SLIDE;
+          state.dashSlideMax = DASH_SLIDE;
+          state.dashSlideFrom = walkSp;
+        }
+      }
+    } else if ((state.dashSlideT || 0) > 0) {
+      var mdSlide = readMoveDir(state);
+      if (mdSlide.moving) {
+        vx = mdSlide.x * walkSp;
+        vy = mdSlide.y * walkSp;
+        state.dashSlideT = 0;
+      } else {
+        var slideMax = state.dashSlideMax || DASH_SLIDE;
+        var u = 1 - Math.max(0, state.dashSlideT) / slideMax;
+        u = u * u * (3 - 2 * u);
+        var from = state.dashSlideFrom || walkSp;
+        var slideSp = from * (1 - u);
+        var sdir = state.dashDir || { x: 0, y: -1 };
+        vx = sdir.x * slideSp;
+        vy = sdir.y * slideSp;
+        state.dashSlideT = Math.max(0, state.dashSlideT - dt);
+      }
     } else {
       var md = readMoveDir(state);
       if (md.moving) {
-        vx = md.x * SQUAD_SPEED * speedMul;
-        vy = md.y * SQUAD_SPEED * speedMul;
+        vx = md.x * walkSp;
+        vy = md.y * walkSp;
       }
     }
     var ox = state.squad.x;

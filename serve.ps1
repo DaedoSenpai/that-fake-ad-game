@@ -23,6 +23,13 @@ function Test-SkipPath([string]$RelPath) {
   return $false
 }
 
+function Test-UpdateSkipPath([string]$RelPath) {
+  if (Test-SkipPath $RelPath) { return $true }
+  $n = ConvertTo-UnixPath $RelPath
+  if ($n -match "(^|/)data(/|$)") { return $true }
+  return $false
+}
+
 function Get-LocalPath([string]$RelPath) {
   $n = ConvertTo-UnixPath $RelPath
   if (-not $n -or $n.Contains("..")) { throw "Caminho invalido." }
@@ -103,7 +110,7 @@ function Get-UpdatePlan {
   foreach ($entry in @($tree.tree)) {
     if ($entry.type -ne "blob") { continue }
     $rel = ConvertTo-UnixPath ([string]$entry.path)
-    if (Test-SkipPath $rel) { continue }
+    if (Test-UpdateSkipPath $rel) { continue }
 
     $local = Get-LocalPath $rel
     $remoteSha = ([string]$entry.sha).ToLowerInvariant()
@@ -227,6 +234,7 @@ function Write-HttpBytes($Context, [int]$Status, [string]$ContentType, [byte[]]$
   $Context.Response.ContentType = $ContentType
   $Context.Response.Headers["Cache-Control"] = "no-cache"
   $Context.Response.Headers["Access-Control-Allow-Origin"] = "*"
+  $Context.Response.Headers["Access-Control-Allow-Private-Network"] = "true"
   if ($null -eq $Bytes) { $Bytes = @() }
   $Context.Response.ContentLength64 = $Bytes.Length
   if ($Bytes.Length -gt 0) {
@@ -240,7 +248,75 @@ function Write-HttpText($Context, [int]$Status, [string]$ContentType, [string]$T
   Write-HttpBytes $Context $Status $ContentType $bytes
 }
 
+function Get-SavePath {
+  return Get-LocalPath "data/tfag-save.json"
+}
+
+function Get-SaveExportPath {
+  return Get-LocalPath "data/tfag-save-http.json"
+}
+
+function Get-SaveStorePath {
+  return Get-LocalPath "data/tfag-save-store.js"
+}
+
+function Read-SaveFile([string]$FilePath) {
+  if (-not (Test-Path -LiteralPath $FilePath)) { return $null }
+  return [IO.File]::ReadAllBytes($FilePath)
+}
+
+function Write-SaveJson([string]$FilePath, [string]$Raw) {
+  $dir = Split-Path -Parent $FilePath
+  if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  }
+  $utf8 = New-Object System.Text.UTF8Encoding $false
+  [IO.File]::WriteAllText($FilePath, $Raw, $utf8)
+}
+
+function Handle-SaveGet($Context, [string]$FilePath) {
+  $bytes = Read-SaveFile $FilePath
+  if ($null -eq $bytes) {
+    Write-HttpText $Context 200 "application/json; charset=utf-8" '{"ok":true,"save":null}'
+    return
+  }
+  Write-HttpBytes $Context 200 "application/json; charset=utf-8" $bytes
+}
+
+function Handle-SavePost($Context, [string]$FilePath, [switch]$AlsoStore) {
+  $raw = Read-RequestBody $Context
+  if (-not $raw) {
+    Write-HttpText $Context 400 "application/json; charset=utf-8" (ConvertTo-JsonText @{ ok = $false; error = "Save vazio." })
+    return
+  }
+  try {
+    $null = $raw | ConvertFrom-Json
+  } catch {
+    Write-HttpText $Context 400 "application/json; charset=utf-8" (ConvertTo-JsonText @{ ok = $false; error = "Save invalido." })
+    return
+  }
+  Write-SaveJson $FilePath $raw
+  if ($AlsoStore) {
+    Write-SaveJson (Get-SaveStorePath) ("window.__TFAG_DISK_SAVE = " + $raw + ";")
+  }
+  Write-HttpText $Context 200 "application/json; charset=utf-8" '{"ok":true}'
+}
+
 function Handle-Api($Context, [string]$Path, [string]$Method) {
+  if ($Path -eq "/api/save") {
+    if ($Method -eq "GET") { Handle-SaveGet $Context (Get-SavePath); return }
+    if ($Method -eq "POST") { Handle-SavePost $Context (Get-SavePath) -AlsoStore; return }
+    Write-HttpText $Context 405 "application/json; charset=utf-8" (ConvertTo-JsonText @{ ok = $false; error = "Metodo nao permitido." })
+    return
+  }
+
+  if ($Path -eq "/api/save-export") {
+    if ($Method -eq "GET") { Handle-SaveGet $Context (Get-SaveExportPath); return }
+    if ($Method -eq "POST") { Handle-SavePost $Context (Get-SaveExportPath); return }
+    Write-HttpText $Context 405 "application/json; charset=utf-8" (ConvertTo-JsonText @{ ok = $false; error = "Metodo nao permitido." })
+    return
+  }
+
   if ($Path -eq "/api/ping") {
     Write-HttpText $Context 200 "application/json; charset=utf-8" (ConvertTo-JsonText @{
       ok = $true
@@ -304,6 +380,7 @@ function Handle-Request($Context) {
       $Context.Response.Headers["Access-Control-Allow-Origin"] = "*"
       $Context.Response.Headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
       $Context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type"
+      $Context.Response.Headers["Access-Control-Allow-Private-Network"] = "true"
       $Context.Response.Close()
       return
     }
@@ -348,12 +425,14 @@ function Start-GameServer {
   }
 
   $url = "http://127.0.0.1:$port/"
+  $indexPath = [System.IO.Path]::GetFullPath((Join-Path $Root "index.html"))
   Write-Host ""
   Write-Host "That Fake Ad Game"
-  Write-Host "Abre em $url"
+  Write-Host "Abrindo o jogo (mesmo save do index.html)."
+  Write-Host "Servidor local em $url"
   Write-Host "Deixa essa janela aberta. Fecha ela pra desligar o jogo."
   Write-Host ""
-  Start-Process $url | Out-Null
+  Start-Process $indexPath | Out-Null
 
   try {
     while ($listener.IsListening) {

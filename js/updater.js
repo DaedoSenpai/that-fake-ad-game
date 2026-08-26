@@ -118,14 +118,15 @@
     });
   }
 
+  function apiRoot() {
+    if (G.save && G.save.findApi) return G.save.findApi();
+    if (hasLocalServer()) return Promise.resolve("");
+    return Promise.resolve(null);
+  }
+
   function pingServer() {
-    if (!hasLocalServer()) return Promise.resolve(false);
-    return fetch("/api/ping", { cache: "no-store" }).then(function (res) {
-      return res.ok ? res.json() : null;
-    }).then(function (data) {
-      return !!(data && data.updater);
-    }).catch(function () {
-      return false;
+    return apiRoot().then(function (base) {
+      return base != null;
     });
   }
 
@@ -135,7 +136,7 @@
 
   function skipPath(p) {
     var n = unixPath(p);
-    return /(^|\/)\.git(\/|$)/.test(n) || /(^|\/)\.cursor(\/|$)/.test(n);
+    return /(^|\/)\.git(\/|$)/.test(n) || /(^|\/)\.cursor(\/|$)/.test(n) || /(^|\/)data(\/|$)/.test(n);
   }
 
   function hexSha(buf) {
@@ -305,27 +306,33 @@
   }
 
   function serverCheck() {
-    return fetch("/api/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apply: false })
-    }).then(function (res) {
-      return res.json().then(function (data) {
-        if (!res.ok || data.ok === false) throw new Error(data.error || "Não deu pra verificar.");
-        return data;
+    return apiRoot().then(function (base) {
+      if (base == null) throw new Error("Servidor local não está no ar.");
+      return fetch((base || "") + "/api/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apply: false })
+      }).then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok || data.ok === false) throw new Error(data.error || "Não deu pra verificar.");
+          return data;
+        });
       });
     });
   }
 
   function serverApply() {
-    return fetch("/api/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apply: true })
-    }).then(function (res) {
-      return res.json().then(function (data) {
-        if (!res.ok) throw new Error(data.error || "Não deu pra baixar.");
-        return data;
+    return apiRoot().then(function (base) {
+      if (base == null) throw new Error("Servidor local não está no ar.");
+      return fetch((base || "") + "/api/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apply: true })
+      }).then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error(data.error || "Não deu pra baixar.");
+          return data;
+        });
       });
     });
   }
@@ -340,7 +347,7 @@
       ["Mais novos nesta máquina", String(keep.length)]
     ];
     if (download.length) {
-      showStatus("Atualização disponível", "O GitHub tem arquivos mais novos. O save no navegador não mexe.", rows.concat(
+      showStatus("Atualização disponível", "O GitHub tem arquivos mais novos. O save do jogo não mexe.", rows.concat(
         download.slice(0, 8).map(function (item) {
           return ["Baixar", item.path || item];
         })
@@ -408,9 +415,6 @@
 
     pingServer().then(function (ok) {
       if (ok) return serverCheck();
-      if (location.protocol === "file:") {
-        throw new Error("Pra baixar na pasta do jogo, fecha essa aba e abre pelo Jogar.bat. O navegador sozinho não deixa substituir arquivo.");
-      }
       showStatus("Pasta do jogo", "Escolhe a pasta onde está o index.html pra eu comparar e substituir os arquivos.", []);
       return pickGameFolder().then(buildPlanFromHandle);
     }).then(renderPlan).catch(function (err) {
@@ -459,7 +463,13 @@
   };
 
   if (hasLocalServer()) setHint("");
-  else if (location.protocol === "file:") setHint("Abre pelo Jogar.bat pra poder baixar atualizações na pasta.");
+  else if (location.protocol === "file:") {
+    pingServer().then(function (ok) {
+      if (!ok && hintEl && !hintEl.textContent) {
+        setHint("Com o Jogar.bat aberto, dá pra baixar atualização direto. Sem ele, o navegador pede a pasta do jogo.");
+      }
+    });
+  }
 
   document.addEventListener("keydown", function (ev) {
     if (ev.key !== "Escape") return;

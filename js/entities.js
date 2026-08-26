@@ -359,8 +359,8 @@
     return {
       diag: diag,
       t: t,
-      spawnInterval: 0.38 - t * 0.24,
-      concurrent: Math.round(6 + t * 12),
+      spawnInterval: (0.38 - t * 0.24) / 1.3,
+      concurrent: Math.round((6 + t * 12) * 1.69 * 1.2),
       waveMul: 2
     };
   };
@@ -419,6 +419,154 @@
     var m = (e.def && e.def.size) || 12;
     e.x = Math.max(b.x0 + m, Math.min(b.x1 - m, e.x));
     e.y = Math.max(b.y0 + m, Math.min(b.y1 - m, e.y));
+  };
+
+  G.drawIncomingArrows = function (ctx, state) {
+    if (!state || state.defeat || (state.mode && state.mode !== "play")) return;
+    var b = G.playfield(state);
+    if (!b) return;
+    var inset = 18;
+    var bin = 52;
+    var reach = 78;
+    var groups = {};
+
+    function addMark(x, y, urg) {
+      urg = urg == null ? 0.35 : urg;
+      if (urg < 0) urg = 0;
+      if (urg > 1) urg = 1;
+      var left = x - b.x0;
+      var right = b.x1 - x;
+      var top = y - b.y0;
+      var bot = b.y1 - y;
+      var outside = x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1;
+      var near = Math.min(left, right, top, bot);
+      if (!outside && near > reach) return;
+      var edge;
+      if (outside) {
+        if (x < b.x0 && left <= top && left <= bot) edge = "L";
+        else if (x > b.x1 && right <= top && right <= bot) edge = "R";
+        else if (y < b.y0) edge = "T";
+        else if (y > b.y1) edge = "B";
+        else if (near === top) edge = "T";
+        else if (near === bot) edge = "B";
+        else if (near === left) edge = "L";
+        else edge = "R";
+      } else if (near === top) edge = "T";
+      else if (near === bot) edge = "B";
+      else if (near === left) edge = "L";
+      else edge = "R";
+      var ax;
+      var ay;
+      var ang;
+      if (edge === "T") {
+        ax = Math.max(b.x0 + 28, Math.min(b.x1 - 28, x));
+        ay = b.y0 + inset;
+        ang = Math.PI / 2;
+      } else if (edge === "B") {
+        ax = Math.max(b.x0 + 28, Math.min(b.x1 - 28, x));
+        ay = b.y1 - inset;
+        ang = -Math.PI / 2;
+      } else if (edge === "L") {
+        ax = b.x0 + inset;
+        ay = Math.max(b.y0 + 28, Math.min(b.y1 - 28, y));
+        ang = 0;
+      } else {
+        ax = b.x1 - inset;
+        ay = Math.max(b.y0 + 28, Math.min(b.y1 - 28, y));
+        ang = Math.PI;
+      }
+      var key = edge + ":" + Math.round((edge === "L" || edge === "R" ? ay : ax) / bin);
+      var g = groups[key];
+      if (!g) {
+        groups[key] = { x: ax, y: ay, ang: ang, n: 1, urg: urg };
+      } else {
+        g.x = (g.x * g.n + ax) / (g.n + 1);
+        g.y = (g.y * g.n + ay) / (g.n + 1);
+        g.n += 1;
+        if (urg > g.urg) g.urg = urg;
+      }
+    }
+
+    var i;
+    var e;
+    if (state.enemies) {
+      for (i = 0; i < state.enemies.length; i++) {
+        e = state.enemies[i];
+        if (!e || e.hp <= 0 || e.stolen || !e.edgeWarn) continue;
+        var insidePad = Math.min(e.x - b.x0, b.x1 - e.x, e.y - b.y0, b.y1 - e.y);
+        if (insidePad > reach) {
+          e.edgeWarn = false;
+          continue;
+        }
+        var distOut = 0;
+        if (e.x < b.x0) distOut = Math.max(distOut, b.x0 - e.x);
+        if (e.x > b.x1) distOut = Math.max(distOut, e.x - b.x1);
+        if (e.y < b.y0) distOut = Math.max(distOut, b.y0 - e.y);
+        if (e.y > b.y1) distOut = Math.max(distOut, e.y - b.y1);
+        var edgeUrg = distOut > 0
+          ? 1 - Math.min(1, distOut / 90)
+          : 1 - Math.min(1, insidePad / reach);
+        addMark(e.x, e.y, Math.max(0.2, edgeUrg));
+      }
+    }
+    var res = G.resolutionInfo ? G.resolutionInfo(state) : null;
+    var interval = (res && res.spawnInterval) || 0.28;
+    var cap = (res && res.concurrent) || 10;
+    var living = 0;
+    if (state.enemies) {
+      for (i = 0; i < state.enemies.length; i++) {
+        e = state.enemies[i];
+        if (e && e.hp > 0 && !e.stolen && !(e.def && e.def.boss)) living++;
+      }
+    }
+    var blocked = living >= cap;
+    if (state.spawnQueue) {
+      for (i = 0; i < state.spawnQueue.length; i++) {
+        e = state.spawnQueue[i];
+        if (!e || typeof e === "string" || e.x == null) continue;
+        var eta = (state.spawnTimer || 0) + i * interval;
+        if (blocked) eta += 0.5 + i * 0.1;
+        var timeUrg = 1 - eta / 1.05;
+        addMark(e.x, e.y, Math.max(0.08, Math.min(1, timeUrg)));
+      }
+    }
+
+    var t = state.time || 0;
+    var key;
+    for (key in groups) {
+      if (!Object.prototype.hasOwnProperty.call(groups, key)) continue;
+      var g = groups[key];
+      var urg = g.urg || 0.3;
+      var freq = 6 + urg * urg * 36;
+      var blink;
+      if (urg > 0.82) {
+        blink = ((t * freq) % 1) < (0.42 - urg * 0.12) ? 1 : 0.06;
+      } else if (urg > 0.45) {
+        blink = Math.sin(t * freq) > 0.15 ? 0.95 : 0.18;
+      } else {
+        blink = 0.5 + Math.sin(t * freq) * 0.28;
+      }
+      var s = 11 + Math.min(7, (g.n - 1) * 1.6) + urg * 3;
+      ctx.save();
+      ctx.translate(g.x, g.y);
+      ctx.rotate(g.ang);
+      ctx.globalAlpha = 0.28 + blink * (0.5 + urg * 0.5);
+      ctx.shadowColor = "#ff1a1a";
+      ctx.shadowBlur = 10 + urg * 16;
+      ctx.fillStyle = urg > 0.75 ? "#ff1111" : "#ff2d2d";
+      ctx.beginPath();
+      ctx.moveTo(s + 2, 0);
+      ctx.lineTo(-s * 0.62, s * 0.78);
+      ctx.lineTo(-s * 0.18, 0);
+      ctx.lineTo(-s * 0.62, -s * 0.78);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = "rgba(255, 220, 220, 0.95)";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.restore();
+    }
   };
 
   G.createPlayerUnit = function (x, y, kind, run, perm) {

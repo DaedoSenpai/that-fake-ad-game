@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>That Fake Ad Game</title>
+  </head>
+  <body>
+    <script>
+      (function () {
+        var KEY = "tfag-save-v2";
+        var OLD = "tfag-save-v1";
+
+        function trusted(origin) {
+          return origin === "null" ||
+            origin === "file://" ||
+            origin === location.origin ||
+            /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(origin || "");
+        }
+
+        function dumpHttpSave() {
+          try {
+            var raw = localStorage.getItem(KEY);
+            if (!raw) return;
+            fetch("/api/save-export", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: raw
+            }).catch(function () {});
+          } catch (err) {}
+        }
+
+        dumpHttpSave();
+
+        window.addEventListener("message", function (ev) {
+          var d = ev.data || {};
+          if (d.type !== "tfag-save-bridge" || !trusted(ev.origin)) return;
+          var reply = { type: "tfag-save-bridge", id: d.id, op: d.op };
+          try {
+            if (d.op === "get") {
+              reply.raw = localStorage.getItem(KEY);
+              reply.old = localStorage.getItem(OLD);
+            } else if (d.op === "set" && d.raw) {
+              localStorage.setItem(KEY, String(d.raw));
+              reply.ok = true;
+              dumpHttpSave();
+            }
+          } catch (err) {
+            reply.error = String(err && err.message ? err.message : err);
+          }
+          ev.source.postMessage(reply, "*");
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -70,6 +70,15 @@
     return 2 << g;
   }
 
+  function openOptions(state, kinds) {
+    var out = [];
+    if (!kinds || !kinds.length) return out;
+    for (var i = 0; i < kinds.length; i++) {
+      if (G.canAddKind(state, kinds[i])) out.push(kinds[i]);
+    }
+    return out;
+  }
+
   function addArquivo(state, x, y) {
     var intel = ensureIntel(state.run);
     intel.arquivo += 1;
@@ -96,6 +105,7 @@
     },
 
     promoteCost: promoteCost,
+    openOptions: openOptions,
 
     listRoster: function (state) {
       var list = [];
@@ -115,6 +125,8 @@
 
     beginPromote: function (state, u) {
       if (!u || u.hp <= 0 || u.commander || !canEvolve(u)) return null;
+      var options = openOptions(state, u.def.merge);
+      if (!options.length) return null;
       var intel = ensureIntel(state.run);
       var cost = promoteCost(u.gen | 0);
       if (intel.arquivo < cost) return null;
@@ -127,7 +139,7 @@
         cost: cost,
         x: u.x,
         y: u.y,
-        options: u.def.merge.slice()
+        options: options
       };
     },
 
@@ -161,17 +173,31 @@
       var p = state.mergeHint;
       state.held = null;
       state.mergeHint = null;
-      if (!p || p.hp <= 0 || p.kind !== held.kind || !canEvolve(held)) return null;
-      return {
-        a: held,
-        b: p,
-        x: (held.x + p.x) / 2,
-        y: (held.y + p.y) / 2,
-        options: held.def.merge.slice()
+      return this.pairPending(state, held, p);
+    },
+
+    pairPending: function (state, a, b, extra) {
+      if (!a || !b || a.hp <= 0 || b.hp <= 0 || a.id === b.id) return null;
+      if (a.commander || b.commander || a.kind !== b.kind) return null;
+      if (!canEvolve(a) || !canEvolve(b)) return null;
+      var options = openOptions(state, a.def.merge);
+      if (!options.length) return null;
+      var pending = {
+        a: a,
+        b: b,
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
+        options: options
       };
+      if (extra) {
+        var k;
+        for (k in extra) pending[k] = extra[k];
+      }
+      return pending;
     },
 
     confirm: function (state, pick, pending) {
+      if (!pending || !pick || !G.canAddKind(state, pick)) return null;
       pending.consumed = true;
       pending.a.hp = 0;
       if (pending.b) pending.b.hp = 0;
