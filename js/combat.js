@@ -1258,6 +1258,22 @@
     state.floaters.push(G.createFloater(e.x, e.y - 28, "airstrike", "#ffb45a"));
   }
 
+  function shotHitsTimeGap(sx, sy, ang, aimDist, lock) {
+    if (!lock || lock.gapR == null) return false;
+    var gx = lock.gapX;
+    var gy = lock.gapY;
+    var r = lock.gapR;
+    var x1 = sx + Math.cos(ang) * aimDist;
+    var y1 = sy + Math.sin(ang) * aimDist;
+    if (Math.hypot(x1 - gx, y1 - gy) < r + 10) return true;
+    var dx = x1 - sx;
+    var dy = y1 - sy;
+    var len2 = dx * dx + dy * dy || 1;
+    var t = ((gx - sx) * dx + (gy - sy) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(sx + dx * t - gx, sy + dy * t - gy) < r + 8;
+  }
+
   function spawnHeldTimeShot(state, e, target, ox, oy, angOff) {
     var sx = e.x + (ox || 0);
     var sy = e.y + (oy || 0);
@@ -1304,6 +1320,22 @@
 
   function beginTimeLock(state, e) {
     var cmd = commanderOf(state) || state.squad;
+    var ang = Math.atan2(cmd.y - e.y, cmd.x - e.x);
+    var gapSign = Math.random() < 0.5 ? 1 : -1;
+    var px = Math.cos(ang + Math.PI / 2) * gapSign;
+    var py = Math.sin(ang + Math.PI / 2) * gapSign;
+    var gapX = cmd.x + px * 86;
+    var gapY = cmd.y + py * 86;
+    var b = G.playfield(state);
+    gapX = Math.max(b.x0 + 36, Math.min(b.x1 - 36, gapX));
+    gapY = Math.max(b.y0 + 36, Math.min(b.y1 - 36, gapY));
+    if (Math.hypot(gapX - cmd.x, gapY - cmd.y) < 48) {
+      gapSign = -gapSign;
+      px = -px;
+      py = -py;
+      gapX = Math.max(b.x0 + 36, Math.min(b.x1 - 36, cmd.x + px * 86));
+      gapY = Math.max(b.y0 + 36, Math.min(b.y1 - 36, cmd.y + py * 86));
+    }
     state.timeLock = {
       t: 0,
       bossId: e.id,
@@ -1311,7 +1343,11 @@
       aimDur: 2.45,
       nextShot: 0.08,
       targetId: cmd && cmd.id,
-      releaseIn: 0.18
+      releaseIn: 0.18,
+      gapSign: gapSign,
+      gapX: gapX,
+      gapY: gapY,
+      gapR: 60
     };
     e.timeStopCd = 18;
     state.banner = { text: "O tempo dobra", t: 1.8 };
@@ -1360,13 +1396,32 @@
       if (lock.t >= lock.nextShot && lock.t < lock.aimDur) {
         var px = Math.cos(angTo + Math.PI / 2);
         var py = Math.sin(angTo + Math.PI / 2);
-        var fan = 0.58;
-        var nFan = 5;
+        var fan = 0.7;
+        var nFan = 7;
+        var fired = 0;
         for (var fi = 0; fi < nFan; fi++) {
           var u = nFan <= 1 ? 0 : fi / (nFan - 1) - 0.5;
           var angOff = u * 2 * fan;
-          var origin = u * 128;
+          var origin = u * 110;
+          var sx = e.x + px * origin;
+          var sy = e.y + py * origin;
+          var base = Math.atan2(cmd.y - sy, cmd.x - sx);
+          var angShot = base + angOff;
+          var aimDist = Math.max(80, Math.hypot(cmd.x - sx, cmd.y - sy));
+          if (shotHitsTimeGap(sx, sy, angShot, aimDist, lock)) continue;
+          var hx = sx + Math.cos(angShot) * aimDist;
+          var hy = sy + Math.sin(angShot) * aimDist;
+          var gdx = lock.gapX - cmd.x;
+          var gdy = lock.gapY - cmd.y;
+          var onGapSide = (hx - cmd.x) * gdx + (hy - cmd.y) * gdy > 0;
+          if (onGapSide && Math.hypot(hx - cmd.x, hy - cmd.y) > 22) continue;
           spawnHeldTimeShot(state, e, cmd, px * origin, py * origin, angOff);
+          fired++;
+        }
+        if (fired < 3) {
+          var cover = -(lock.gapSign || 1);
+          spawnHeldTimeShot(state, e, cmd, px * cover * 48, py * cover * 48, cover * 0.38);
+          spawnHeldTimeShot(state, e, cmd, px * cover * 78, py * cover * 78, cover * 0.55);
         }
         lock.nextShot += 0.12;
       }
@@ -1415,6 +1470,7 @@
     if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
       e.dashCd = 1.2;
       e.disparadaCd = 2.5;
+      e.airstrikeCd = 3.2;
     }
     if (G.invasion && G.invasion.cinematic(state)) return;
     if (state.timeLock) return;
@@ -1422,6 +1478,7 @@
     if (e.p2 && e.inv && !e.irwinAllIn && e.hp <= e.maxHp * 0.5) {
       e.irwinAllIn = true;
       fireIrwinAirstrike(state, e);
+      e.airstrikeCd = 5.4;
       var cmdNow = commanderOf(state) || state.squad;
       var hideAng = cmdNow ? Math.atan2(cmdNow.y - e.y, cmdNow.x - e.x) : 0;
       var bx = e.x - Math.cos(hideAng) * 36;
@@ -1456,6 +1513,14 @@
       G.clampPlay(e, state);
       if (e.irwinDashT <= 0) e.vx = e.vy = 0;
       return;
+    }
+
+    if (e.inv && e.p2 && (e.timeStopWind || 0) <= 0) {
+      e.airstrikeCd = (e.airstrikeCd == null ? 3.2 : e.airstrikeCd) - dt;
+      if (e.airstrikeCd <= 0) {
+        fireIrwinAirstrike(state, e);
+        e.airstrikeCd = e.irwinAllIn ? 5.6 : 7.4;
+      }
     }
 
     var scouts = countIrwinScouts(state);

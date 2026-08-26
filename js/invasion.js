@@ -50,9 +50,6 @@
     },
 
     P2_HP_BUFF: 1.2,
-    TWO_BAR_ALWAYS: {
-      chefe_invasao: true
-    },
 
     cinematic: function (state) {
       return !!(state && state.bossCutscene);
@@ -65,7 +62,6 @@
     wantsTwoBars: function (state, e) {
       if (!e || !e.def || !e.def.boss || e.fake || e.def.codexHide) return false;
       if (e.type === "beeprincess" || e.type === "chefe_final") return false;
-      if (this.TWO_BAR_ALWAYS[e.type]) return true;
       return this.enraged(state, state.stageIndex | 0);
     },
 
