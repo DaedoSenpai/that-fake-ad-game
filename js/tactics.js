@@ -816,7 +816,7 @@
 
   function onAltDown(state) {
     ensure(state);
-    if (state.paused || state.stageOutro) return;
+    if (state.paused || state.stageOutro || (G.invasion && G.invasion.cinematic(state)) || state.timeLock) return;
     state.pointer.altHold = true;
     state.pointer.altFrom = { x: aim(state).x, y: aim(state).y };
     var u = selectedUnit(state);
@@ -2784,6 +2784,8 @@
   }
 
   function update(state, dt) {
+    if (G.invasion && G.invasion.cinematic(state)) return;
+    if (state.timeLock && state.timeLock.phase !== "release") return;
     ensure(state);
     var p = aim(state);
     var last = state.lastMouse || p;
@@ -4151,7 +4153,7 @@
   }
 
   function playerShoot(state, dt) {
-    if (state.stageOutro) return;
+    if (state.stageOutro || (G.invasion && G.invasion.cinematic(state)) || state.timeLock) return;
     ensure(state);
     var firing = !!(state.pointer && state.pointer.fireHold);
     var sfx = false;

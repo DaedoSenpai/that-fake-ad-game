@@ -294,6 +294,8 @@
       state.waitingClear = false;
       state.clearTimer = 0;
       state.stageOutro = null;
+      state.bossCutscene = null;
+      state.timeLock = null;
       state.vacuumLoot = false;
       state.bumperHp = 5;
       state.bumperCd = 0;
@@ -356,14 +358,14 @@
     update: function (state, dt) {
       if (state.camZoomTo && Math.abs((state.camZoom || 1) - state.camZoomTo) > 0.002) {
         var z = state.camZoom || 1;
-        var rate = state.defeat ? 1.05 : 1.6;
+        var rate = state.defeat ? 1.05 : (state.bossCutscene ? 2.4 : 1.6);
         z += (state.camZoomTo - z) * Math.min(1, dt * rate);
         state.camZoom = z;
         if (!state.defeat && !(state.stageOutro && state.stageOutro.phase === "march")) G.clampPlay(state.squad, state);
       } else if (state.camZoomTo) {
         state.camZoom = state.camZoomTo;
       }
-      if (!state.defeat && state.spawnQueue.length) {
+      if (!state.defeat && !state.bossCutscene && state.spawnQueue.length) {
         var res = G.resolutionInfo(state);
         var nextType = spawnTypeOf(state.spawnQueue[0]);
         var nextBoss = nextType.indexOf("chefe") === 0;

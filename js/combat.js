@@ -185,6 +185,11 @@
       G.burst(state, unit.x, unit.y, "#ffe08a", 3, 28);
       return;
     }
+    if (unit.team === "enemy" && (unit.irwinIFrame || 0) > 0) {
+      unit.flash = 0.06;
+      return;
+    }
+    if (state.timeLock && unit.team === "player") return;
     if (unit.team === "player" && state.debugFight && state.debugOpts && state.debugOpts.god) {
       unit.flash = 0.06;
       return;
@@ -261,6 +266,9 @@
         var ally = nearest(state.units, unit.x, unit.y);
         if (ally) ally.hp = Math.min(ally.maxHp, ally.hp + amount * 0.12);
       }
+    }
+    if (unit.hp > 0 && unit.team === "enemy" && G.invasion && G.invasion.enterP2) {
+      G.invasion.enterP2(state, unit);
     }
     if (unit.hp <= 0) {
       if (unit.team === "enemy" && advanceCorePhase(state, unit)) return;
@@ -644,7 +652,7 @@
     var last = e.cascaLast || "";
     var opts = [];
     if (readyOrbitShields(state, e.id).length > 0) opts.push("throw");
-    if (e.hp < e.maxHp * 0.5) opts.push("charge");
+    if (e.hp < e.maxHp * 0.5 || (G.invasion && G.invasion.rage(e))) opts.push("charge");
     if (!opts.length) {
       e.skillT = 2.8;
       return;
@@ -1013,7 +1021,11 @@
 
   function isInvasaoMinion(state, e) {
     if (!e || e.def.boss || e.type === "chefe_invasao") return false;
-    if (e.rushMinion || e.ownerId || e.type === "fuzileiro_alien" || e.type === "batedor_alien" || e.type === "pistoleiro_alien") return true;
+    if (e.type === "heal_station" || e.type === "dobrador_luz") return false;
+    if (e.rushMinion || e.ownerId) return true;
+    if (e.type === "fuzileiro_alien" || e.type === "batedor_alien" || e.type === "pistoleiro_alien") return true;
+    if (e.type === "fuzileiro_elite" || e.type === "batedor_elite" || e.type === "pistoleiro_elite") return true;
+    if (e.type === "fuzileiro_veterano" || e.type === "infiltrador_alien" || e.type === "medico_alien") return true;
     return !!invasaoHost(state, e);
   }
 
@@ -1038,7 +1050,7 @@
   }
 
   function trySpawnInvasao(state, e, type, x, y, force) {
-    var cap = (e && (e.invP2 || e.inv)) ? 8 : 5;
+    var cap = (e && (e.invP2 || e.inv)) ? 10 : 5;
     if (!force && countInvasaoMinions(state) >= cap) return null;
     return G.game.spawnAt(state, type, x, y, { noDrop: true, rushMinion: true, ownerId: e.id });
   }
@@ -1059,59 +1071,450 @@
     face(e, sx, sy, dt);
   }
 
+  function countIrwinScouts(state) {
+    var n = 0;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var m = state.enemies[i];
+      if (m.hp <= 0) continue;
+      if (m.type === "batedor_elite" || m.type === "infiltrador_alien" || m.type === "batedor_alien") n++;
+    }
+    return n;
+  }
+
+  function countTypeAlive(state, type) {
+    var n = 0;
+    for (var i = 0; i < state.enemies.length; i++) {
+      if (state.enemies[i].hp > 0 && state.enemies[i].type === type) n++;
+    }
+    return n;
+  }
+
+  function irwinThreat(state, e) {
+    var best = null;
+    var bestScore = 0;
+    function consider(x, y, r, pad, napalm) {
+      var d = Math.hypot(e.x - x, e.y - y);
+      var reach = r + (pad == null ? 56 : pad);
+      if (d > reach) return;
+      var score = reach - d;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x: x, y: y, napalm: !!napalm };
+      }
+    }
+    var zones = state.zones || [];
+    for (var z = 0; z < zones.length; z++) {
+      var zn = zones[z];
+      if (zn.kind === "napalm" || zn.kind === "fire") consider(zn.x, zn.y, zn.r || 36, 118, true);
+      else if (zn.kind === "acid") consider(zn.x, zn.y, zn.r || 36, 56, false);
+    }
+    var warns = state.warnings || [];
+    for (var w = 0; w < warns.length; w++) {
+      var wn = warns[w];
+      if (wn.kind === "acid" || wn.kind === "airstrike") consider(wn.x, wn.y, wn.r || 40, 56, false);
+    }
+    if (state.bombPending) {
+      var bp = state.bombPending;
+      var mx = (bp.x0 + bp.x1) / 2;
+      var my = (bp.y0 + bp.y1) / 2;
+      consider(mx, my, 90, 70, false);
+    }
+    return best;
+  }
+
+  function irwinNapalmAt(state, x, y, pad) {
+    pad = pad == null ? 18 : pad;
+    var zones = state.zones || [];
+    for (var z = 0; z < zones.length; z++) {
+      var zn = zones[z];
+      if (zn.kind !== "napalm" && zn.kind !== "fire") continue;
+      if (Math.hypot(x - zn.x, y - zn.y) < (zn.r || 36) + pad) return true;
+    }
+    return false;
+  }
+
+  function pickIrwinEscape(state, e, threat) {
+    var b = G.playfield(state);
+    var dur = 0.34;
+    var spd = 700;
+    var bestAng = threat ? Math.atan2(e.y - threat.y, e.x - threat.x) : 0;
+    var bestScore = -1e9;
+    for (var i = 0; i < 14; i++) {
+      var ang = (Math.PI * 2 * i) / 14;
+      var nx = e.x + Math.cos(ang) * spd * dur;
+      var ny = e.y + Math.sin(ang) * spd * dur;
+      if (nx < b.x0 + 36 || nx > b.x1 - 36 || ny < b.y0 + 36 || ny > b.y1 - 36) continue;
+      var nearest = 240;
+      var zones = state.zones || [];
+      for (var z = 0; z < zones.length; z++) {
+        var zn = zones[z];
+        if (zn.kind !== "napalm" && zn.kind !== "fire") continue;
+        var d = Math.hypot(nx - zn.x, ny - zn.y) - (zn.r || 36);
+        if (d < nearest) nearest = d;
+      }
+      var away = threat ? Math.hypot(nx - threat.x, ny - threat.y) : 80;
+      var score = nearest * 1.6 + away;
+      if (score > bestScore) {
+        bestScore = score;
+        bestAng = ang;
+      }
+    }
+    return bestAng;
+  }
+
+  function startIrwinDash(state, e, ang, dur, spd, len) {
+    e.dashWind = 0.32;
+    e.dashWindAng = ang;
+    e.dashWindDur = dur;
+    e.dashWindSpd = spd;
+    e.irwinDashKind = "dash";
+    warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: ang, len: len || 170, w: 16, t: 0.32, max: 0.32, r: 16, dmg: 0, color: "#8ad422" });
+    G.burst(state, e.x, e.y, "#8ad422", 8, 70);
+  }
+
+  function startIrwinDisparada(state, e, threat, longDash) {
+    var ang;
+    if (threat) ang = Math.atan2(e.y - threat.y, e.x - threat.x);
+    else {
+      var b = G.playfield(state);
+      var cx = (b.x0 + b.x1) / 2;
+      var cy = (b.y0 + b.y1) / 2;
+      ang = Math.atan2(cy - e.y, cx - e.x);
+    }
+    e.dashWind = 0.26;
+    e.dashWindAng = ang;
+    e.dashWindDur = longDash ? 0.5 : 0.3;
+    e.dashWindSpd = longDash ? 760 : 680;
+    e.irwinDashKind = "disparada";
+    e.irwinIFrame = (longDash ? 0.5 : 0.3) + 0.26;
+    warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: ang, len: longDash ? 260 : 190, w: 18, t: 0.26, max: 0.26, r: 18, dmg: 0, color: "#ffe08a" });
+    G.burst(state, e.x, e.y, "#ffe08a", 14, 110);
+    state.floaters.push(G.createFloater(e.x, e.y - 26, "disparada", "#ffe08a"));
+  }
+
+  function applyIrwinMorale(state, e, dt) {
+    e.moraleT = (e.moraleT == null ? 0 : e.moraleT) - dt;
+    e.moralePulse = Math.max(0, (e.moralePulse || 0) - dt);
+    if (e.moraleT <= 0) {
+      e.moraleT = 4.6;
+      e.moralePulse = 0.7;
+      state.floaters.push(G.createFloater(e.x, e.y - 28, "moral", "#e8c86a"));
+    }
+    var auraR = (e.p2 && e.inv) ? 210 : 118;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var ally = state.enemies[i];
+      if (ally.hp <= 0 || ally.id === e.id) continue;
+      if (dist(e, ally) < auraR) {
+        ally.moraleSpd = 1.22;
+        ally.moraleT = 0.4;
+        if (G.invasion) G.invasion.heal(ally, ally.maxHp * 0.01 * dt);
+        else ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * 0.01 * dt);
+      }
+    }
+  }
+
+  function fireIrwinAirstrike(state, e) {
+    var cmd = commanderOf(state) || state.squad;
+    var tx = cmd.x;
+    var ty = cmd.y;
+    var ang = Math.atan2(ty - e.y, tx - e.x);
+    if (!isFinite(ang) || Math.hypot(tx - e.x, ty - e.y) < 8) ang = e.rot || 0;
+    var z = state.camZoom || 1;
+    var lx = state.camLook && state.camLook.x != null ? state.camLook.x : state.W / 2;
+    var ly = state.camLook && state.camLook.y != null ? state.camLook.y : state.H / 2;
+    var screen = {
+      x0: lx - state.W / (2 * z),
+      y0: ly - state.H / (2 * z),
+      x1: lx + state.W / (2 * z),
+      y1: ly + state.H / (2 * z)
+    };
+    var fx = Math.cos(ang);
+    var fy = Math.sin(ang);
+    var start = rayExitPlay(screen, tx, ty, -fx, -fy, 2);
+    var end = rayExitPlay(screen, tx, ty, fx, fy, 2);
+    var x0 = start.x;
+    var y0 = start.y;
+    var x1 = end.x;
+    var y1 = end.y;
+    var dx = x1 - x0;
+    var dy = y1 - y0;
+    var len = Math.hypot(dx, dy) || 1;
+    var n = Math.max(14, Math.round(len / 34));
+    for (var i = 0; i < n; i++) {
+      var k = n <= 1 ? 0.5 : i / (n - 1);
+      warnAt(state, {
+        kind: "airstrike",
+        x: x0 + dx * k,
+        y: y0 + dy * k,
+        t: 0.42 + i * 0.028,
+        max: 0.9,
+        r: 48,
+        dmg: Math.round(e.def.dmg * 1.8),
+        color: "#ffb45a"
+      });
+    }
+    warnAt(state, { kind: "lane", x: x0, y: y0, ang: ang, len: len, w: 30, t: 0.85, max: 0.85, r: 30, dmg: 0, color: "#ffb45a" });
+    state.banner = { text: "Bombardeio", t: 1.6 };
+    state.floaters.push(G.createFloater(e.x, e.y - 28, "airstrike", "#ffb45a"));
+  }
+
+  function spawnHeldTimeShot(state, e, target, ox, oy, angOff) {
+    var sx = e.x + (ox || 0);
+    var sy = e.y + (oy || 0);
+    var base = Math.atan2(target.y - sy, target.x - sx);
+    var ang = base + (angOff || 0);
+    var aimDist = Math.max(80, Math.hypot(target.x - sx, target.y - sy));
+    var p = G.createProjectile({
+      x: sx + Math.cos(ang) * 16,
+      y: sy + Math.sin(ang) * 16,
+      vx: 0,
+      vy: 0,
+      dmg: Math.round(e.def.dmg * 1.15),
+      team: "enemy",
+      kind: "timeshot",
+      life: 3.2,
+      r: 4.2,
+      color: "#d8f4ff",
+      fromBoss: true,
+      fromId: e.id
+    });
+    p.held = true;
+    p.holdAng = ang;
+    p.holdSp = 1020;
+    p.holdX = sx + Math.cos(ang) * aimDist;
+    p.holdY = sy + Math.sin(ang) * aimDist;
+    state.projectiles.push(p);
+    G.burst(state, p.x, p.y, "#c8e8ff", 3, 36);
+  }
+
+  function releaseHeldShots(state) {
+    for (var i = 0; i < state.projectiles.length; i++) {
+      var p = state.projectiles[i];
+      if (!p.held) continue;
+      var ang = p.holdAng || 0;
+      var sp = p.holdSp || 900;
+      p.vx = Math.cos(ang) * sp;
+      p.vy = Math.sin(ang) * sp;
+      p.held = false;
+      p.life = Math.max(p.life, 0.7);
+    }
+    state.shake = Math.max(state.shake || 0, 10);
+    G.audio.explosion();
+  }
+
+  function beginTimeLock(state, e) {
+    var cmd = commanderOf(state) || state.squad;
+    state.timeLock = {
+      t: 0,
+      bossId: e.id,
+      phase: "aim",
+      aimDur: 2.45,
+      nextShot: 0.08,
+      targetId: cmd && cmd.id,
+      releaseIn: 0.18
+    };
+    e.timeStopCd = 18;
+    state.banner = { text: "O tempo dobra", t: 1.8 };
+    state.pointer.down = false;
+    state.pointer.fireHold = false;
+    state.dashActive = false;
+    state.dashT = 0;
+    G.burst(state, e.x, e.y, "#c8e8ff", 22, 130);
+    state.shake = Math.max(state.shake || 0, 8);
+  }
+
+  function tickTimeLock(state, dt) {
+    var lock = state.timeLock;
+    if (!lock) return;
+    lock.t += dt;
+    var e = findEnemy(state, lock.bossId);
+    if (!e || e.hp <= 0) {
+      releaseHeldShots(state);
+      state.timeLock = null;
+      return;
+    }
+    var aliveBender = countTypeAlive(state, "dobrador_luz") > 0;
+    if (!aliveBender) {
+      releaseHeldShots(state);
+      state.timeLock = null;
+      state.floaters.push(G.createFloater(e.x, e.y - 24, "prisma caiu", "#c8e8ff"));
+      return;
+    }
+    state.squad.vx = 0;
+    state.squad.vy = 0;
+    var cmd = commanderOf(state) || { x: state.squad.x, y: state.squad.y };
+    if (lock.phase === "aim") {
+      var side = Math.sin(lock.t * 3.2) * 90;
+      var back = 40;
+      var angTo = Math.atan2(cmd.y - e.y, cmd.x - e.x);
+      var tx = cmd.x - Math.cos(angTo) * 150 + Math.cos(angTo + Math.PI / 2) * side;
+      var ty = cmd.y - Math.sin(angTo) * 150 + Math.sin(angTo + Math.PI / 2) * side;
+      moveTowards(e, tx, ty, (e.def.speed || 62) * 1.55, dt);
+      G.clampPlay(e, state);
+      face(e, cmd.x, cmd.y, dt);
+      for (var bi = 0; bi < state.enemies.length; bi++) {
+        var bender = state.enemies[bi];
+        if (bender.hp <= 0 || bender.type !== "dobrador_luz") continue;
+        coverBehindIrwin(state, bender, e, dt);
+      }
+      if (lock.t >= lock.nextShot && lock.t < lock.aimDur) {
+        var px = Math.cos(angTo + Math.PI / 2);
+        var py = Math.sin(angTo + Math.PI / 2);
+        var fan = 0.58;
+        var nFan = 5;
+        for (var fi = 0; fi < nFan; fi++) {
+          var u = nFan <= 1 ? 0 : fi / (nFan - 1) - 0.5;
+          var angOff = u * 2 * fan;
+          var origin = u * 128;
+          spawnHeldTimeShot(state, e, cmd, px * origin, py * origin, angOff);
+        }
+        lock.nextShot += 0.12;
+      }
+      if (lock.t >= lock.aimDur) {
+        lock.phase = "release";
+        lock.releaseIn = 0.2;
+        state.banner = { text: "AGORA", t: 0.85 };
+        state.shake = Math.max(state.shake || 0, 6);
+      }
+    } else {
+      lock.releaseIn -= dt;
+      e.vx = e.vy = 0;
+      if (lock.releaseIn <= 0) {
+        releaseHeldShots(state);
+        state.timeLock = null;
+      }
+    }
+  }
+
+  function evolveAlien(state, e) {
+    var map = {
+      fuzileiro_elite: "fuzileiro_veterano",
+      pistoleiro_elite: "medico_alien",
+      batedor_elite: "infiltrador_alien"
+    };
+    var next = map[e.type];
+    if (!next || !G.ENEMY_DEFS[next]) return;
+    var oldDef = e.def;
+    var ratio = e.maxHp ? e.hp / e.maxHp : 1;
+    e.type = next;
+    e.def = G.ENEMY_DEFS[next];
+    var scale = oldDef && oldDef.hp ? e.maxHp / oldDef.hp : 1;
+    e.maxHp = Math.max(1, Math.round(e.def.hp * scale));
+    e.hp = Math.max(1, Math.round(e.maxHp * Math.max(0.35, ratio)));
+    e.evolved = true;
+    e.flash = 0.45;
+    G.burst(state, e.x, e.y, e.def.color || "#ffe08a", 16, 90);
+    state.floaters.push(G.createFloater(e.x, e.y - 22, e.def.name, "#ffe08a"));
+  }
+
   function tickInvasao(state, e, target, dt, spd) {
     var d = dist(e, target);
     var prefer = 176;
     var p2 = G.invasion && G.invasion.isP2(e);
-    if (G.invasion && G.invasion.enterP2(state, e, "Irwin · segunda barra")) {
-      trySpawnInvasao(state, e, "fuzileiro_alien", e.x + 36, e.y + 10, true);
-      trySpawnInvasao(state, e, "fuzileiro_alien", e.x - 36, e.y - 10, true);
-      trySpawnInvasao(state, e, "batedor_alien", e.x + 20, e.y - 28, true);
-      trySpawnInvasao(state, e, "batedor_alien", e.x - 20, e.y + 28, true);
-      trySpawnInvasao(state, e, "pistoleiro_alien", e.x + 48, e.y, true);
-      trySpawnInvasao(state, e, "pistoleiro_alien", e.x - 48, e.y, true);
-      e.dashCd = 2;
+    if (G.invasion) G.invasion.enterP2(state, e, "Irwin · segunda barra");
+    if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
+      e.dashCd = 1.2;
+      e.disparadaCd = 2.5;
     }
-    if (d < prefer - 28) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
-    else if (d > prefer + 24) moveTowards(e, target.x, target.y, spd * 0.85, dt);
-    e.auraPulse = (e.auraPulse || 0) + dt;
-    var auraR = p2 ? 204 : 102;
-    for (var al = 0; al < state.enemies.length; al++) {
-      var ally = state.enemies[al];
-      if (ally.hp <= 0 || ally.id === e.id) continue;
-      if (dist(e, ally) < auraR) ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * 0.012 * dt);
+    if (G.invasion && G.invasion.cinematic(state)) return;
+    if (state.timeLock) return;
+
+    if (e.p2 && e.inv && !e.irwinAllIn && e.hp <= e.maxHp * 0.5) {
+      e.irwinAllIn = true;
+      fireIrwinAirstrike(state, e);
+      var cmdNow = commanderOf(state) || state.squad;
+      var hideAng = cmdNow ? Math.atan2(cmdNow.y - e.y, cmdNow.x - e.x) : 0;
+      var bx = e.x - Math.cos(hideAng) * 36;
+      var by = e.y - Math.sin(hideAng) * 36;
+      warnAt(state, { kind: "mark", x: bx, y: by, t: 0.45, max: 0.45, r: 26, dmg: 0, color: "#c8e8ff" });
+      var bender = G.game.spawnAt(state, "dobrador_luz", bx, by, { noDrop: true, ownerId: e.id });
+      if (bender) bender.helperOf = e.id;
+      e.timeStopCd = 2.8;
+      state.banner = { text: "Tudo que ele tem", t: 2.2 };
+      G.burst(state, e.x, e.y, "#c8e8ff", 20, 140);
     }
-    if (p2) {
-      e.dashCd = (e.dashCd == null ? 10 : e.dashCd) - dt;
-      if ((e.irwinDashT || 0) > 0) {
-        e.irwinDashT -= dt;
-        e.x += (e.vx || 0) * dt;
-        e.y += (e.vy || 0) * dt;
-        G.clampPlay(e, state);
-        if (e.irwinDashT <= 0) e.vx = e.vy = 0;
-      } else if (e.dashCd <= 0 && target) {
-        var da = Math.atan2(target.y - e.y, target.x - e.x);
-        e.vx = Math.cos(da) * 620;
-        e.vy = Math.sin(da) * 620;
-        e.irwinDashT = 0.32;
-        e.dashCd = 10;
-        warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: da, len: 180, w: 16, t: 0.18, max: 0.18, r: 16, dmg: 0, color: "#8ad422" });
-        G.burst(state, e.x, e.y, "#8ad422", 10, 90);
+
+    applyIrwinMorale(state, e, dt);
+
+    if ((e.irwinIFrame || 0) > 0) e.irwinIFrame -= dt;
+    if ((e.dashWind || 0) > 0) {
+      e.dashWind -= dt;
+      e.vx = e.vy = 0;
+      if (e.dashWind <= 0) {
+        var wa = e.dashWindAng || 0;
+        e.vx = Math.cos(wa) * (e.dashWindSpd || 600);
+        e.vy = Math.sin(wa) * (e.dashWindSpd || 600);
+        e.irwinDashT = e.dashWindDur || 0.28;
+        G.burst(state, e.x, e.y, e.irwinDashKind === "disparada" ? "#ffe08a" : "#8ad422", 12, 90);
+      }
+      return;
+    }
+    if ((e.irwinDashT || 0) > 0) {
+      e.irwinDashT -= dt;
+      e.x += (e.vx || 0) * dt;
+      e.y += (e.vy || 0) * dt;
+      G.clampPlay(e, state);
+      if (e.irwinDashT <= 0) e.vx = e.vy = 0;
+      return;
+    }
+
+    var scouts = countIrwinScouts(state);
+    var threat = irwinThreat(state, e);
+    e.dodgeCd = Math.max(0, (e.dodgeCd == null ? 0 : e.dodgeCd) - dt);
+    if (threat && threat.napalm) {
+      e.napalmClearT = 0;
+      if (e.napalmDodge == null) e.napalmDodge = Math.random() < 0.5;
+    } else {
+      e.napalmClearT = (e.napalmClearT || 0) + dt;
+      if (e.napalmClearT > 0.55) e.napalmDodge = null;
+    }
+    if (threat && threat.napalm && e.napalmDodge && e.dodgeCd <= 0) {
+      var escape = pickIrwinEscape(state, e, threat);
+      if (e.inv && e.p2 && scouts > 0) {
+        startIrwinDisparada(state, e, { x: e.x - Math.cos(escape) * 80, y: e.y - Math.sin(escape) * 80 }, scouts === 1);
+      } else {
+        startIrwinDash(state, e, escape, 0.32, 700, 210);
+      }
+      e.dodgeCd = 2.6;
+      return;
+    }
+
+    if (e.inv && e.p2 && scouts > 0) {
+      e.disparadaCd = (e.disparadaCd == null ? 4 : e.disparadaCd) - dt;
+      if (e.disparadaCd <= 0 && threat && !threat.napalm) {
+        var longDash = scouts === 1;
+        startIrwinDisparada(state, e, threat, longDash);
+        e.disparadaCd = scouts >= 2 ? 10 : 20;
+        return;
       }
     }
+
+    e.dashCd = (e.dashCd == null ? 3.2 : e.dashCd) - dt;
+    if (e.dashCd <= 0 && target) {
+      var da = Math.atan2(target.y - e.y, target.x - e.x);
+      var landX = e.x + Math.cos(da) * 170;
+      var landY = e.y + Math.sin(da) * 170;
+      if (!irwinNapalmAt(state, landX, landY, 28) && !(threat && threat.napalm && e.napalmDodge === false)) {
+        startIrwinDash(state, e, da, 0.28, 600, 175);
+        e.dashCd = p2 ? 4.4 : 5.2;
+        return;
+      }
+    }
+
+    if (d < prefer - 28) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
+    else if (d > prefer + 24) moveTowards(e, target.x, target.y, spd * 0.85, dt);
+
     e.spawnWaveT = (e.spawnWaveT == null ? 6 : e.spawnWaveT) - dt;
     if (e.spawnWaveT <= 0) {
-      if (p2) {
-        var kinds = ["fuzileiro_alien", "batedor_alien", "pistoleiro_alien"];
-        var spawnedP2 = 0;
-        for (var sk = 0; sk < kinds.length; sk++) {
-          while (G.invasion.countType(state, kinds[sk]) < 2) {
-            if (!trySpawnInvasao(state, e, kinds[sk], e.x + (Math.random() - 0.5) * 50, e.y + (Math.random() - 0.5) * 50)) break;
-            spawnedP2++;
-            if (spawnedP2 >= 2) break;
-          }
+      if (p2 && e.inv) {
+        var roomP2 = 10 - countInvasaoMinions(state);
+        if (roomP2 <= 0) e.spawnWaveT = 1.4;
+        else {
+          e.spawnWaveT = 3.6 + Math.random() * 1.6;
+          var trashP2 = G.ENEMY_POOL[(Math.random() * G.ENEMY_POOL.length) | 0];
+          var offP2 = pickPlay(state, 40);
+          trySpawnInvasao(state, e, trashP2, offP2.x, offP2.y);
         }
-        e.spawnWaveT = spawnedP2 ? 3.2 : 1.2;
       } else {
         var room = 5 - countInvasaoMinions(state);
         if (room <= 0) {
@@ -1156,7 +1559,7 @@
         e.invasaoT = 1.55;
       } else if (pick === "rifles") {
         var spawned = 0;
-        if (trySpawnInvasao(state, e, p2 ? "fuzileiro_alien" : "fuzileiro_alien", e.x + 32, e.y + 8)) spawned++;
+        if (trySpawnInvasao(state, e, "fuzileiro_alien", e.x + 32, e.y + 8)) spawned++;
         if (trySpawnInvasao(state, e, p2 ? "batedor_alien" : "fuzileiro_alien", e.x - 32, e.y - 8)) spawned++;
         if (spawned) {
           warnAt(state, { kind: "mark", x: e.x + 28, y: e.y, t: 0.4, max: 0.4, r: 22, dmg: 0 });
@@ -1169,6 +1572,21 @@
       }
     }
     if ((e.bombT || 0) > 0) e.bombT -= dt;
+    if (e.inv && e.p2 && e.irwinAllIn && countTypeAlive(state, "dobrador_luz") > 0) {
+      e.timeStopCd = (e.timeStopCd == null ? 8 : e.timeStopCd) - dt;
+      if (e.timeStopCd <= 0 && !state.timeLock) {
+        warnAt(state, { kind: "mark", x: e.x, y: e.y, t: 0.85, max: 0.85, r: 58, dmg: 0, color: "#c8e8ff", followId: e.id });
+        e.timeStopWind = 0.85;
+        e.timeStopCd = 16;
+      }
+      if ((e.timeStopWind || 0) > 0) {
+        e.timeStopWind -= dt;
+        if (e.timeStopWind <= 0) {
+          beginTimeLock(state, e);
+          return;
+        }
+      }
+    }
     if (e.cooldown <= 0 && target) {
       e.cooldown = 1 / Math.max(0.35, e.def.fire);
       var pang = Math.atan2(target.y - e.y, target.x - e.x);
@@ -1181,17 +1599,210 @@
 
   function tickAlienRifle(state, e, target, dt, spd) {
     var d = dist(e, target);
-    var prefer = (e.justHealed || 0) > 0 ? 54 : (e.def.kind === "alien_scout" ? 70 : 96);
+    var healed = (e.justHealed || 0) > 0;
+    var rifle = e.def.kind === "alien_rifle";
+    var prefer = healed && rifle ? 36 : (healed ? 54 : (e.def.kind === "alien_scout" ? 70 : 96));
     var chase = e.def.kind === "alien_scout" ? 1.55 : 1.2;
-    if (d > prefer + 14) moveTowards(e, target.x, target.y, spd * ((e.justHealed || 0) > 0 ? 1.55 : chase), dt);
-    else if (d < prefer - 18) moveTowards(e, e.x + (e.x - target.x) * 0.15, e.y + (e.y - target.y) * 0.15, spd * 0.55, dt);
+    if (healed && rifle) {
+      moveTowards(e, target.x, target.y, spd * 1.85, dt);
+    } else if (d > prefer + 14) {
+      moveTowards(e, target.x, target.y, spd * (healed ? 1.55 : chase), dt);
+    } else if (d < prefer - 18 && !healed) {
+      moveTowards(e, e.x + (e.x - target.x) * 0.15, e.y + (e.y - target.y) * 0.15, spd * 0.55, dt);
+    }
     if (e.def.kind === "alien_pistol") {
       var irw = invasaoHost(state, e);
-      if (irw && dist(e, irw) < 90) irw.hp = Math.min(irw.maxHp, irw.hp + irw.maxHp * 0.008 * dt);
+      if (irw && dist(e, irw) < 90) {
+        if (G.invasion) G.invasion.heal(irw, irw.maxHp * 0.008 * dt);
+        else irw.hp = Math.min(irw.maxHp, irw.hp + irw.maxHp * 0.008 * dt);
+      }
     }
     if (d <= e.def.range && e.cooldown <= 0) {
       e.cooldown = 1 / e.def.fire;
       enemyFire(state, e, target, "bullet", { speed: e.def.kind === "alien_scout" ? 340 : 310, r: 3 });
+    }
+  }
+
+  function tickEliteRifle(state, e, target, dt, spd) {
+    var d = dist(e, target);
+    var vet = e.def.kind === "alien_veteran";
+    if (d > 64) moveTowards(e, target.x, target.y, spd * 1.15, dt);
+    else moveTowards(e, e.x + (e.x - target.x) * 0.1, e.y + (e.y - target.y) * 0.1, spd * 0.35, dt);
+    e.barrageT = (e.barrageT == null ? 2.2 + (e.id % 5) * 0.35 : e.barrageT) - dt;
+    if ((e.barrageWind || 0) > 0) {
+      e.barrageWind -= dt;
+      e.vx = e.vy = 0;
+      if (e.barrageWind <= 0 && target) {
+        var n = vet ? 9 : 7;
+        var spread = vet ? 0.72 : 0.55;
+        enemyFan(state, e, target, n, spread, "bullet", {
+          speed: 390,
+          r: vet ? 3.4 : 3,
+          dmg: e.def.dmg,
+          color: "#8ad422",
+          hitsLeft: vet ? 2 : 1
+        });
+        e.barrageT = vet ? 4.4 : 5.1;
+      }
+      return;
+    }
+    if (e.barrageT <= 0 && target) {
+      var bang = Math.atan2(target.y - e.y, target.x - e.x);
+      e.barrageWind = 0.55;
+      warnAt(state, {
+        kind: "cone",
+        x: e.x,
+        y: e.y,
+        ang: bang,
+        spread: vet ? 0.4 : 0.32,
+        range: 210,
+        t: 0.55,
+        max: 0.55,
+        r: 24,
+        dmg: 0,
+        color: "#8ad422"
+      });
+      state.floaters.push(G.createFloater(e.x, e.y - 20, "barragem", "#8ad422"));
+    }
+    if (d <= e.def.range && e.cooldown <= 0 && (e.barrageWind || 0) <= 0) {
+      e.cooldown = 1 / e.def.fire;
+      enemyFire(state, e, target, "bullet", { speed: 330, r: 3.2, color: "#8ad422" });
+    }
+  }
+
+  function tickEliteScout(state, e, target, dt, spd) {
+    var d = dist(e, target);
+    var inf = e.def.kind === "alien_infiltrator";
+    var prefer = 150;
+    if (d < prefer - 24) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
+    else if (d > prefer + 20) moveTowards(e, target.x, target.y, spd * 0.9, dt);
+    e.dropCd = (e.dropCd == null ? 1.1 + (e.id % 4) * 0.2 : e.dropCd) - dt;
+    if (e.dropCd <= 0 && target) {
+      var n = inf ? 2 : 1;
+      for (var i = 0; i < n; i++) {
+        var ox = (i ? 1 : -1) * (inf ? 22 : 0);
+        warnAt(state, {
+          kind: "drop",
+          x: target.x + ox,
+          y: target.y,
+          t: inf ? 0.78 : 0.86,
+          max: inf ? 0.78 : 0.86,
+          r: 20,
+          dmg: e.def.dmg,
+          color: "#c8ff6a",
+          followLag: inf ? 3.1 : 2.15,
+          dropShot: true
+        });
+      }
+      e.dropCd = inf ? 3.4 : 4.2;
+      state.floaters.push(G.createFloater(e.x, e.y - 20, "queda", "#c8ff6a"));
+    }
+  }
+
+  function tickEliteMedic(state, e, target, dt, spd) {
+    var d = dist(e, target);
+    var med = e.def.kind === "alien_field_medic";
+    var prefer = 120;
+    if (d < prefer - 20) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
+    else if (d > prefer + 24) moveTowards(e, target.x, target.y, spd * 0.85, dt);
+    var irw = invasaoHost(state, e);
+    if (irw && dist(e, irw) < 110) {
+      if (G.invasion) G.invasion.heal(irw, irw.maxHp * (med ? 0.01 : 0.007) * dt);
+    }
+    for (var i = 0; i < state.enemies.length; i++) {
+      var al = state.enemies[i];
+      if (al.hp <= 0 || al.id === e.id || al.def.boss) continue;
+      if (dist(e, al) < 86) {
+        if (G.invasion) G.invasion.heal(al, al.maxHp * 0.006 * dt);
+      }
+    }
+    e.stationT = (e.stationT == null ? 2.4 + (e.id % 3) * 0.5 : e.stationT) - dt;
+    var cap = med ? 2 : 1;
+    var planted = 0;
+    for (var s = 0; s < state.enemies.length; s++) {
+      if (state.enemies[s].hp > 0 && state.enemies[s].type === "heal_station" && state.enemies[s].ownerId === e.id) planted++;
+    }
+    if (e.stationT <= 0 && planted < cap) {
+      var spot = pickPlay(state, 50);
+      warnAt(state, { kind: "mark", x: spot.x, y: spot.y, t: 0.55, max: 0.55, r: 22, dmg: 0, color: "#7cffb0" });
+      e.stationPend = { t: 0.55, x: spot.x, y: spot.y };
+      e.stationT = med ? 7.5 : 9.2;
+      state.floaters.push(G.createFloater(e.x, e.y - 20, "estação", "#7cffb0"));
+    }
+    if (e.stationPend) {
+      e.stationPend.t -= dt;
+      if (e.stationPend.t <= 0) {
+        var st = G.game.spawnAt(state, "heal_station", e.stationPend.x, e.stationPend.y, {
+          noDrop: true,
+          ownerId: e.id,
+          healR: med ? 90 : 72
+        });
+        if (st) {
+          st.maxHp = med ? Math.round(st.maxHp * 1.45) : st.maxHp;
+          st.hp = st.maxHp;
+          st.healR = med ? 90 : 72;
+          st.healPct = med ? 0.018 : 0.012;
+        }
+        e.stationPend = null;
+      }
+    }
+    if (d <= e.def.range && e.cooldown <= 0) {
+      e.cooldown = 1 / Math.max(0.4, e.def.fire);
+      enemyFire(state, e, target, "bullet", { speed: 300, r: 3, color: "#7cffb0" });
+    }
+  }
+
+  function tickHealStation(state, e, dt) {
+    e.vx = 0;
+    e.vy = 0;
+    var r = e.healR || 72;
+    var pct = e.healPct || 0.012;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var al = state.enemies[i];
+      if (al.hp <= 0 || al.id === e.id) continue;
+      if (dist(e, al) < r) {
+        if (G.invasion) G.invasion.heal(al, al.maxHp * pct * dt);
+        else al.hp = Math.min(al.maxHp, al.hp + al.maxHp * pct * dt);
+        al.healGlow = 0.35;
+      }
+    }
+  }
+
+  function coverBehindIrwin(state, e, host, dt) {
+    if (!e || e.hp <= 0 || !host || host.hp <= 0) return;
+    var cmd = commanderOf(state) || state.squad;
+    var ang = cmd ? Math.atan2(cmd.y - host.y, cmd.x - host.x) : (host.rot || 0);
+    var cover = 34 + Math.sin((e.phase || 0) * 2.4) * 4;
+    var hx = host.x - Math.cos(ang) * cover;
+    var hy = host.y - Math.sin(ang) * cover + 6;
+    var dHost = Math.hypot(e.x - hx, e.y - hy);
+    if (dHost > 48 || (state.timeLock && dHost > 10)) {
+      e.x = hx;
+      e.y = hy;
+    } else {
+      moveTowards(e, hx, hy, 280, dt);
+    }
+    e.rot = ang;
+    e.zDraw = 6 + Math.sin((e.phase || 0) * 3.2) * 2;
+  }
+
+  function tickLightBender(state, e, target, dt, spd) {
+    var host = null;
+    if (e.helperOf) host = findEnemy(state, e.helperOf);
+    if ((!host || host.hp <= 0) && e.ownerId) host = findEnemy(state, e.ownerId);
+    if (!host || host.hp <= 0) {
+      for (var i = 0; i < state.enemies.length; i++) {
+        var cand = state.enemies[i];
+        if (cand.hp > 0 && cand.type === "chefe_invasao") {
+          host = cand;
+          break;
+        }
+      }
+    }
+    if (host && host.hp > 0) coverBehindIrwin(state, e, host, dt);
+    else if (target) {
+      moveTowards(e, target.x, target.y, spd, dt);
+      face(e, target.x, target.y, dt);
     }
   }
 
@@ -1350,7 +1961,8 @@
     moveTowards(e, dest.x, dest.y, spd * 1.2, dt);
     moveTowards(host, dest.x, dest.y, spd * 1.05, dt);
     if (Math.hypot(host.x - dest.x, host.y - dest.y) < 40) {
-      host.hp = Math.min(host.maxHp, host.hp + host.maxHp * 0.06 * dt);
+      if (G.invasion) G.invasion.heal(host, host.maxHp * 0.06 * dt);
+      else host.hp = Math.min(host.maxHp, host.hp + host.maxHp * 0.06 * dt);
     }
   }
 
@@ -1591,8 +2203,12 @@
   function tickVulto(state, e, target, dt, spd) {
     state.vultoId = e.id;
     state.vultoDark = Math.min(1, (state.vultoDark || 0) + dt * 0.55);
-    var rage = e.hp <= e.maxHp * 0.5;
+    var rage = G.invasion ? G.invasion.rage(e) : e.hp <= e.maxHp * 0.5;
     var d = dist(e, target);
+    if (G.invasion) G.invasion.enterP2(state, e, "Glinder · segunda barra");
+    if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
+      e.vultoT = Math.min(e.vultoT || 0, 0.4);
+    }
     e.vultoT -= dt;
     if (state.vultoBlind > 0) {
       state.vultoBlind -= dt;
@@ -1888,7 +2504,8 @@
         var gx = queen.x + (state.squad.x - queen.x) * 0.35;
         var gy = queen.y + (state.squad.y - queen.y) * 0.35;
         moveTowards(e, gx, gy, spd * 1.4, dt);
-        queen.hp = Math.min(queen.maxHp, queen.hp + queen.maxHp * 0.012 * dt);
+        if (G.invasion) G.invasion.heal(queen, queen.maxHp * 0.012 * dt);
+        else queen.hp = Math.min(queen.maxHp, queen.hp + queen.maxHp * 0.012 * dt);
         return;
       }
       var hoverK = 150 + Math.sin(e.phase * 2.2) * 30;
@@ -2027,8 +2644,9 @@
   }
 
   function tickWorm(state, e, target, dt) {
-    var rage = e.hp <= e.maxHp * 0.5;
-    if (G.invasion && G.invasion.enterP2(state, e, "Arklan · tempestade")) {
+    var rage = G.invasion ? G.invasion.rage(e) : e.hp <= e.maxHp * 0.5;
+    if (G.invasion) G.invasion.enterP2(state, e, "Arklan · tempestade");
+    if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
       e.stormT = 0.6;
       e.suckT = 8;
     }
@@ -2471,7 +3089,8 @@
   }
 
   function tryDash(state) {
-    if (state.paused || state.userPaused || state.stageOutro || state.defeat) return false;
+    if (state.paused || state.userPaused || state.stageOutro || state.defeat || (G.invasion && G.invasion.cinematic(state))) return false;
+    if (state.timeLock && state.timeLock.phase !== "release") return false;
     if ((state.dashCd || 0) > 0) return false;
     var md = readMoveDir(state);
     var dx = md.x;
@@ -2578,7 +3197,7 @@
   function steerSquad(state, dt) {
     if (state.dashCd > 0) state.dashCd = Math.max(0, state.dashCd - dt);
     state.dashStep = null;
-    if (state.stageOutro) {
+    if (state.stageOutro || state.timeLock || (G.invasion && G.invasion.cinematic(state))) {
       state.dashActive = false;
       state.dashT = 0;
       state.dashSlideT = 0;
@@ -2851,6 +3470,7 @@
   }
 
   function updateEnemies(state, dt) {
+    if (G.invasion && G.invasion.cinematic(state)) return;
     var units = state.units;
     for (var i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
@@ -2939,10 +3559,19 @@
       }
       var kind = e.def.kind;
       var spd = e.def.speed;
+      if ((e.moraleT || 0) > 0) {
+        e.moraleT -= dt;
+        spd *= e.moraleSpd || 1.22;
+      }
+      if ((e.eliteDrop || e.type === "fuzileiro_elite" || e.type === "batedor_elite" || e.type === "pistoleiro_elite") && !e.evolved) {
+        e.evoT = (e.evoT || 0) + dt;
+        if (e.evoT >= 28) evolveAlien(state, e);
+      }
 
       if (isInvasaoMinion(state, e) && !e.stolen) {
         var host = invasaoHost(state, e);
-        if (host && wantHealRetreat(e)) {
+        var eliteKind = kind === "alien_elite_rifle" || kind === "alien_veteran" || kind === "alien_elite_scout" || kind === "alien_infiltrator" || kind === "alien_elite_pistol" || kind === "alien_field_medic";
+        if (host && !eliteKind && wantHealRetreat(e)) {
           retreatBehindBoss(state, e, host, dt, spd);
           if (!e.attached && !(e.ricoLeft > 0)) G.clampPlay(e, state);
           continue;
@@ -3031,7 +3660,8 @@
           moveTowards(e, wounded.x, wounded.y, spd, dt);
           if (dist(e, wounded) < 55 && e.cooldown <= 0) {
             e.cooldown = 0.8;
-            wounded.hp = Math.min(wounded.maxHp, wounded.hp + 10);
+            if (G.invasion) G.invasion.heal(wounded, 10);
+            else wounded.hp = Math.min(wounded.maxHp, wounded.hp + 10);
             wounded.healGlow = 0.7;
             if (G.healFx) G.healFx(state, wounded.x, wounded.y);
             G.burst(state, wounded.x, wounded.y, "#3dff7a", 8, 45);
@@ -3187,7 +3817,8 @@
           enemyFire(state, e, target, "sting", { poison: true, speed: 200, r: 4 });
         }
       } else if (kind === "boss_burst") {
-        if (G.invasion && G.invasion.enterP2(state, e, "Kaska perde a carapaça")) {
+        if (G.invasion) G.invasion.enterP2(state, e, "Kaska perde a carapaça");
+        if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
           e.shellOff = true;
           e.shieldLockT = 0;
           spawnDuskShields(state, e);
@@ -3440,7 +4071,8 @@
           }
         }
       } else if (kind === "boss_spawn") {
-        if (G.invasion && G.invasion.enterP2(state, e, "Fortilax · ninho aberto")) {
+        if (G.invasion) G.invasion.enterP2(state, e, "Fortilax · ninho aberto");
+        if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
           e.sentryT = 0.8;
           e.cannonT = 1.4;
           e.tpT = 3;
@@ -3479,11 +4111,15 @@
         }
         if (e.lastHitT > 4.8) {
           e.parked = true;
-          e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.005 * dt);
+          if (G.invasion) G.invasion.heal(e, e.maxHp * 0.005 * dt);
+          else e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.005 * dt);
           for (var al = 0; al < state.enemies.length; al++) {
             var ally = state.enemies[al];
             if (ally.hp <= 0 || ally.id === e.id) continue;
-            if (dist(e, ally) < 150) ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * 0.005 * dt);
+            if (dist(e, ally) < 150) {
+              if (G.invasion) G.invasion.heal(ally, ally.maxHp * 0.005 * dt);
+              else ally.hp = Math.min(ally.maxHp, ally.hp + ally.maxHp * 0.005 * dt);
+            }
           }
         } else {
           e.parked = false;
@@ -3509,7 +4145,8 @@
         }
       } else if (kind === "boss_veil") {
         if (e.type === "chefe_espectro" && !e.fake && e.inv) {
-          if (G.invasion && G.invasion.enterP2(state, e, "Moonlight permanente")) {
+          if (G.invasion) G.invasion.enterP2(state, e, "Moonlight permanente");
+          if (G.invasion && G.invasion.tookP2Hook(e)) {
             e.moonLock = true;
             e.moonEnergy = 100;
             e.veilAct = "sword";
@@ -3520,7 +4157,7 @@
         }
         e.stealth = 0.45 + Math.sin(e.phase * 2) * 0.2;
         if (e.type === "chefe_espectro" && !e.fake && !e.helperOf) {
-          if (!e.veilClone50 && e.hp <= e.maxHp * 0.5) {
+          if (!e.veilClone50 && (e.hp <= e.maxHp * 0.5 || e.p2)) {
             e.veilClone50 = true;
             spawnVeilClone(state, e, 0);
             spawnVeilClone(state, e, 1);
@@ -3675,6 +4312,16 @@
         tickInvasao(state, e, target, dt, spd);
       } else if (kind === "alien_rifle" || kind === "alien_scout" || kind === "alien_pistol") {
         tickAlienRifle(state, e, target, dt, spd);
+      } else if (kind === "alien_elite_rifle" || kind === "alien_veteran") {
+        tickEliteRifle(state, e, target, dt, spd);
+      } else if (kind === "alien_elite_scout" || kind === "alien_infiltrator") {
+        tickEliteScout(state, e, target, dt, spd);
+      } else if (kind === "alien_elite_pistol" || kind === "alien_field_medic") {
+        tickEliteMedic(state, e, target, dt, spd);
+      } else if (kind === "heal_station") {
+        tickHealStation(state, e, dt);
+      } else if (kind === "light_bender") {
+        tickLightBender(state, e, target, dt, spd);
       } else if (kind === "bonfire") {
         tickBonfire(state, e, dt);
       } else if (kind === "kaska_sentry") {
@@ -3722,7 +4369,8 @@
           e.coreHealT -= dt;
           if (e.coreHealT <= 0) {
             e.coreHealT = 9;
-            e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.04);
+            if (G.invasion) G.invasion.heal(e, e.maxHp * 0.04);
+            else e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.04);
             G.burst(state, e.x, e.y, "#7cffb0", 10, 50);
           }
           e.coreSummonT -= dt;
@@ -3804,6 +4452,16 @@
     for (var i = state.projectiles.length - 1; i >= 0; i--) {
       var p = state.projectiles[i];
       if (p.arc || p.orbitBoss) continue;
+      if (p.held) continue;
+      if (state.timeLock && p.team === "player") continue;
+      if (p.kind === "dropshot" && p.z != null) {
+        p.z = Math.max(0, p.z - dt * 320);
+        p.life -= dt;
+        if (p.z > 0 && p.life > 0) continue;
+        explode(state, p.x, p.y, p.boomR || 22, p.dmg, "enemy", "#c8ff6a");
+        state.projectiles.splice(i, 1);
+        continue;
+      }
       if (p.homing) {
         var tgt = null;
         if (p.team === "player") {
@@ -3967,6 +4625,10 @@
     if (!state.warnings) state.warnings = [];
     for (var i = state.warnings.length - 1; i >= 0; i--) {
       var w = state.warnings[i];
+      if (w.followLag) {
+        w.x += (state.squad.x - w.x) * Math.min(1, dt * w.followLag);
+        w.y += (state.squad.y - w.y) * Math.min(1, dt * w.followLag);
+      }
       if (w.followSquad) {
         w.x = state.squad.x;
         w.y = state.squad.y;
@@ -3991,6 +4653,28 @@
         }
       } else if (w.kind === "mark" || w.kind === "lane" || w.kind === "cone" || w.kind === "tp" || w.kind === "spin") {
         /* telegraph only */
+      } else if (w.kind === "drop" || w.dropShot) {
+        var drop = G.createProjectile({
+          x: w.x,
+          y: w.y,
+          vx: 0,
+          vy: 0,
+          dmg: w.dmg || 14,
+          team: "enemy",
+          kind: "dropshot",
+          life: 0.28,
+          r: 7,
+          color: "#c8ff6a"
+        });
+        drop.z = 86;
+        drop.fallTo = 0;
+        drop.fallHit = true;
+        drop.boomR = 22;
+        state.projectiles.push(drop);
+        G.audio.hit();
+      } else if (w.kind === "airstrike") {
+        explode(state, w.x, w.y, w.r || 48, w.dmg || 24, "enemy", w.color || "#ffb45a");
+        G.audio.explosion();
       } else if (w.kind !== "mark") {
         explode(state, w.x, w.y, w.r, w.dmg, w.team || "enemy", w.color);
         G.audio.explosion();
@@ -4292,6 +4976,29 @@
           cu.fallT = (cu.fallT || 0) + dt;
         }
         state.shake *= Math.max(0, 1 - dt * 3.2);
+        return;
+      }
+      if (G.invasion && G.invasion.cinematic(state)) {
+        G.invasion.tickCutscene(state, dt);
+        updateFx(state, dt);
+        if (state.vfx) {
+          for (var cv = 0; cv < state.vfx.length; cv++) state.vfx[cv].t -= dt;
+          state.vfx = state.vfx.filter(function (fx) { return fx.t > 0; });
+        }
+        state.shake *= Math.max(0, 1 - dt * 2.4);
+        return;
+      }
+      if (state.timeLock) {
+        tickTimeLock(state, dt);
+        if (state.timeLock && state.timeLock.phase === "release") updateSquad(state, dt);
+        updateProjectiles(state, dt);
+        updateWarnings(state, dt);
+        updateFx(state, dt);
+        if (state.vfx) {
+          for (var lv = 0; lv < state.vfx.length; lv++) state.vfx[lv].t -= dt;
+          state.vfx = state.vfx.filter(function (fx) { return fx.t > 0; });
+        }
+        state.shake *= Math.max(0, 1 - dt * 2.2);
         return;
       }
       updateSquad(state, dt);

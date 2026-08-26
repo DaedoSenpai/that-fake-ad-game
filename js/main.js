@@ -1286,7 +1286,8 @@
     }
     if (state.paused) return;
     if (state.defeat) return;
-    if (state.stageOutro) return;
+    if (state.stageOutro || (G.invasion && G.invasion.cinematic(state))) return;
+    if (state.timeLock && state.timeLock.phase !== "release") return;
     if (ev.button === 2) return;
     ev.preventDefault();
     G.audio.ensure();
@@ -1313,7 +1314,7 @@
       updateInspect();
       return;
     }
-    if (!state.pointer.down || state.mode !== "play" || state.paused || state.stageOutro) return;
+    if (!state.pointer.down || state.mode !== "play" || state.paused || state.stageOutro || (G.invasion && G.invasion.cinematic(state)) || state.timeLock) return;
     ev.preventDefault();
     if (state.pointer.moveSquad) {
       var b = G.playfield(state);
@@ -1404,7 +1405,9 @@
         title = "Fúria do rei";
       }
       document.getElementById("boss-title").textContent = title;
+      bossHud.classList.toggle("p2", !!(boss.p2 || boss.invP2));
       var bars = Math.max(1, boss.hpBars || 1);
+      if (boss.p2 || boss.invP2) bars = 1;
       var per = 1 / bars;
       var frac = Math.max(0, boss.hp / boss.maxHp);
       var barI = Math.max(0, Math.min(bars - 1, Math.floor((frac - 1e-6) / per)));
@@ -1426,6 +1429,7 @@
       }
     } else {
       bossHud.classList.add("hidden");
+      bossHud.classList.remove("p2");
       state.bossShown = 1;
       var pipsOff = document.getElementById("souls-pips");
       if (pipsOff) pipsOff.classList.add("hidden");
@@ -1658,6 +1662,8 @@
 
   function drawAim() {
     if (state.mode !== "play" || state.userPaused || state.pendingMerge || state.archiveMenu || state.defeat) return;
+    if (G.invasion && G.invasion.cinematic(state)) return;
+    if (state.timeLock && state.timeLock.phase !== "release") return;
     if (!state.pointer.live || state.pointer.x == null) return;
     var p = G.combat.aimPoint(state);
     var snap = G.combat.aimTarget(state);
@@ -1948,6 +1954,20 @@
     }
 
     ctx.restore();
+    if (G.invasion && G.invasion.drawCutscene) G.invasion.drawCutscene(ctx, state);
+    if (state.timeLock) {
+      var lock = state.timeLock;
+      var la = lock.phase === "release" ? 0.18 : 0.42;
+      ctx.save();
+      ctx.fillStyle = "rgba(10, 22, 36, " + la + ")";
+      ctx.fillRect(0, 0, state.W, state.H);
+      ctx.strokeStyle = "rgba(180, 230, 255, 0.35)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(state.W / 2, 52, 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, lock.t / 2.2));
+      ctx.stroke();
+      ctx.restore();
+    }
     if (state.banner && state.banner.t > 0 && !state.defeat) {
       var ba = Math.min(1, state.banner.t);
       ctx.save();
@@ -2320,7 +2340,7 @@
     state.pointer.sx = p.sx;
     state.pointer.sy = p.sy;
     if (state.mode === "play") state.pointer.live = true;
-    if (state.userPaused || state.paused || state.stageOutro || state.pendingMerge || state.archiveMenu) return;
+    if (state.userPaused || state.paused || state.stageOutro || (G.invasion && G.invasion.cinematic(state)) || state.timeLock || state.pendingMerge || state.archiveMenu) return;
     G.audio.ensure();
     if (G.tactics) G.tactics.onAltDown(state);
   }

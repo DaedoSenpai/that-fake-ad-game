@@ -197,6 +197,28 @@ body {
   z-index: 2;
 }
 
+#boss-hud.p2 .souls-track {
+  border-color: #f0d48a;
+  box-shadow: 0 0 0 1px #5a4414, 0 0 14px rgba(232, 180, 60, 0.5);
+}
+
+#boss-hud.p2 #souls-fill {
+  background: linear-gradient(180deg, #ffe9a0, #d4a024 55%, #8a6810);
+}
+
+#boss-hud.p2 #souls-delay {
+  background: #c49a3a;
+}
+
+#boss-hud.p2 #boss-name {
+  color: #ffe9b0;
+  text-shadow: 0 1px 0 #000, 0 0 10px rgba(232, 180, 60, 0.55);
+}
+
+#boss-hud.p2 #boss-title {
+  color: #e8c86a;
+}
+
 .souls-pips {
   display: flex;
   gap: 4px;
