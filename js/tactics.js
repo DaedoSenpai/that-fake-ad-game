@@ -2785,7 +2785,7 @@
 
   function update(state, dt) {
     if (G.invasion && G.invasion.cinematic(state)) return;
-    if (state.timeLock && state.timeLock.phase !== "release") return;
+    if (state.timeLock) return;
     ensure(state);
     var p = aim(state);
     var last = state.lastMouse || p;

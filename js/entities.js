@@ -263,8 +263,8 @@
       { type: "active", name: "Aura e moral", desc: "Cura quem fica perto e aumenta a velocidade do grupo.", icon: "✚" },
       { type: "active", name: "Dash", desc: "Avança na faixa marcada. Sai da área antes do impacto.", icon: "»" },
       { type: "active", name: "Disparada", desc: "Na invasão, com batedores vivos, ele usa o dash do batedor pra sair de napalm e área.", icon: "⚡" },
-      { type: "active", name: "Ordem de rádio", desc: "Na segunda barra da invasão: elite, estações de cura e quedas orbitais.", icon: "📡" },
-      { type: "active", name: "Tudo que tem", desc: "Na metade da segunda barra: bombardeio e o Dobrador de Luz. Tempo para, tiros saem juntos.", icon: "⏱" }
+      { type: "active", name: "Ordem de reforço", desc: "Na segunda barra da invasão: elite, estações de cura e quedas orbitais.", icon: "📡" },
+      { type: "active", name: "Tudo que tem", desc: "Na metade da segunda barra: bombardeio e o Dobrador de Luz. O tempo para, depois volta em câmera lenta. Dash quando o tempo volta a correr.", icon: "⏱" }
     ];
     E.fuzileiro_alien.passive = { name: "Disciplina", desc: "Fecha no esquadrão. Com a vida baixa, recua." };
     E.fuzileiro_alien.active = { name: "Rajada", desc: "Tiro de fuzil orgânico. Depois de curar, vai pra cima atirando." };
@@ -287,7 +287,7 @@
     E.heal_station.passive = { name: "Seiva", desc: "Cura o enxame no raio. Não anda." };
     E.heal_station.active = { name: "Nódulo", desc: "Atira no nódulo até ele cair." };
     E.dobrador_luz.passive = { name: "Prisma", desc: "Enquanto viver, o Irwin pode parar o tempo." };
-    E.dobrador_luz.active = { name: "Dobra", desc: "O esquadrão congela. Os tiros ficam no ar e saem todos de uma vez. Dash na hora do AGORA." };
+    E.dobrador_luz.active = { name: "Dobra", desc: "O esquadrão congela. Os tiros ficam no ar e saem em câmera lenta. Dash quando o tempo volta a correr." };
     E.chefe_comandante.passive = { name: "Carrasco da linha", desc: "Escudos orbitam nele. Só chama o próximo anel quando o atual morre e passam 10s desprotegido." };
     E.chefe_comandante.skills = [
       { type: "active", name: "Giro de fogo", desc: "A cada 3 sequências de tiro ele gira 360° atirando pelas duas pontas, nos dois sentidos. Tem aviso no chão antes de girar.", icon: "💥" },
@@ -667,6 +667,7 @@
 
   G.createEnemy = function (type, x, y, scale) {
     var def = G.ENEMY_DEFS[type];
+    if (!def) return null;
     var s = type === "larva" ? 1 : scale || 1;
     var hp = Math.round(def.hp * s);
     return {
@@ -911,7 +912,7 @@
     if ((e.stealth || 0) > 0.2 && (e.revealT || 0) <= 0) return;
     var glow = e.healGlow || 0;
     var stolen = !!e.stolen;
-    if (e.hp >= e.maxHp * 0.98 && glow <= 0 && !stolen) return;
+    if (e.hp >= e.maxHp * 0.98 && glow <= 0 && !stolen && (e.burnT || 0) <= 0) return;
     var w = Math.max(16, e.def.size * 2);
     var bx = e.x - w / 2;
     var by = e.y - e.def.size - 10;
@@ -924,6 +925,11 @@
     ctx.fillRect(bx, by, w, 4);
     ctx.fillStyle = glow > 0 ? "#b8ffc8" : (e.team === "player" || stolen ? "#6cff7a" : "#ff5a5a");
     ctx.fillRect(bx, by, w * Math.max(0, Math.min(1, e.hp / e.maxHp)), 4);
+    if ((e.burnT || 0) > 0) {
+      var flick = 0.45 + 0.55 * Math.max(0, Math.sin((e.phase || 0) * 16));
+      ctx.fillStyle = "rgba(255, 140, 40, " + (0.55 + flick * 0.4) + ")";
+      ctx.fillRect(bx, by + 4, w * Math.min(1, e.burnT / 5), 2);
+    }
     if (stolen) {
       ctx.fillStyle = "rgba(0,0,0,0.5)";
       ctx.fillRect(bx, by + 5, w, 3);
@@ -1938,6 +1944,7 @@
   }
 
   G.drawEnemy = function (ctx, e) {
+    if (!e || !e.def) return;
     var s = e.def.size;
     var ph = e.phase || 0;
     var t = e.type;
@@ -2965,6 +2972,7 @@
     }
     ctx.restore();
     if (!e.preview) drawEnemyMark(ctx, e);
+    if (!e.preview) drawBurn(ctx, e);
     if (e.parked) {
       ctx.save();
       ctx.strokeStyle = "rgba(224, 92, 255, 0.55)";
@@ -2976,6 +2984,40 @@
     }
     if (!e.preview) hpBar(ctx, e);
   };
+
+  function drawBurn(ctx, e) {
+    if ((e.burnT || 0) <= 0) return;
+    if ((e.stealth || 0) > 0.2 && (e.revealT || 0) <= 0) return;
+    var s = e.def.size;
+    var fade = e.burnT < 0.4 ? e.burnT / 0.4 : 1;
+    var ph = e.phase || 0;
+    var flick = 0.72 + 0.28 * Math.sin(ph * 13.4) * Math.sin(ph * 8.1);
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.32 * fade * flick;
+    ctx.fillStyle = "#ff5a14";
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.08, s * 1.05, s * 0.78, 0, 0, Math.PI * 2);
+    ctx.fill();
+    var n = e.def.boss ? 8 : 5;
+    for (var i = 0; i < n; i++) {
+      var ang = (i / n) * Math.PI * 2 + ph * 1.8;
+      var wob = Math.sin(ph * (10 + i * 1.6) + i * 1.7);
+      var x = Math.cos(ang) * s * 0.38;
+      var y = Math.sin(ang) * s * 0.22 - s * 0.28 + wob * s * 0.1;
+      var h = s * (0.42 + (i % 3) * 0.16) * flick;
+      var w = Math.max(2.4, s * 0.16);
+      ctx.globalAlpha = (0.5 + 0.4 * flick) * fade;
+      ctx.fillStyle = i % 2 ? "#fff3b0" : "#ff7a22";
+      ctx.beginPath();
+      ctx.moveTo(x, y + h * 0.18);
+      ctx.quadraticCurveTo(x + w, y - h * 0.12, x, y - h);
+      ctx.quadraticCurveTo(x - w, y - h * 0.12, x, y + h * 0.18);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 
   function drawEnemyMark(ctx, e) {
     var s = e.def.size;
@@ -3259,6 +3301,16 @@
         ctx.beginPath();
         ctx.arc(hx, hy, 10, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+      } else {
+        var sang = p.holdAng != null ? p.holdAng : Math.atan2(p.vy, p.vx);
+        ctx.save();
+        ctx.strokeStyle = "rgba(180, 230, 255, 0.5)";
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - Math.cos(sang) * 26, p.y - Math.sin(sang) * 26);
+        ctx.stroke();
         ctx.restore();
       }
       ctx.save();
@@ -3972,6 +4024,7 @@
     } else {
       dummy = G.createEnemy(key, w / 2, h / 2 + 8, 1);
     }
+    if (!dummy || !dummy.def) return;
     dummy.preview = true;
     dummy.rot = -0.55;
     dummy.hp = dummy.maxHp;

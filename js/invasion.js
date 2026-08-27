@@ -165,8 +165,54 @@
       return true;
     },
 
+    clearFieldForCutscene: function (state, keep) {
+      if (!state) return;
+      var keepId = keep && keep.id;
+      var kept = [];
+      for (var i = 0; i < (state.enemies || []).length; i++) {
+        var en = state.enemies[i];
+        if (keepId && en.id === keepId) {
+          en.attached = false;
+          en.held = false;
+          kept.push(en);
+        }
+      }
+      state.enemies = kept;
+      state.projectiles = [];
+      state.drops = [];
+      state.mines = [];
+      state.warnings = [];
+      state.booms = [];
+      state.zones = [];
+      state.firewaves = [];
+      state.minions = [];
+      state.drones = [];
+      state.deploys = [];
+      state.stickies = [];
+      state.cmdStrikes = [];
+      state.spawnQueue = [];
+      state.particles = [];
+      state.floaters = [];
+      state.vfx = [];
+      state.timeLock = null;
+      state.bombLine = null;
+      state.bombPending = null;
+      state.guerrillaDraw = null;
+      state.guerrillaMenu = null;
+      state.hook = null;
+      state.waitingClear = false;
+      for (var u = 0; u < (state.units || []).length; u++) {
+        var unit = state.units[u];
+        unit.held = false;
+        unit.stowed = false;
+        unit.packed = false;
+        unit.attached = false;
+      }
+    },
+
     startCutscene: function (state, e, label) {
       if (!state || !e) return;
+      this.clearFieldForCutscene(state, e);
       var spec = this.specFor(e.type);
       var dur = spec.dur || this.defaultCutscene.dur;
       state.bossCutscene = {
@@ -321,7 +367,7 @@
               G.burst(state, e.x, e.y, "#ffe08a", 18, 110);
               G.burst(state, e.x, e.y, "#8ad422", 12, 80);
               state.shake = Math.max(state.shake || 0, 7);
-              if (state.banner) state.banner = { text: "Ordem de rádio", t: 2.2 };
+              if (state.banner) state.banner = { text: "Ordem de reforço", t: 2.2 };
             }
           }
           var beamStart = 2.55;

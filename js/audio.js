@@ -97,7 +97,9 @@
       if (this.muted || this.master <= 0.01) return;
       this.ensure();
       if (!this.ctx) return;
-      fn(this.ctx);
+      try {
+        fn(this.ctx);
+      } catch (err) {}
     },
 
     shoot: function () {

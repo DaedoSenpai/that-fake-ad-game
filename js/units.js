@@ -163,7 +163,7 @@
     }),
     lanca_chamas: u({
       kind: "lanca_chamas", name: "Lança-chamas", short: "CHM", gen: 3,
-      hp: 135, dmg: 11, range: 330, fire: 6.2, speed: 135, size: 17,
+      hp: 135, dmg: 11, range: 330, fire: 2.35, speed: 135, size: 17,
       color: "#ff7a2a", accent: "#ffd27a", projectile: "flame", role: "flamer",
       blurb: "Cone de fogo. 10% de chance de derreter cada bala física.",
       active: { id: "napalm", name: "Napalm", cd: 12, desc: "Jato branco-quente: dobro de alcance, queimadura forte e derrete todas as balas no cone." },
@@ -360,7 +360,7 @@
     }),
     inferno: u({
       kind: "inferno", name: "Inferno", short: "NFR", gen: 4,
-      hp: 180, dmg: 15, range: 135, fire: 7.0, speed: 130, size: 19,
+      hp: 180, dmg: 15, range: 135, fire: 2.7, speed: 130, size: 19,
       color: "#ff4a18", accent: "#ffe08a", projectile: "flame", role: "inferno",
       blurb: "Piromaniaco veterno que só está em atividade por ser altamente eficiente. Quem morre queimado deixa uma poça de fogo no chão.",
       active: { id: "firewave", name: "Maré de fogo", cd: 12, desc: "Onda de fogo branco sai do Inferno e varre o mapa inteiro." },

@@ -189,7 +189,10 @@
       unit.flash = 0.06;
       return;
     }
-    if (state.timeLock && unit.team === "player") return;
+    if (state.timeLock && unit.team === "player") {
+      if (state.timeLock.phase !== "slow") return;
+      if (state.dashActive || (state.dashT || 0) > 0) return;
+    }
     if (unit.team === "player" && state.debugFight && state.debugOpts && state.debugOpts.god) {
       unit.flash = 0.06;
       return;
@@ -506,7 +509,9 @@
       var a = Math.atan2(dy, dx);
       var diff = Math.abs(Math.atan2(Math.sin(a - ang), Math.cos(a - ang)));
       if (diff < cone) {
-        hurt(state, e, dmg, u.x, u.y, true);
+        var alreadyBurning = (e.burnT || 0) > 0.2;
+        var hit = alreadyBurning ? Math.max(1, Math.round(dmg * 0.45)) : dmg;
+        hurt(state, e, hit, u.x, u.y, true);
         if (u.kind === "lanca_chamas" || u.kind === "inferno") {
           e.burnT = 5;
           e.burnDps = Math.max(e.burnDps || 0, u.def.dmg * 0.85 * dmgMul(state) * burnMul);
@@ -1303,19 +1308,45 @@
     G.burst(state, p.x, p.y, "#c8e8ff", 3, 36);
   }
 
-  function releaseHeldShots(state) {
+  var TIMELOCK_AIM_DUR = 2.45;
+  var TIMELOCK_SLOW_DUR = 0.2;
+  var TIMELOCK_CATCHUP_DUR = 0.08;
+  var TIMELOCK_SLOW_SCALE = 0.48;
+
+  function setTimeShotSpeed(state, scale) {
     for (var i = 0; i < state.projectiles.length; i++) {
       var p = state.projectiles[i];
-      if (!p.held) continue;
-      var ang = p.holdAng || 0;
-      var sp = p.holdSp || 900;
+      if (!p.held && p.kind !== "timeshot") continue;
+      var ang = p.holdAng != null ? p.holdAng : Math.atan2(p.vy, p.vx);
+      var sp = (p.holdSp || 900) * scale;
       p.vx = Math.cos(ang) * sp;
       p.vy = Math.sin(ang) * sp;
-      p.held = false;
-      p.life = Math.max(p.life, 0.7);
+      if (p.held) {
+        p.held = false;
+        p.life = Math.max(p.life, 0.7);
+      }
     }
-    state.shake = Math.max(state.shake || 0, 10);
-    G.audio.explosion();
+  }
+
+  function finishTimeLock(state) {
+    var wasAim = state.timeLock && state.timeLock.phase === "aim";
+    setTimeShotSpeed(state, 1);
+    if (wasAim) {
+      state.shake = Math.max(state.shake || 0, 10);
+      G.audio.explosion();
+    }
+    state.timeLock = null;
+  }
+
+  function timeLockSlowScale(lock) {
+    var t = lock.slowT || 0;
+    var slowDur = lock.slowDur || TIMELOCK_SLOW_DUR;
+    var catchDur = lock.catchupDur || TIMELOCK_CATCHUP_DUR;
+    var base = lock.slowScale || TIMELOCK_SLOW_SCALE;
+    if (t <= slowDur) return base;
+    var u = Math.min(1, (t - slowDur) / Math.max(0.01, catchDur));
+    u = u * u * (3 - 2 * u);
+    return base + (1 - base) * u;
   }
 
   function beginTimeLock(state, e) {
@@ -1340,17 +1371,20 @@
       t: 0,
       bossId: e.id,
       phase: "aim",
-      aimDur: 2.45,
+      aimDur: TIMELOCK_AIM_DUR,
       nextShot: 0.08,
       targetId: cmd && cmd.id,
-      releaseIn: 0.18,
+      slowT: 0,
+      slowDur: TIMELOCK_SLOW_DUR,
+      catchupDur: TIMELOCK_CATCHUP_DUR,
+      slowScale: TIMELOCK_SLOW_SCALE,
       gapSign: gapSign,
       gapX: gapX,
       gapY: gapY,
       gapR: 60
     };
     e.timeStopCd = 18;
-    state.banner = { text: "O tempo dobra", t: 1.8 };
+    state.banner = { text: "O tempo congela...", t: 1.8 };
     state.pointer.down = false;
     state.pointer.fireHold = false;
     state.dashActive = false;
@@ -1365,19 +1399,19 @@
     lock.t += dt;
     var e = findEnemy(state, lock.bossId);
     if (!e || e.hp <= 0) {
-      releaseHeldShots(state);
-      state.timeLock = null;
+      finishTimeLock(state);
       return;
     }
     var aliveBender = countTypeAlive(state, "dobrador_luz") > 0;
     if (!aliveBender) {
-      releaseHeldShots(state);
-      state.timeLock = null;
+      finishTimeLock(state);
       state.floaters.push(G.createFloater(e.x, e.y - 24, "prisma caiu", "#c8e8ff"));
       return;
     }
-    state.squad.vx = 0;
-    state.squad.vy = 0;
+    if (lock.phase === "aim") {
+      state.squad.vx = 0;
+      state.squad.vy = 0;
+    }
     var cmd = commanderOf(state) || { x: state.squad.x, y: state.squad.y };
     if (lock.phase === "aim") {
       var side = Math.sin(lock.t * 3.2) * 90;
@@ -1426,17 +1460,24 @@
         lock.nextShot += 0.12;
       }
       if (lock.t >= lock.aimDur) {
-        lock.phase = "release";
-        lock.releaseIn = 0.2;
-        state.banner = { text: "AGORA", t: 0.85 };
-        state.shake = Math.max(state.shake || 0, 6);
+        lock.phase = "slow";
+        lock.slowT = 0;
+        state.banner = { text: "O tempo volta a correr...", t: 0.7 };
+        state.shake = Math.max(state.shake || 0, 7);
+        state.dashCd = 0;
+        state.dashActive = false;
+        state.dashT = 0;
+        G.audio.explosion();
+        setTimeShotSpeed(state, lock.slowScale || TIMELOCK_SLOW_SCALE);
       }
     } else {
-      lock.releaseIn -= dt;
+      lock.slowT = (lock.slowT || 0) + dt;
       e.vx = e.vy = 0;
-      if (lock.releaseIn <= 0) {
-        releaseHeldShots(state);
+      setTimeShotSpeed(state, timeLockSlowScale(lock));
+      if (lock.slowT >= (lock.slowDur || TIMELOCK_SLOW_DUR) + (lock.catchupDur || TIMELOCK_CATCHUP_DUR)) {
+        setTimeShotSpeed(state, 1);
         state.timeLock = null;
+        state.shake = Math.max(state.shake || 0, 5);
       }
     }
   }
@@ -1466,7 +1507,7 @@
     var d = dist(e, target);
     var prefer = 176;
     var p2 = G.invasion && G.invasion.isP2(e);
-    if (G.invasion) G.invasion.enterP2(state, e, "Irwin · segunda barra");
+    if (G.invasion) G.invasion.enterP2(state, e, "O comandante decide levar a sério");
     if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
       e.dashCd = 1.2;
       e.disparadaCd = 2.5;
@@ -1487,7 +1528,7 @@
       var bender = G.game.spawnAt(state, "dobrador_luz", bx, by, { noDrop: true, ownerId: e.id });
       if (bender) bender.helperOf = e.id;
       e.timeStopCd = 2.8;
-      state.banner = { text: "Tudo que ele tem", t: 2.2 };
+      state.banner = { text: "Irwin solta tudo que tem guardado.", t: 2.2 };
       G.burst(state, e.x, e.y, "#c8e8ff", 20, 140);
     }
 
@@ -3155,7 +3196,7 @@
 
   function tryDash(state) {
     if (state.paused || state.userPaused || state.stageOutro || state.defeat || (G.invasion && G.invasion.cinematic(state))) return false;
-    if (state.timeLock && state.timeLock.phase !== "release") return false;
+    if (state.timeLock && state.timeLock.phase !== "slow") return false;
     if ((state.dashCd || 0) > 0) return false;
     var md = readMoveDir(state);
     var dx = md.x;
@@ -3262,7 +3303,7 @@
   function steerSquad(state, dt) {
     if (state.dashCd > 0) state.dashCd = Math.max(0, state.dashCd - dt);
     state.dashStep = null;
-    if (state.stageOutro || state.timeLock || (G.invasion && G.invasion.cinematic(state))) {
+    if (state.stageOutro || (state.timeLock && state.timeLock.phase !== "slow") || (G.invasion && G.invasion.cinematic(state))) {
       state.dashActive = false;
       state.dashT = 0;
       state.dashSlideT = 0;
@@ -4519,6 +4560,7 @@
       if (p.arc || p.orbitBoss) continue;
       if (p.held) continue;
       if (state.timeLock && p.team === "player") continue;
+      if (state.timeLock && p.kind !== "timeshot") continue;
       if (p.kind === "dropshot" && p.z != null) {
         p.z = Math.max(0, p.z - dt * 320);
         p.life -= dt;
@@ -5055,7 +5097,7 @@
       }
       if (state.timeLock) {
         tickTimeLock(state, dt);
-        if (state.timeLock && state.timeLock.phase === "release") updateSquad(state, dt);
+        if (state.timeLock && state.timeLock.phase === "slow") updateSquad(state, dt);
         updateProjectiles(state, dt);
         updateWarnings(state, dt);
         updateFx(state, dt);

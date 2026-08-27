@@ -172,6 +172,7 @@
   G.game = {
     spawnAt: function (state, type, x, y, extra) {
       var e = G.createEnemy(type, x, y, scaleFor(state.stageIndex));
+      if (!e) return null;
       if (G.invasion) G.invasion.stamp(state, e);
       if (extra) {
         Object.keys(extra).forEach(function (k) {
@@ -393,7 +394,7 @@
       if (!state.defeat) G.audio.sync(state, dt);
       if (state.defeat) return "play";
 
-      if (!state.spawnQueue.length && !state.waitingClear && !state.stageOutro) {
+      if (!state.spawnQueue.length && !state.waitingClear && !state.stageOutro && !state.bossCutscene) {
         var hostilesLeft = 0;
         for (var he = 0; he < state.enemies.length; he++) {
           if (state.enemies[he].hp > 0 && !state.enemies[he].stolen) hostilesLeft++;

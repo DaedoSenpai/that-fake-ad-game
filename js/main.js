@@ -1287,7 +1287,7 @@
     if (state.paused) return;
     if (state.defeat) return;
     if (state.stageOutro || (G.invasion && G.invasion.cinematic(state))) return;
-    if (state.timeLock && state.timeLock.phase !== "release") return;
+    if (state.timeLock) return;
     if (ev.button === 2) return;
     ev.preventDefault();
     G.audio.ensure();
@@ -1354,10 +1354,14 @@
   function syncHud(dt) {
     dt = dt || 0.016;
     var stage = G.STAGES[state.stageIndex];
-    document.getElementById("hud-stage").textContent =
-      (state.debugFight ? "Teste · " : "") +
-      "Fase " + (state.stageIndex + 1) + " · " + stage.name +
-      (state.debugFight && (state.run.invasion | 0) > 0 ? " · Inv " + (state.run.invasion | 0) : "");
+    if (!stage) return;
+    var hudStage = document.getElementById("hud-stage");
+    if (hudStage) {
+      hudStage.textContent =
+        (state.debugFight ? "Teste · " : "") +
+        "Fase " + (state.stageIndex + 1) + " · " + stage.name +
+        (state.debugFight && (state.run.invasion | 0) > 0 ? " · Inv " + (state.run.invasion | 0) : "");
+    }
     var waveTxt = "Onda " + (state.waveIndex + 1) + "/" + stage.waves.length;
     if (state.debugFight && state.debugOpts) {
       var dmgScale = state.debugOpts.dmgMul | 0;
@@ -1379,7 +1383,7 @@
     var boss = null;
     for (var b = 0; b < state.enemies.length; b++) {
       var be = state.enemies[b];
-      if (!be.def.boss || be.hp <= 0 || be.fake) continue;
+      if (!be.def || !be.def.boss || be.hp <= 0 || be.fake) continue;
       if (be.type === "chefe_final") {
         boss = be;
         break;
@@ -1435,6 +1439,7 @@
       if (pipsOff) pipsOff.classList.add("hidden");
     }
     var bar = document.getElementById("active-bar");
+    if (!bar) return;
     bar.innerHTML = "";
     var dashReady = (state.dashCd || 0) <= 0;
     var dashMax = state.dashCdMax || G.combat.dashCd();
@@ -1663,7 +1668,7 @@
   function drawAim() {
     if (state.mode !== "play" || state.userPaused || state.pendingMerge || state.archiveMenu || state.defeat) return;
     if (G.invasion && G.invasion.cinematic(state)) return;
-    if (state.timeLock && state.timeLock.phase !== "release") return;
+    if (state.timeLock && state.timeLock.phase !== "slow") return;
     if (!state.pointer.live || state.pointer.x == null) return;
     var p = G.combat.aimPoint(state);
     var snap = G.combat.aimTarget(state);
@@ -1957,14 +1962,23 @@
     if (G.invasion && G.invasion.drawCutscene) G.invasion.drawCutscene(ctx, state);
     if (state.timeLock) {
       var lock = state.timeLock;
-      var la = lock.phase === "release" ? 0.18 : 0.42;
+      var la = 0.42;
+      var clockT = 0;
+      if (lock.phase === "slow") {
+        var pulse = 0.5 + 0.5 * Math.sin((lock.slowT || 0) * 11);
+        la = 0.14 + pulse * 0.1;
+        var slowSpan = (lock.slowDur || 0.2) + (lock.catchupDur || 0.08);
+        clockT = 1 - Math.min(1, (lock.slowT || 0) / slowSpan);
+      } else {
+        clockT = Math.min(1, lock.t / (lock.aimDur || 2.45));
+      }
       ctx.save();
       ctx.fillStyle = "rgba(10, 22, 36, " + la + ")";
       ctx.fillRect(0, 0, state.W, state.H);
-      ctx.strokeStyle = "rgba(180, 230, 255, 0.35)";
+      ctx.strokeStyle = lock.phase === "slow" ? "rgba(255, 210, 74, 0.55)" : "rgba(180, 230, 255, 0.35)";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(state.W / 2, 52, 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, lock.t / 2.2));
+      ctx.arc(state.W / 2, 52, 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clockT);
       ctx.stroke();
       ctx.restore();
     }
@@ -2002,24 +2016,29 @@
 
   var last = performance.now();
   function loop(now) {
-    var dt = Math.min(0.033, (now - last) / 1000);
-    last = now;
-    state.time += dt;
-    if (state.mode === "play") {
-      if (state.banner) state.banner.t -= dt;
-      if (!state.paused) {
-        var result = G.game.update(state, dt);
-        if (result === "dead") beginDefeat();
-        else if (result === "stageClear") {
-          if (state.debugFight) finishDebug();
-          else if (state.stageIndex >= G.STAGES.length - 1) finish(true);
-          else showCards();
+    try {
+      var dt = Math.min(0.033, Math.max(0, (now - last) / 1000));
+      last = now;
+      state.time += dt;
+      if (state.mode === "play") {
+        if (state.banner) state.banner.t -= dt;
+        if (!state.paused) {
+          var result = G.game.update(state, dt);
+          if (result === "dead") beginDefeat();
+          else if (result === "stageClear") {
+            if (state.debugFight) finishDebug();
+            else if (state.stageIndex >= G.STAGES.length - 1) finish(true);
+            else showCards();
+          }
         }
+        if (state.defeat) tickDefeat(dt);
+        syncHud(dt);
       }
-      if (state.defeat) tickDefeat(dt);
-      syncHud(dt);
+      draw();
+    } catch (err) {
+      last = now || performance.now();
+      if (typeof console !== "undefined" && console.error) console.error("[tfag]", err);
     }
-    draw();
     requestAnimationFrame(loop);
   }
 
