@@ -141,8 +141,9 @@
     chefe_comandante: {
       name: "Kaska O Marechal do Avanço",
       title: "A ponta de lança do enxame",
-      hp: 930, dmg: 28, range: 210, fire: 0.9, speed: 48, size: 32, color: "#d4a024", kind: "boss_burst", boss: true,
-      blurb: "Chefe da linha. Escudos orbitam e ele gira atirando pelas duas pontas do corpo."
+      hp: 930, dmg: 28, range: 210, fire: 0.9, speed: 48, size: 32, color: "#8a5a28", kind: "boss_burst", boss: true,
+      blurb: "Besouro rinoceronte, meio máquina. A casca de placas e os canhões cobrem o mesmo corpo que explode na segunda barra.",
+      blurbP2: "A carapaça estilhaçou. Fica magro, o chifre cresce e o núcleo laranja fica à mostra. Mesmo Kaska, sem a armadura."
     },
     chefe_vulto: {
       name: "Glinder o Vulto da Noite",
@@ -288,13 +289,15 @@
     E.heal_station.active = { name: "Nódulo", desc: "Atira no nódulo até ele cair." };
     E.dobrador_luz.passive = { name: "Prisma", desc: "Enquanto viver, o Irwin pode parar o tempo." };
     E.dobrador_luz.active = { name: "Dobra", desc: "O esquadrão congela. Os tiros ficam no ar e saem em câmera lenta. Dash quando o tempo volta a correr." };
-    E.chefe_comandante.passive = { name: "Carrasco da linha", desc: "Escudos orbitam nele. Só chama o próximo anel quando o atual morre e passam 10s desprotegido." };
+    E.chefe_comandante.passive = { name: "Carrasco da linha", desc: "Escudos orbitam em círculo e protegem ele. Só chama o próximo anel quando o atual morre e passam 10s desprotegido." };
     E.chefe_comandante.skills = [
-      { type: "active", name: "Giro de fogo", desc: "A cada 3 sequências de tiro ele gira 360° atirando pelas duas pontas, nos dois sentidos. Tem aviso no chão antes de girar.", icon: "💥" },
-      { type: "active", name: "Tiros sequenciais", desc: "Rajada pela frente e por trás, sem girar o corpo. Só entra no giro na terceira sequência.", icon: "🔫" },
-      { type: "active", name: "Escudos arremessados", desc: "Joga os escudos orbitais em cima do esquadrão. Depois eles voltam pra órbita.", icon: "🛡" },
-      { type: "active", name: "Guarda orbital", desc: "A cada 20% de HP chama um anel de escudos. Não chama outro enquanto algum estiver vivo. Quando o anel cai, fica 10s sem proteção.", icon: "🛡" },
-      { type: "active", name: "Investida", desc: "Abaixo de 50% de HP, aponta e avança no esquadrão.", icon: "⚠" }
+      { type: "active", name: "Setas crescentes", desc: "Três disparos mirados em formato de seta. Cada um é maior que o anterior. Sai da faixa no chão.", icon: "➤" },
+      { type: "active", name: "Giro de espinhos", desc: "Depois das três setas ele gira no eixo, ignora a mira e joga setas pra todos os lados.", icon: "💥" },
+      { type: "active", name: "Impalada", desc: "Cinco dashes telegrafados em cima do esquadrão. No fim de cada um ele pula. A área do pulo cresce 10% por vez, até 50% maior no último.", icon: "⚠" },
+      { type: "active", name: "Setas triplas", desc: "Na segunda barra as setas saem em leque de três. Três rajadas, cada uma maior.", icon: "➤" },
+      { type: "active", name: "Investida com anel", desc: "Três charges rápidas na posição do esquadrão. Enquanto avança, solta um círculo de setas.", icon: "⚠" },
+      { type: "active", name: "Queda", desc: "Três pulos saindo da tela, cada um numa área maior. Onde cai, o chão racha e atrasa o passo. Depois do terceiro ele fica parado e toma mais dano.", icon: "🪲" },
+      { type: "active", name: "Cacos orbitais", desc: "Os escudos marcam áreas pequenas e atiram pedaços de casca nelas.", icon: "🛡" }
     ];
     E.chefe_vulto.passive = { name: "Apaga-luz", desc: "A arena escurece. Só as chamas dele devolvem a visão." };
     E.chefe_vulto.skills = [
@@ -435,7 +438,7 @@
         var d = G.ENEMY_DEFS[k];
         if (d && d.boss && !d.codexHide && !d.fake) kinds.push(k);
       });
-      var extra = ["fuzileiro_alien", "batedor_alien", "pistoleiro_alien", "fogueira", "kaska_sentry", "abelha_enfermeira", "abelha_arquiteta"];
+      var extra = ["fuzileiro_alien", "batedor_alien", "pistoleiro_alien", "fogueira", "kaska_sentry", "abelha_enfermeira", "abelha_arquiteta", "chefe_comandante_p2"];
       for (var ei = 0; ei < extra.length; ei++) kinds.push(extra[ei]);
     }
     for (var i = 0; i < kinds.length; i++) {
@@ -822,7 +825,7 @@
     state.booms.push({
       x: x,
       y: y,
-      r: radius || 40,
+      r: Math.min(Math.max(1, radius || 40), 320),
       t: 0.42,
       max: 0.42,
       color: color || "#ffb45a"
@@ -1943,6 +1946,193 @@
     }
   }
 
+  function kaskaRad(v, fb) {
+    v = Number(v);
+    if (!isFinite(v) || v <= 0) return fb > 0 ? fb : 2;
+    return Math.min(v, 96);
+  }
+
+  function kaskaOval(ctx, x, y, rx, ry, fill) {
+    rx = kaskaRad(rx, 2);
+    ry = kaskaRad(ry, 2);
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+
+  function drawKaskaHorn(ctx, s, len, baseW, shaft, edge) {
+    s = kaskaRad(s, 32);
+    len = kaskaRad(len, 0.8);
+    baseW = kaskaRad(baseW, 6);
+    var root = s * 0.72;
+    var mid = root + s * len * 0.62;
+    var tip = root + s * len;
+    ctx.fillStyle = "#3a2210";
+    kaskaOval(ctx, root - s * 0.04, 0, s * 0.16, baseW * 1.35, "#3a2210");
+    kaskaOval(ctx, root, 0, s * 0.12, baseW * 1.08, "#8a5a18");
+    ctx.fillStyle = shaft;
+    ctx.beginPath();
+    ctx.moveTo(root, -baseW);
+    ctx.lineTo(mid, -baseW * 0.28);
+    ctx.lineTo(tip, 0);
+    ctx.lineTo(mid, baseW * 0.28);
+    ctx.lineTo(root, baseW);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = edge;
+    ctx.beginPath();
+    ctx.moveTo(root + s * 0.06, -baseW * 0.38);
+    ctx.lineTo(mid, -baseW * 0.1);
+    ctx.lineTo(tip - s * 0.05, 0);
+    ctx.lineTo(mid, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = shaft;
+    ctx.beginPath();
+    ctx.moveTo(root + s * len * 0.28, -baseW * 0.18);
+    ctx.lineTo(root + s * len * 0.72, -baseW * 1.22);
+    ctx.lineTo(root + s * len * 0.22, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(root + s * len * 0.28, baseW * 0.18);
+    ctx.lineTo(root + s * len * 0.72, baseW * 1.22);
+    ctx.lineTo(root + s * len * 0.22, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = edge;
+    ctx.beginPath();
+    ctx.moveTo(root + s * len * 0.34, -baseW * 0.08);
+    ctx.lineTo(root + s * len * 0.66, -baseW * 0.92);
+    ctx.lineTo(root + s * len * 0.3, 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawKaskaLeg(ctx, s, side, y, gait, bare) {
+    var swing = Math.sin(gait) * s * 0.2;
+    var lift = Math.max(0, Math.cos(gait)) * s * 0.1;
+    var x0 = side * s * 0.1;
+    var x1 = side * (s * 0.5 + swing * 0.4);
+    var y1 = y + s * 0.2 - lift;
+    var x2 = side * (s * 0.98 + swing);
+    var y2 = y + s * 0.56 - lift * 0.28;
+    ctx.strokeStyle = bare ? "#4a2810" : "#2a1810";
+    ctx.lineWidth = kaskaRad(s * (bare ? 0.13 : 0.2), 3);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    kaskaOval(ctx, x1, y1, s * 0.09, s * 0.09, bare ? "#8a5020" : "#6a4814");
+    kaskaOval(ctx, x1, y1, s * 0.04, s * 0.04, "#c49040");
+    ctx.strokeStyle = "#1a0c08";
+    ctx.lineWidth = kaskaRad(s * 0.11, 2);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 + side * s * 0.14, y2 + s * 0.12);
+    ctx.stroke();
+  }
+
+  function drawKaskaCannon(ctx, s, y) {
+    kaskaOval(ctx, s * 0.08, y, s * 0.22, s * 0.14, "#3a2410");
+    kaskaOval(ctx, s * 0.12, y, s * 0.16, s * 0.1, "#8a5a18");
+    ctx.fillStyle = "#1a1008";
+    var hw = kaskaRad(s * 0.07, 2);
+    var len = kaskaRad(s * 0.55, 8);
+    ctx.fillRect(s * 0.18, y - hw, len, hw * 2);
+    ctx.fillStyle = "#5a3a10";
+    ctx.fillRect(s * 0.18 + len - s * 0.08, y - hw - 1, s * 0.1, hw * 2 + 2);
+    kaskaOval(ctx, s * 0.18 + len + s * 0.02, y, s * 0.05, s * 0.05, "#1a0808");
+  }
+
+  function drawKaska(ctx, e, s) {
+    s = kaskaRad(s, 32);
+    var ph = e.phase || 0;
+    var bare = !!e.shellOff;
+    ctx.save();
+    try {
+      var i;
+      var y;
+      var gait;
+      for (i = 0; i < 3; i++) {
+        y = (i - 1) * s * 0.32;
+        gait = ph * 10 + i * 1.15;
+        drawKaskaLeg(ctx, s, 1, y, gait, bare);
+        drawKaskaLeg(ctx, s, -1, y, gait + Math.PI, bare);
+      }
+      kaskaOval(ctx, -s * 0.58, 0, s * 0.62, s * 0.4, bare ? "#4a2810" : "#24140c");
+      if (!bare) {
+        kaskaOval(ctx, -s * 0.22, -s * 0.28, s * 0.98, s * 0.5, "#6a3a14");
+        kaskaOval(ctx, -s * 0.22, s * 0.28, s * 0.98, s * 0.5, "#4a2810");
+        kaskaOval(ctx, -s * 0.16, -s * 0.22, s * 0.78, s * 0.34, "#8a5424");
+        kaskaOval(ctx, -s * 0.16, s * 0.22, s * 0.78, s * 0.34, "#6a3c18");
+        ctx.fillStyle = "#2a1408";
+        for (i = 0; i < 4; i++) {
+          ctx.fillRect(-s * 0.92 + i * s * 0.26, -s * 0.62, s * 0.1, s * 1.24);
+        }
+        ctx.strokeStyle = "#1a0c06";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(s * 0.22, 0);
+        ctx.lineTo(-s * 1.08, 0);
+        ctx.stroke();
+        ctx.fillStyle = "#a07030";
+        for (i = 0; i < 5; i++) {
+          kaskaOval(ctx, -s * 0.78 + i * s * 0.28, -s * 0.34, s * 0.045, s * 0.045, "#c49050");
+          kaskaOval(ctx, -s * 0.78 + i * s * 0.28, s * 0.34, s * 0.045, s * 0.045, "#c49050");
+        }
+        kaskaOval(ctx, -s * 0.12, -s * 0.06, s * 0.42, s * 0.1, "rgba(180, 110, 50, 0.35)");
+        drawKaskaCannon(ctx, s, -s * 0.52);
+        drawKaskaCannon(ctx, s, s * 0.52);
+      } else {
+        kaskaOval(ctx, -s * 0.18, 0, s * 0.78, s * 0.4, "#5a3014");
+        kaskaOval(ctx, -s * 0.12, 0, s * 0.58, s * 0.28, "#a05020");
+        ctx.strokeStyle = "#3a1408";
+        ctx.lineWidth = 1.8;
+        for (i = 0; i < 5; i++) {
+          ctx.beginPath();
+          ctx.moveTo(-s * 0.72 + i * s * 0.16, -s * 0.2);
+          ctx.lineTo(-s * 0.72 + i * s * 0.16, s * 0.2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "#2a1408";
+        ctx.fillRect(-s * 0.4, -s * 0.08, s * 0.7, s * 0.16);
+        kaskaOval(ctx, s * 0.22, 0, s * 0.08, s * 0.08, "#ff7a28");
+      }
+      kaskaOval(ctx, s * 0.24, 0, s * 0.5, s * 0.44, bare ? "#5a3010" : "#4a2810");
+      kaskaOval(ctx, s * 0.3, -s * 0.04, s * 0.32, s * 0.22, bare ? "#a05020" : "#8a5020");
+      kaskaOval(ctx, s * 0.56, 0, s * 0.36, s * 0.32, bare ? "#4a200c" : "#3a1c0c");
+      kaskaOval(ctx, s * 0.6, 0, s * 0.24, s * 0.22, "#1a0c08");
+      kaskaOval(ctx, s * 0.7, -s * 0.12, kaskaRad(s * 0.14, 4), kaskaRad(s * 0.11, 3), "#0a0404");
+      kaskaOval(ctx, s * 0.66, -s * 0.14, kaskaRad(s * 0.05, 2), kaskaRad(s * 0.04, 2), "#ff7a28");
+      kaskaOval(ctx, s * 0.7, s * 0.12, kaskaRad(s * 0.14, 4), kaskaRad(s * 0.11, 3), "#0a0404");
+      kaskaOval(ctx, s * 0.66, s * 0.1, kaskaRad(s * 0.05, 2), kaskaRad(s * 0.04, 2), "#ff7a28");
+      ctx.fillStyle = "#2a1408";
+      ctx.beginPath();
+      ctx.moveTo(s * 0.72, -s * 0.1);
+      ctx.lineTo(s * 1.12, -s * 0.28);
+      ctx.lineTo(s * 1.18, -s * 0.08);
+      ctx.lineTo(s * 0.78, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(s * 0.72, s * 0.1);
+      ctx.lineTo(s * 1.12, s * 0.28);
+      ctx.lineTo(s * 1.18, s * 0.08);
+      ctx.lineTo(s * 0.78, 0);
+      ctx.closePath();
+      ctx.fill();
+      if (bare) drawKaskaHorn(ctx, s, 1.22, s * 0.24, "#c4a040", "#f0d080");
+      else drawKaskaHorn(ctx, s, 0.92, s * 0.2, "#c49028", "#e8c070");
+    } finally {
+      ctx.restore();
+    }
+  }
+
   G.drawEnemy = function (ctx, e) {
     if (!e || !e.def) return;
     var s = e.def.size;
@@ -1968,7 +2158,18 @@
       ctx.arc(0, 0, s + 10, 0, Math.PI * 2);
       ctx.stroke();
     }
-    if (e.zDraw) ctx.translate(0, -e.zDraw);
+    if (e.kaskaVuln || e.kaskaStep === "stun") {
+      var pulse = 0.45 + Math.sin((e.phase || 0) * 14) * 0.25;
+      ctx.strokeStyle = "rgba(255, 210, 74, " + pulse + ")";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, s + 14, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (e.zDraw) {
+      var zd = Number(e.zDraw);
+      if (isFinite(zd) && zd > 0) ctx.translate(0, -Math.min(zd, 120));
+    }
     ctx.rotate(e.rot || 0);
 
     if (t === "orb_escudo") {
@@ -2620,36 +2821,7 @@
       ctx.ellipse(0, s * 0.52, s * 0.55, s * 0.18, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (t === "chefe_comandante") {
-      insectLegs(ctx, s, 3, "#3a2208");
-      oval(ctx, -s * 0.35, 0, s * 0.95, s * 0.7, "#3a2208");
-      if (e.shellOff) {
-        oval(ctx, -s * 0.35, 0, s * 0.72, s * 0.48, "#5a3010");
-        oval(ctx, -s * 0.28, 0, s * 0.58, s * 0.38, "#8a4a18");
-      } else {
-        oval(ctx, -s * 0.35, 0, s * 0.82, s * 0.58, "#c48a20");
-        ctx.fillStyle = "#5a3010";
-        for (var sg = 0; sg < 4; sg++) ctx.fillRect(-s * 0.9 + sg * s * 0.28, -s * 0.5, 5, s);
-      }
-      oval(ctx, s * 0.35, 0, s * 0.55, s * 0.5, "#8a5a18");
-      oval(ctx, s * 0.85, 0, s * 0.42, s * 0.38, "#d4a024");
-      eye(ctx, s * 1.02, -s * 0.12, s * 0.14, "#1a0808");
-      eye(ctx, s * 1.02, s * 0.12, s * 0.14, "#1a0808");
-      mandibles(ctx, s * 0.9, "#2a1408");
-      ctx.fillStyle = "#ffe08a";
-      ctx.beginPath();
-      ctx.moveTo(s * 0.55, -s * 0.4);
-      ctx.lineTo(s * 0.72, -s * 0.95);
-      ctx.lineTo(s * 0.95, -s * 0.32);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = "#3a2010";
-      ctx.fillRect(s * 0.15, -s * 0.72, s * 0.7, 7);
-      ctx.fillStyle = "#ffd24a";
-      ctx.fillRect(s * 0.55, -4, s * 0.95, 8);
-      ctx.fillStyle = "#c48a20";
-      ctx.fillRect(-s * 1.35, -3.5, s * 0.7, 7);
-      ctx.fillStyle = "#ffd24a";
-      ctx.fillRect(-s * 1.55, -2.5, s * 0.32, 5);
+      drawKaska(ctx, e, s);
     } else if (t === "chefe_fortaleza") {
       ctx.strokeStyle = "#4a1848";
       ctx.lineWidth = 4;
@@ -3275,6 +3447,40 @@
       ctx.fillStyle = "#fff4c4";
       ctx.fillRect(-4, -3.2, 6, 6.4);
       ctx.restore();
+    } else if (p.kind === "horn") {
+      ctx.save();
+      try {
+        ctx.translate(p.x, p.y);
+        ctx.rotate(Math.atan2(p.vy || 0, p.vx || 1));
+        var hr = Number(p.r);
+        if (!isFinite(hr) || hr <= 0) hr = 10;
+        hr = Math.min(hr, 20);
+        ctx.fillStyle = p.color || "#ffd24a";
+        ctx.beginPath();
+        ctx.moveTo(hr * 2.2, 0);
+        ctx.lineTo(-hr * 1.05, -hr * 0.78);
+        ctx.lineTo(-hr * 0.28, 0);
+        ctx.lineTo(-hr * 1.05, hr * 0.78);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#fff6c8";
+        ctx.beginPath();
+        ctx.moveTo(hr * 1.75, 0);
+        ctx.lineTo(-hr * 0.05, -hr * 0.28);
+        ctx.lineTo(hr * 0.12, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(60, 28, 0, 0.55)";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(hr * 2.05, 0);
+        ctx.lineTo(-hr * 0.9, -hr * 0.62);
+        ctx.moveTo(hr * 2.05, 0);
+        ctx.lineTo(-hr * 0.9, hr * 0.62);
+        ctx.stroke();
+      } finally {
+        ctx.restore();
+      }
     } else if (p.kind === "honey") {
       ctx.fillStyle = "rgba(232, 192, 64, 0.85)";
       ctx.beginPath();
@@ -3418,9 +3624,14 @@
   };
 
   G.drawWarning = function (ctx, w) {
-    var k = 1 - w.t / (w.max || w.t || 1);
+    var wMax = w.max || w.t || 1;
+    var k = wMax > 0 ? 1 - w.t / wMax : 0;
+    if (!isFinite(k)) k = 0;
+    if (k < 0) k = 0;
+    else if (k > 1) k = 1;
     var col = w.color || "#ff4646";
     ctx.save();
+    try {
     if (w.kind === "lane") {
       var ang = w.ang || 0;
       var len = w.len || 240;
@@ -3529,9 +3740,12 @@
       ctx.ellipse(0, skyY - 10, 2.2, 10, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (w.kind === "spin") {
-      var sr = w.r || 70;
+      var sr = Number(w.r);
+      if (!isFinite(sr) || sr <= 0) sr = 70;
+      sr = Math.min(sr, 160);
       ctx.translate(w.x, w.y);
       ctx.save();
+      try {
       ctx.rotate(k * Math.PI * 2.2);
       ctx.strokeStyle = "rgba(255, 210, 74, " + (0.5 + k * 0.45) + ")";
       ctx.fillStyle = "rgba(255, 196, 50, " + (0.08 + k * 0.14) + ")";
@@ -3557,7 +3771,9 @@
         ctx.stroke();
         ctx.restore();
       }
+      } finally {
       ctx.restore();
+      }
       ctx.fillStyle = "rgba(255, 220, 90, " + (0.75 + k * 0.25) + ")";
       ctx.strokeStyle = "rgba(40, 20, 0, 0.85)";
       ctx.lineWidth = 4;
@@ -3567,20 +3783,25 @@
       ctx.strokeText("GIRO", 0, 0);
       ctx.fillText("GIRO", 0, 0);
     } else {
+      var wr = Number(w.r);
+      if (!isFinite(wr) || wr <= 0) wr = 40;
+      wr = Math.min(wr, 320);
       ctx.strokeStyle = col;
       ctx.globalAlpha = 0.35 + k * 0.55;
       ctx.fillStyle = "rgba(255,40,40," + 0.12 * k + ")";
       if (w.kind === "tp") ctx.fillStyle = "rgba(200, 160, 255, " + (0.1 + k * 0.16) + ")";
       ctx.lineWidth = 2.2;
       ctx.beginPath();
-      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+      ctx.arc(w.x, w.y, wr, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(w.x, w.y, w.r * Math.max(0.15, k), 0, Math.PI * 2);
+      ctx.arc(w.x, w.y, wr * Math.max(0.15, k), 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.restore();
+    } finally {
+      ctx.restore();
+    }
   };
 
   G.drawChargeTelegraph = function (ctx, e) {
@@ -3968,10 +4189,11 @@
     ctx.restore();
   };
 
-  G.drawPortrait = function (canvas, team, key, locked) {
+  G.drawPortrait = function (canvas, team, key, locked, portraitKey) {
     var ctx = canvas.getContext("2d");
     var w = canvas.width;
     var h = canvas.height;
+    var imgKey = portraitKey || key;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#101828";
@@ -3990,9 +4212,14 @@
       ctx.fillText("?", w / 2, h / 2);
       return;
     }
-    if (key && G.portraitImgs) {
+    if (imgKey && G.portraitImgs) {
       G.preloadPortraits();
-      var face = G.portraitImgs[key];
+      var face = G.portraitImgs[imgKey];
+      if (face && !(face.complete && face.naturalWidth)) {
+        face.onload = function () {
+          G.drawPortrait(canvas, team, key, locked, portraitKey);
+        };
+      }
       if (face && face.complete && face.naturalWidth) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
@@ -4025,6 +4252,7 @@
       dummy = G.createEnemy(key, w / 2, h / 2 + 8, 1);
     }
     if (!dummy || !dummy.def) return;
+    if (imgKey === "chefe_comandante_p2") dummy.shellOff = true;
     dummy.preview = true;
     dummy.rot = -0.55;
     dummy.hp = dummy.maxHp;

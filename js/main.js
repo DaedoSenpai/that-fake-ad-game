@@ -502,9 +502,45 @@
     tip.classList.remove("hidden");
   }
 
+  function kaskaPortraitKey(form) {
+    return form === "p2" ? "chefe_comandante_p2" : "chefe_comandante";
+  }
+
+  function setCodexForm(form) {
+    codexForm = form;
+    var p1 = document.getElementById("codex-form-p1");
+    var p2 = document.getElementById("codex-form-p2");
+    if (p1) p1.classList.toggle("on", form === "p1");
+    if (p2) p2.classList.toggle("on", form === "p2");
+  }
+
+  function paintCodexArt(team, key, known) {
+    var extra = team === "enemy" && key === "chefe_comandante" ? kaskaPortraitKey(codexForm) : null;
+    G.drawPortrait(document.getElementById("codex-art"), team, key, !known, extra);
+  }
+
+  function showCodexForms(team, key, known) {
+    var box = document.getElementById("codex-forms");
+    var show = team === "enemy" && key === "chefe_comandante" && known;
+    box.classList.toggle("hidden", !show);
+    if (show) setCodexForm(codexForm);
+  }
+
+  function kaskaBlurb(form) {
+    var edef = G.ENEMY_DEFS.chefe_comandante;
+    if (!edef) return "";
+    return form === "p2" && edef.blurbP2 ? edef.blurbP2 : edef.blurb;
+  }
+
+  function applyKaskaForm(form) {
+    if (codexSheet !== "enemy:chefe_comandante") return;
+    setCodexForm(form);
+    paintCodexArt("enemy", "chefe_comandante", true);
+    document.getElementById("codex-blurb").textContent = kaskaBlurb(form);
+  }
+
   function openCodexSheet(team, key, known) {
     var modal = document.getElementById("codex-modal");
-    var art = document.getElementById("codex-art");
     var nameEl = document.getElementById("codex-name");
     var blurbEl = document.getElementById("codex-blurb");
     var list = document.getElementById("codex-stats-list");
@@ -518,7 +554,9 @@
     list.innerHTML = "";
     passList.innerHTML = "";
     actList.innerHTML = "";
-    G.drawPortrait(art, team, key, !known);
+    codexForm = "p1";
+    paintCodexArt(team, key, known);
+    showCodexForms(team, key, known);
     codexSheet = team + ":" + key;
 
     function addSkill(boxList, icon, title, extra, desc, hint) {
@@ -588,7 +626,7 @@
         actBox.classList.add("hidden");
       } else {
         nameEl.textContent = edef.name + (edef.title ? " — " + edef.title : "");
-        blurbEl.textContent = edef.blurb || G.enemyKindLabel(edef.kind);
+        blurbEl.textContent = key === "chefe_comandante" ? kaskaBlurb(codexForm) : (edef.blurb || G.enemyKindLabel(edef.kind));
         G.enemyStatRows(edef).forEach(function (line) {
           var li = document.createElement("li");
           li.textContent = line;
@@ -620,7 +658,9 @@
 
   function closeCodexSheet() {
     document.getElementById("codex-modal").classList.add("hidden");
+    document.getElementById("codex-forms").classList.add("hidden");
     codexSheet = null;
+    codexForm = "p1";
   }
 
   function openMerge(pending) {
@@ -1037,6 +1077,7 @@
 
   var codexTab = "ally";
   var codexSheet = null;
+  var codexForm = "p1";
   function renderCodex() {
     var c = G.codex.counts();
     document.getElementById("codex-stats").textContent =
@@ -1736,8 +1777,11 @@
       ctx.save();
       ctx.globalAlpha = worldA;
       if (state.warnings) {
-        for (var w = 0; w < state.warnings.length; w++) G.drawWarning(ctx, state.warnings[w]);
+        for (var w = 0; w < state.warnings.length; w++) {
+          try { G.drawWarning(ctx, state.warnings[w]); } catch (ew) {}
+        }
       }
+      if (G.tactics && G.tactics.drawGround) G.tactics.drawGround(ctx, state);
       if (G.drawBossWorld) G.drawBossWorld(ctx, state);
       for (var ct = 0; ct < state.enemies.length; ct++) {
         if (G.drawChargeTelegraph) G.drawChargeTelegraph(ctx, state.enemies[ct]);
@@ -1746,8 +1790,12 @@
         for (var bm = 0; bm < state.booms.length; bm++) {
           var boom = state.booms[bm];
           var bk = Math.max(0, boom.t / boom.max);
-          var br = boom.r * (1.15 - bk * 0.35);
+          if (!(boom.max > 0) || !isFinite(bk)) bk = 0;
+          var br = (boom.r || 40) * (1.15 - bk * 0.35);
+          if (!isFinite(br) || br <= 0) continue;
+          br = Math.min(br, 360);
           ctx.save();
+          try {
           ctx.globalAlpha = Math.min(1, bk * 1.2);
           ctx.strokeStyle = boom.color || "#ffb45a";
           ctx.lineWidth = 5 + (1 - bk) * 10;
@@ -1765,18 +1813,24 @@
           ctx.beginPath();
           ctx.arc(boom.x, boom.y, br * 0.45, 0, Math.PI * 2);
           ctx.stroke();
+          } finally {
           ctx.restore();
+          }
         }
       }
       if (state.mines) {
         for (var m = 0; m < state.mines.length; m++) G.drawMine(ctx, state.mines[m]);
       }
       for (var d = 0; d < state.drops.length; d++) G.drawDrop(ctx, state.drops[d]);
-      for (var e = 0; e < state.enemies.length; e++) G.drawEnemy(ctx, state.enemies[e]);
+      for (var e = 0; e < state.enemies.length; e++) {
+        try { G.drawEnemy(ctx, state.enemies[e]); } catch (ee) {}
+      }
       for (var au = 0; au < state.units.length; au++) {
         if (!state.units[au].commander && !state.units[au].stowed) G.drawPlayerUnit(ctx, state.units[au], state.time);
       }
-      for (var p = 0; p < state.projectiles.length; p++) G.drawProjectile(ctx, state.projectiles[p]);
+      for (var p = 0; p < state.projectiles.length; p++) {
+        try { G.drawProjectile(ctx, state.projectiles[p]); } catch (ep) {}
+      }
       if (G.tactics && G.tactics.draw) G.tactics.draw(ctx, state);
       if (G.drawIncomingArrows) G.drawIncomingArrows(ctx, state);
       ctx.restore();
@@ -2073,6 +2127,14 @@
   };
   document.getElementById("codex-modal").onclick = function (ev) {
     if (ev.target.id === "codex-modal") closeCodexSheet();
+  };
+  document.getElementById("codex-form-p1").onclick = function () {
+    G.audio.ui();
+    applyKaskaForm("p1");
+  };
+  document.getElementById("codex-form-p2").onclick = function () {
+    G.audio.ui();
+    applyKaskaForm("p2");
   };
 
   document.getElementById("btn-ifcara").onclick = function () {

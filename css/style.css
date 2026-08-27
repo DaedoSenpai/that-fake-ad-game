@@ -1703,12 +1703,46 @@ h2 {
   min-width: 0;
 }
 
+.codex-art-wrap {
+  display: grid;
+  gap: 8px;
+}
+
 .codex-art {
   background: #101828;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--line);
   position: relative;
+}
+
+.codex-forms {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.codex-forms.hidden {
+  display: none;
+}
+
+.codex-form-btn {
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #152038;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.codex-form-btn.on {
+  border-color: var(--gold);
+  color: #2a1a00;
+  background: linear-gradient(180deg, #ffd86a, #f0b020);
 }
 
 #codex-art {
@@ -2087,6 +2121,12 @@ h2 {
     background: #1c2c4c;
     box-shadow: 0 0 0 1px rgba(255, 210, 74, 0.28), 0 0 14px rgba(255, 210, 74, 0.16);
     transform: translateY(-1px);
+  }
+
+  .codex-form-btn:hover:not(.on) {
+    border-color: #ffe08a;
+    color: var(--gold);
+    background: #1c2c4c;
   }
 
   #btn-pause:hover,

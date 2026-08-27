@@ -62,6 +62,7 @@
     wantsTwoBars: function (state, e) {
       if (!e || !e.def || !e.def.boss || e.fake || e.def.codexHide) return false;
       if (e.type === "beeprincess" || e.type === "chefe_final") return false;
+      if (e.type === "chefe_comandante") return true;
       return this.enraged(state, state.stageIndex | 0);
     },
 
@@ -156,11 +157,11 @@
       e.hpBars = 1;
       e.flash = Math.max(e.flash || 0, 0.55);
       if (state) state.bossShown = 1;
-      var text = label || "Segunda fase";
+      var text = label || (e.type === "chefe_comandante" ? "Kaska perde a carapaça" : "Segunda fase");
       G.burst(state, e.x, e.y, "#ffe08a", 22, 150);
       G.burst(state, e.x, e.y, e.def.color || "#ff6a3a", 18, 120);
       if (state) state.shake = Math.max(state.shake || 0, 10);
-      if (e.inv) this.startCutscene(state, e, text);
+      if (e.inv || e.type === "chefe_comandante") this.startCutscene(state, e, text);
       else if (state) state.banner = { text: text, t: 2.2 };
       return true;
     },
@@ -230,7 +231,10 @@
       e.vy = 0;
       e.immortal = true;
       state.camLook = { x: e.x, y: e.y };
-      state.camZoomTo = spec.zoom != null ? spec.zoom : this.defaultCutscene.zoom;
+      var z = spec.zoom != null ? spec.zoom : this.defaultCutscene.zoom;
+      if (!(z > 0) || !isFinite(z)) z = 1;
+      else z = Math.max(0.15, Math.min(8, z));
+      state.camZoomTo = z;
       state.banner = { text: state.bossCutscene.label, t: dur };
       state.pointer.down = false;
       state.pointer.fireHold = false;
@@ -276,7 +280,9 @@
       if (state.defeat) return;
       state.camLook = cs.prevLook || null;
       var z = cs.prevZoom;
-      state.camZoomTo = z != null && z > 0 ? z : 1;
+      if (!(z > 0) || !isFinite(z)) z = 1;
+      else z = Math.max(0.15, Math.min(8, z));
+      state.camZoomTo = z;
     },
 
     drawCutscene: function (ctx, state) {
@@ -439,6 +445,153 @@
         onEnd: function (state, e) {
           if (e) e.radioLift = 0;
           state.banner = { text: "Tropa de elite", t: 1.8 };
+        }
+      },
+      chefe_comandante: {
+        dur: 4.7,
+        zoom: 1.36,
+        onStart: function (state, e, cs) {
+          cs.cx = (state.W || 1280) / 2;
+          cs.cy = (state.H || 720) / 2;
+          if (!isFinite(cs.cx)) cs.cx = 640;
+          if (!isFinite(cs.cy)) cs.cy = 360;
+          cs.fromX = e && isFinite(e.x) ? e.x : cs.cx;
+          cs.fromY = e && isFinite(e.y) ? e.y : cs.cy;
+          cs.hopSfx = [];
+          cs.broke = false;
+          if (e) {
+            e.zDraw = 0;
+            e.vx = 0;
+            e.vy = 0;
+            e.rot = Math.atan2(cs.cy - cs.fromY, cs.cx - cs.fromX);
+          }
+          state.camLook = { x: cs.fromX, y: cs.fromY };
+        },
+        tick: function (state, e, cs, dt) {
+          var t = cs.t;
+          var hopLen = 0.38;
+          var hops = 4;
+          var hopEnd = hopLen * hops;
+          var flyEnd = hopEnd + 1.05;
+          var k;
+          if (!e || e.hp <= 0) {
+            state.camLook = { x: cs.cx, y: cs.cy };
+            return;
+          }
+          if (t < hopEnd) {
+            var hi = Math.min(hops - 1, Math.floor(t / hopLen));
+            k = (t - hi * hopLen) / hopLen;
+            if (!isFinite(k)) k = 0;
+            if (k < 0) k = 0;
+            else if (k > 1) k = 1;
+            var z = Math.sin(k * Math.PI) * 58;
+            if (!isFinite(z) || z < 0) z = 0;
+            e.zDraw = Math.min(z, 72);
+            e.x = cs.fromX;
+            e.y = cs.fromY;
+            e.rot += dt * 10;
+            if (k < 0.12 && !cs.hopSfx[hi]) {
+              cs.hopSfx[hi] = true;
+              state.shake = Math.max(state.shake || 0, 7);
+              if (G.audio && G.audio.thud) G.audio.thud();
+              else if (G.audio && G.audio.hit) G.audio.hit();
+              G.burst(state, e.x, e.y + 10, "#c48a20", 8, 70);
+            }
+            state.camLook = { x: e.x, y: e.y - (e.zDraw || 0) * 0.25 };
+          } else if (t < flyEnd) {
+            k = (t - hopEnd) / 1.05;
+            if (!isFinite(k)) k = 1;
+            if (k < 0) k = 0;
+            else if (k > 1) k = 1;
+            k = k * k * (3 - 2 * k);
+            e.x = cs.fromX + (cs.cx - cs.fromX) * k;
+            e.y = cs.fromY + (cs.cy - cs.fromY) * k;
+            var flyZ = Math.sin(k * Math.PI) * 44 + (1 - k) * 10;
+            if (!isFinite(flyZ) || flyZ < 0) flyZ = 0;
+            e.zDraw = Math.min(flyZ, 72);
+            e.rot = Math.atan2(cs.cy - cs.fromY, cs.cx - cs.fromX);
+            state.camLook = { x: e.x, y: e.y };
+          } else {
+            e.x = cs.cx + (Math.random() - 0.5) * (cs.broke ? 7 : 4);
+            e.y = cs.cy + (Math.random() - 0.5) * (cs.broke ? 6 : 3);
+            e.zDraw = 0;
+            e.flash = Math.max(e.flash || 0, 0.18);
+            e.rot += dt * (cs.broke ? 14 : 8);
+            state.shake = Math.max(state.shake || 0, cs.broke ? 11 : 7);
+            state.camLook = { x: cs.cx, y: cs.cy };
+            if (t >= 3.55 && !cs.broke) {
+              cs.broke = true;
+              e.shellOff = true;
+              e.x = cs.cx;
+              e.y = cs.cy;
+              G.burst(state, e.x, e.y, "#ffd24a", 28, 160);
+              G.burst(state, e.x, e.y, "#8a4a18", 22, 140);
+              G.burst(state, e.x, e.y, "#fff4c4", 16, 110);
+              state.shake = Math.max(state.shake || 0, 14);
+              if (G.audio && G.audio.explosion) G.audio.explosion();
+              if (state.banner) state.banner = { text: "A carapaça racha", t: 1.6 };
+            }
+          }
+        },
+        draw: function (ctx, state, e, cs) {
+          var dur = cs.dur || 4.7;
+          var u = dur > 0 ? Math.min(1, cs.t / 0.32) : 0;
+          var out = cs.t > dur - 0.38 ? Math.min(1, (dur - cs.t) / 0.38) : 1;
+          if (!isFinite(u)) u = 0;
+          if (!isFinite(out)) out = 1;
+          var a = Math.min(u, out) * 0.52;
+          if (!isFinite(a) || a < 0) a = 0;
+          var cx = (state.W || 1280) / 2;
+          var cy = (state.H || 720) / 2;
+          if (!isFinite(cx)) cx = 640;
+          if (!isFinite(cy)) cy = 360;
+          ctx.save();
+          try {
+            var inner = 22;
+            var outer = 260;
+            var g = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+            g.addColorStop(0, "rgba(40, 22, 6, 0)");
+            g.addColorStop(0.55, "rgba(18, 10, 4, " + (a * 0.32) + ")");
+            g.addColorStop(1, "rgba(8, 4, 2, " + a + ")");
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, state.W || 1280, state.H || 720);
+          } finally {
+            ctx.restore();
+          }
+        },
+        onEnd: function (state, e) {
+          if (e) {
+            e.zDraw = 0;
+            e.shellOff = true;
+            e.x = isFinite(e.x) ? e.x : (state.W || 1280) / 2;
+            e.y = isFinite(e.y) ? e.y : (state.H || 720) / 2;
+            var n = 16;
+            var i;
+            var dmg = Math.round((e.def && e.def.dmg ? e.def.dmg : 28) * 0.85);
+            for (i = 0; i < n; i++) {
+              var ang = (i / n) * Math.PI * 2 + 0.18;
+              var sp = 200 + (i % 4) * 26;
+              var r = 8 + (i % 3);
+              if (!isFinite(r) || r <= 0) r = 8;
+              r = Math.min(r, 16);
+              if (!isFinite(sp) || sp <= 0) sp = 210;
+              state.projectiles.push(G.createProjectile({
+                x: e.x,
+                y: e.y,
+                vx: Math.cos(ang) * sp,
+                vy: Math.sin(ang) * sp,
+                dmg: dmg,
+                team: "enemy",
+                kind: "horn",
+                life: 2.4,
+                r: r,
+                color: "#e8b84a",
+                fromBoss: true,
+                fromId: e.id
+              }));
+            }
+          }
+          state.banner = { text: "Desvia dos cacos", t: 1.8 };
         }
       }
     },

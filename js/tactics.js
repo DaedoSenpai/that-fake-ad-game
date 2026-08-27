@@ -157,7 +157,7 @@
   function zoneRetires(z) {
     if (!z) return false;
     var k = z.kind;
-    return k === "heal" || k === "smoke" || k === "fire" || k === "napalm" || k === "anchor" || k === "standard" || k === "obsmark" || k === "spot" || k === "beacon" || k === "phalanx" || k === "cmd_aura";
+    return k === "heal" || k === "smoke" || k === "fire" || k === "napalm" || k === "anchor" || k === "standard" || k === "obsmark" || k === "spot" || k === "beacon" || k === "phalanx" || k === "cmd_aura" || k === "crack";
   }
 
   function applyRetirePose(ctx, k, mode) {
@@ -225,6 +225,7 @@
     if (k === "obsmark" || k === "spot") return ["#7ad8ff", "#e8ffff", "#4aa3ff"];
     if (k === "beacon") return ["#ff6a4a", "#ffd24a", "#ff9080"];
     if (k === "phalanx") return ["#e8c878", "#c4a45a", "#fff4d0"];
+    if (k === "crack") return ["#6a3a14", "#c49040", "#3a1c08"];
     return ["#ffe9a0", "#fff8d8", "#c8b070"];
   }
 
@@ -1133,10 +1134,17 @@
     }
     if (onTrail(state)) mul *= 2;
     if ((state.honeyT || 0) > 0) mul *= 0.42;
+    var onCrack = false;
     for (var i = 0; i < (state.zones || []).length; i++) {
       var z = state.zones[i];
-      if (!z.retiring && z.kind === "beacon" && hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r) mul *= 1.08;
+      if (z.retiring) continue;
+      if (z.kind === "beacon" && hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r) mul *= 1.08;
+      if (z.kind === "crack") {
+        var cr = z.r;
+        if (isFinite(cr) && cr > 0 && hypot(state.squad.x - z.x, state.squad.y - z.y) < Math.min(cr, 260)) onCrack = true;
+      }
     }
+    if (onCrack) mul *= 0.55;
     if (state.tacticsAura && state.tacticsAura.speed) mul *= 1 + state.tacticsAura.speed;
     return mul;
   }
@@ -5185,6 +5193,66 @@
     ctx.restore();
   }
 
+  function drawCrackGround(ctx, z) {
+    var r = Number(z.r);
+    if (!isFinite(r) || r <= 0) return;
+    r = Math.min(r, 260);
+    var inner = Math.max(8, r * 0.62);
+    var seed = Number(z.seed);
+    if (!isFinite(seed)) seed = 1;
+    ctx.save();
+    try {
+      ctx.translate(z.x, z.y);
+      ctx.fillStyle = "rgba(18, 8, 4, 0.52)";
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(8, 3, 2, 0.45)";
+      ctx.beginPath();
+      ctx.arc(0, 0, inner, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(92, 48, 18, 0.95)";
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(180, 90, 36, 0.5)";
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "rgba(10, 4, 2, 0.92)";
+      ctx.lineWidth = 2.2;
+      var i;
+      for (i = 0; i < 7; i++) {
+        var a = seed + i * 0.95;
+        var len = r * (0.48 + (i % 3) * 0.16);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * 8, Math.sin(a) * 8);
+        ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+        ctx.stroke();
+        var b = a + 0.32;
+        var mid = len * 0.52;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * mid, Math.sin(a) * mid);
+        ctx.lineTo(Math.cos(b) * (mid + r * 0.16), Math.sin(b) * (mid + r * 0.16));
+        ctx.stroke();
+      }
+      for (i = 0; i < 8; i++) {
+        var ra = seed * 0.7 + i * (Math.PI * 2 / 8);
+        var rr = r * 0.88;
+        ctx.save();
+        ctx.translate(Math.cos(ra) * rr, Math.sin(ra) * rr - 2);
+        isoCube(ctx, 4 + (i % 3), 3 + (i % 2), "#6a4828", "#3a2410", "#241408");
+        ctx.restore();
+      }
+    } finally {
+      ctx.restore();
+    }
+  }
+
   function drawBanner3d(ctx, z, time) {
     ctx.save();
     ctx.translate(z.x, z.y);
@@ -5856,6 +5924,27 @@
     ctx.restore();
   }
 
+  function drawGround(ctx, state) {
+    ensure(state);
+    var i;
+    for (i = 0; i < state.zones.length; i++) {
+      var z = state.zones[i];
+      if (z.kind !== "crack") continue;
+      ctx.save();
+      try {
+        var rk = retireK(z);
+        if (rk > 0) {
+          ctx.translate(z.x, z.y);
+          applyRetirePose(ctx, rk, "sink");
+          ctx.globalAlpha *= Math.max(0.06, 1 - rk * 0.7);
+          ctx.translate(-z.x, -z.y);
+        }
+        drawCrackGround(ctx, z);
+      } catch (eG) {}
+      ctx.restore();
+    }
+  }
+
   function draw(ctx, state) {
     ensure(state);
     var i;
@@ -6008,6 +6097,8 @@
         ctx.fillStyle = "rgba(255, 220, 120, 0.45)";
         circle(ctx, z.x, z.y, z.r * 0.62);
         ctx.fill();
+      } else if (z.kind === "crack") {
+        /* chão: G.tactics.drawGround, abaixo das entidades */
       } else if (z.kind === "moon_spot" || z.kind === "moon_burn") {
         var mp = 0.5 + Math.sin((state.time || 0) * 5) * 0.2;
         var grd = ctx.createRadialGradient(z.x, z.y, 8, z.x, z.y, z.r * 2.2);
@@ -6631,6 +6722,7 @@
     ensure: ensure,
     update: update,
     draw: draw,
+    drawGround: drawGround,
     playerShoot: playerShoot,
     onAltDown: onAltDown,
     onAltUp: onAltUp,

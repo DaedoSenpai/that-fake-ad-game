@@ -161,7 +161,7 @@
           b.y += ny * push;
         }
       }
-      if (clampEach && a.wormAct !== "dive" && a.vultoAct !== "strafe") G.clampPlay(a, state);
+      if (clampEach && a.wormAct !== "dive" && a.vultoAct !== "strafe" && !kaskaAirborne(a)) G.clampPlay(a, state);
     }
   }
 
@@ -229,6 +229,7 @@
         amount *= 1 + Math.min(15, unit.reconMark) * 0.01;
       }
       if (unit.parked) amount *= 0.4;
+      if (unit.kaskaVuln || unit.kaskaStep === "stun") amount *= 1.35;
       if (unit.type === "chefe_final" && unit.bossPhase === 1 && findEnemy(state, unit.guardianId)) {
         if (unit.contactCd <= 0) {
           unit.contactCd = 0.5;
@@ -251,6 +252,9 @@
       }
     }
     unit.hp -= amount;
+    if (unit.team === "enemy" && unit.hp <= 0 && G.invasion && !unit.p2 && G.invasion.barCount(unit) >= 2) {
+      unit.hp = 1;
+    }
     if (unit.team === "enemy" && amount > 0) unit.revealT = 1.8;
     if (!(trueDmg && amount < 2)) {
       unit.flash = 0.12;
@@ -627,7 +631,7 @@
   function spawnDuskShields(state, e) {
     if ((e.shieldLockT || 0) > 0) return false;
     if (countOrbitShields(state, e.id) > 0) return false;
-    var n = e.invP2 ? 6 : 4;
+    var n = (e.p2 || e.invP2 || e.shellOff) ? 6 : 4;
     for (var k = 0; k < n; k++) {
       G.game.spawnAt(state, "orb_escudo", e.x, e.y, {
         orbitHost: e.id,
@@ -1014,6 +1018,556 @@
     e.seqMode = 1;
     e.seqAcc = 0;
     e.seqShotT = 0;
+  }
+
+  var KASKA_ARROW_R = [8, 13, 18];
+
+  function kaskaNum(v, fb) {
+    var n = Number(v);
+    return isFinite(n) ? n : fb;
+  }
+
+  function kaskaHornR(v) {
+    var r = kaskaNum(v, 10);
+    if (!(r > 0)) r = 10;
+    return Math.min(r, 20);
+  }
+
+  function kaskaWarn(state, opt) {
+    var t = kaskaNum(opt.t, 0.4);
+    if (!(t > 0)) t = 0.4;
+    opt.t = t;
+    opt.max = t;
+    if (opt.r != null) {
+      var r = kaskaNum(opt.r, 40);
+      if (!(r > 0)) r = 40;
+      var rCap = opt.rCap != null ? kaskaNum(opt.rCap, 160) : 160;
+      if (!(rCap > 0) || !isFinite(rCap)) rCap = 160;
+      rCap = Math.min(rCap, 320);
+      opt.r = Math.min(r, rCap);
+    }
+    if (opt.len != null) {
+      var len = kaskaNum(opt.len, 200);
+      if (!(len > 0)) len = 200;
+      opt.len = Math.min(len, 720);
+    }
+    if (opt.w != null) {
+      var ww = kaskaNum(opt.w, 16);
+      if (!(ww > 0)) ww = 16;
+      opt.w = Math.min(ww, 40);
+    }
+    if (!isFinite(opt.x) || !isFinite(opt.y)) return;
+    warnAt(state, opt);
+  }
+
+  function kaskaIsP2(e) {
+    return !!(e && (e.p2 || e.shellOff));
+  }
+
+  function kaskaAirborne(e) {
+    var s = e && e.kaskaStep;
+    return s === "dive_up" || s === "dive_air" || s === "dive_fall";
+  }
+
+  function kaskaFireTriple(state, e, ang, r, extra) {
+    extra = extra || {};
+    kaskaFireHorn(state, e, ang - 0.24, r, extra);
+    kaskaFireHorn(state, e, ang, r, extra);
+    kaskaFireHorn(state, e, ang + 0.24, r, extra);
+  }
+
+  function kaskaFireRing(state, e, n, r, dmgMul) {
+    n = n || 8;
+    if (n > 12) n = 12;
+    var i;
+    var off = ((e.kaskaSpinRing || 0) % 2) * (Math.PI / n);
+    for (i = 0; i < n; i++) {
+      kaskaFireHorn(state, e, off + i * Math.PI * 2 / n, r || 9, { dmg: Math.round(e.def.dmg * (dmgMul || 0.7)) });
+    }
+    e.kaskaSpinRing = (e.kaskaSpinRing || 0) + 1;
+  }
+
+  function kaskaFireHorn(state, e, ang, r, extra) {
+    extra = extra || {};
+    extra.r = kaskaHornR(r);
+    extra.speed = extra.speed || 305;
+    extra.life = extra.life || 2.4;
+    extra.muzzle = extra.muzzle != null ? extra.muzzle : (e.def.size || 32) * 0.95;
+    extra.color = extra.color || "#ffd24a";
+    enemyFireAng(state, e, ang, "horn", extra);
+  }
+
+  function kaskaLaneLen(e, target) {
+    if (!target) return 220;
+    var d = dist(e, target);
+    if (!isFinite(d)) d = 220;
+    return Math.min(420, Math.max(120, d + 40));
+  }
+
+  function kaskaStartArrow(state, e, target) {
+    var ang = target ? Math.atan2(target.y - e.y, target.x - e.x) : e.rot || 0;
+    if (!isFinite(ang)) ang = e.rot || 0;
+    e.rot = ang;
+    e.kaskaStep = "arrow_warn";
+    e.kaskaT = 0.4;
+    kaskaWarn(state, {
+      kind: "lane",
+      x: e.x,
+      y: e.y,
+      ang: ang,
+      len: kaskaLaneLen(e, target),
+      w: 14 + (e.kaskaArrowI || 0) * 4,
+      t: 0.4,
+      dmg: 0,
+      color: "#ffd24a",
+      followId: e.id
+    });
+  }
+
+  function kaskaStartDash(state, e, target) {
+    var tx = target ? target.x : e.x + Math.cos(e.rot || 0) * 140;
+    var ty = target ? target.y : e.y + Math.sin(e.rot || 0) * 140;
+    if (!isFinite(tx) || !isFinite(ty)) {
+      tx = e.x;
+      ty = e.y;
+    }
+    e.kaskaDashTx = tx;
+    e.kaskaDashTy = ty;
+    var ang = Math.atan2(ty - e.y, tx - e.x);
+    if (!isFinite(ang)) ang = e.rot || 0;
+    e.kaskaDashAng = ang;
+    e.rot = ang;
+    e.kaskaStep = "dash_warn";
+    e.kaskaT = 0.34;
+    var len = Math.hypot(tx - e.x, ty - e.y);
+    if (!isFinite(len) || len < 36) len = 36;
+    kaskaWarn(state, {
+      kind: "lane",
+      x: e.x,
+      y: e.y,
+      ang: ang,
+      len: len,
+      w: 18,
+      t: 0.34,
+      dmg: 0,
+      color: "#ff6a3a"
+    });
+    if ((e.kaskaDashI || 0) === 0) {
+      state.floaters.push(G.createFloater(e.x, e.y - 28, "investida", "#ff6a3a"));
+    }
+  }
+
+  function kaskaFinishDash(e, state, target) {
+    e.vx = 0;
+    e.vy = 0;
+    e.zDraw = 0;
+    e.kaskaDashI = (e.kaskaDashI || 0) + 1;
+    var maxD = kaskaIsP2(e) ? 3 : 5;
+    if (e.kaskaDashI >= maxD) {
+      if (kaskaIsP2(e) && state) {
+        e.kaskaDiveI = 0;
+        kaskaStartDive(state, e, target);
+      } else {
+        e.kaskaStep = "idle";
+        e.kaskaT = 0.7;
+        e.kaskaArrowI = 0;
+      }
+    } else {
+      e.kaskaStep = "dash_gap";
+      e.kaskaT = kaskaIsP2(e) ? 0.22 : 0.16;
+    }
+  }
+
+  function kaskaHopR(e) {
+    var i = e && e.kaskaDashI ? e.kaskaDashI : 0;
+    if (i < 0) i = 0;
+    if (i > 4) i = 4;
+    var r = 78 * (1.1 + i * 0.1);
+    if (!isFinite(r) || r <= 0) r = 78;
+    return Math.min(r, 120);
+  }
+
+  function kaskaStartHop(state, e) {
+    e.vx = 0;
+    e.vy = 0;
+    e.kaskaStep = "hop";
+    e.kaskaT = 0.36;
+    e.kaskaHopMax = 0.36;
+    e.zDraw = 0;
+    var r = kaskaHopR(e);
+    kaskaWarn(state, {
+      kind: "mark",
+      x: e.x,
+      y: e.y,
+      t: 0.36,
+      r: r,
+      rCap: 120,
+      dmg: 0,
+      color: "#ffb45a",
+      followId: e.id
+    });
+  }
+
+  function kaskaStomp(state, e) {
+    var r = kaskaHopR(e);
+    if (!isFinite(r) || r <= 0) r = 72;
+    r = Math.min(r, 120);
+    var x = e.x;
+    var y = e.y;
+    if (!isFinite(x) || !isFinite(y)) return;
+    e.zDraw = 0;
+    explode(state, x, y, r, Math.round(e.def.dmg * 1.15), "enemy", "#c49028");
+    if (G.audio && G.audio.thud) G.audio.thud();
+    else if (G.audio && G.audio.explosion) G.audio.explosion();
+  }
+
+  function kaskaDiveR(i) {
+    var n = i || 0;
+    if (n < 0) n = 0;
+    if (n > 2) n = 2;
+    var r = 176;
+    var k;
+    for (k = 0; k < n; k++) r *= 1.25;
+    if (!isFinite(r) || r <= 0) r = 176;
+    return Math.min(r, 256);
+  }
+
+  function kaskaStartDive(state, e, target) {
+    var tx = target ? target.x : (state.squad ? state.squad.x : e.x);
+    var ty = target ? target.y : (state.squad ? state.squad.y : e.y);
+    if (!isFinite(tx) || !isFinite(ty)) {
+      tx = (state.W || 1280) / 2;
+      ty = (state.H || 720) / 2;
+    }
+    if (e.kaskaDiveI == null) e.kaskaDiveI = 0;
+    var r = kaskaDiveR(e.kaskaDiveI);
+    e.kaskaDiveTx = tx;
+    e.kaskaDiveTy = ty;
+    e.kaskaDiveR = r;
+    e.kaskaStep = "dive_up";
+    e.kaskaT = 0.58;
+    e.kaskaHopMax = 0.58;
+    e.vx = 0;
+    e.vy = 0;
+    kaskaWarn(state, {
+      kind: "mark",
+      x: tx,
+      y: ty,
+      t: 1.42,
+      r: r,
+      rCap: 256,
+      dmg: 0,
+      color: "#ffb45a"
+    });
+    if ((e.kaskaDiveI || 0) === 0) {
+      state.floaters.push(G.createFloater(e.x, e.y - 28, "queda", "#ffb45a"));
+    }
+  }
+
+  function kaskaDiveImpact(state, e, target) {
+    var x = isFinite(e.kaskaDiveTx) ? e.kaskaDiveTx : e.x;
+    var y = isFinite(e.kaskaDiveTy) ? e.kaskaDiveTy : e.y;
+    var r = e.kaskaDiveR;
+    if (!isFinite(r) || r <= 0) r = 160;
+    r = Math.min(r, 256);
+    e.x = x;
+    e.y = y;
+    e.zDraw = 0;
+    G.clampPlay(e, state);
+    explode(state, x, y, r, Math.round(e.def.dmg * (1.25 + (e.kaskaDiveI || 0) * 0.12)), "enemy", "#c49028");
+    if (G.audio && G.audio.explosion) G.audio.explosion();
+    else if (G.audio && G.audio.thud) G.audio.thud();
+    pushZone(state, {
+      kind: "crack",
+      x: x,
+      y: y,
+      r: r,
+      t: 4.2,
+      max: 4.2,
+      seed: (e.id || 1) * 0.37 + (e.kaskaDiveI || 0) * 1.7
+    });
+    e.kaskaDiveI = (e.kaskaDiveI || 0) + 1;
+    if (e.kaskaDiveI < 3) {
+      e.kaskaStep = "dive_gap";
+      e.kaskaT = 0.2;
+    } else {
+      e.kaskaStep = "stun";
+      e.kaskaT = 2.5;
+      e.kaskaVuln = true;
+      e.kaskaArrowI = 0;
+      e.kaskaDashI = 0;
+      e.kaskaDiveI = 0;
+      e.vx = 0;
+      e.vy = 0;
+      state.floaters.push(G.createFloater(e.x, e.y - 36, "exposto", "#ffd24a"));
+    }
+  }
+
+  function tickKaskaP1(state, e, target, spd, dt, d) {
+    if (!e.kaskaP1) {
+      e.kaskaP1 = true;
+      e.kaskaStep = "idle";
+      e.kaskaT = 0.4;
+      e.kaskaArrowI = 0;
+      e.kaskaDashI = 0;
+      e.spinMode = 0;
+      e.throwWindup = 0;
+      e.chargeWindup = 0;
+      e.cascaDashT = 0;
+      e.seqWindup = 0;
+      e.seqBurst = 0;
+      e.seqMode = 0;
+    }
+    e.kaskaT = (e.kaskaT || 0) - dt;
+    var step = e.kaskaStep || "idle";
+    if (step === "idle") {
+      moveTowards(e, state.squad.x, state.squad.y, spd, dt);
+      if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      if (e.kaskaT <= 0) kaskaStartArrow(state, e, target);
+      return;
+    }
+    if (step === "arrow_warn") {
+      if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      e.flash = Math.max(e.flash || 0, 0.1);
+      if (e.kaskaT <= 0) {
+        var shot = e.kaskaArrowI || 0;
+        var rr = KASKA_ARROW_R[Math.min(2, shot)] || 10;
+        var extra = { dmg: Math.round(e.def.dmg * (1 + shot * 0.12)) };
+        if (kaskaIsP2(e)) kaskaFireTriple(state, e, e.rot, rr, extra);
+        else kaskaFireHorn(state, e, e.rot, rr, extra);
+        if (G.audio && G.audio.horn) G.audio.horn();
+        else if (G.audio && G.audio.shoot) G.audio.shoot();
+        e.kaskaArrowI = shot + 1;
+        if (e.kaskaArrowI >= 3) {
+          if (kaskaIsP2(e)) {
+            e.kaskaDashI = 0;
+            kaskaStartDash(state, e, target);
+          } else {
+            e.kaskaStep = "spin_warn";
+            e.kaskaT = 0.75;
+            kaskaWarn(state, {
+              kind: "spin",
+              x: e.x,
+              y: e.y,
+              t: 0.75,
+              r: (e.def.size || 32) + 48,
+              dmg: 0,
+              color: "#ffd24a",
+              followId: e.id
+            });
+            state.floaters.push(G.createFloater(e.x, e.y - 28, "giro", "#ffd24a"));
+          }
+        } else {
+          e.kaskaStep = "arrow_gap";
+          e.kaskaT = kaskaIsP2(e) ? 0.26 : 0.2;
+        }
+      }
+      return;
+    }
+    if (step === "arrow_gap") {
+      if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      moveTowards(e, state.squad.x, state.squad.y, spd * 0.45, dt);
+      if (e.kaskaT <= 0) kaskaStartArrow(state, e, target);
+      return;
+    }
+    if (step === "spin_warn") {
+      e.flash = Math.max(e.flash || 0, 0.12);
+      if (e.kaskaT <= 0) {
+        e.kaskaStep = "spin";
+        e.kaskaT = 1.7;
+        e.kaskaSpinShotT = 0;
+        e.kaskaSpinRing = 0;
+      }
+      return;
+    }
+    if (step === "spin") {
+      e.rot = (e.rot || 0) + Math.PI * 2 * 1.4 * dt;
+      e.kaskaSpinShotT = (e.kaskaSpinShotT || 0) - dt;
+      if (e.kaskaSpinShotT <= 0) {
+        e.kaskaSpinShotT = 0.15;
+        e.kaskaSpinRing = (e.kaskaSpinRing || 0) + 1;
+        var off = ((e.kaskaSpinRing % 2) * Math.PI) / 8;
+        var si;
+        for (si = 0; si < 8; si++) {
+          kaskaFireHorn(state, e, e.rot + off + si * (Math.PI / 4), 10, { dmg: Math.round(e.def.dmg * 0.78) });
+        }
+      }
+      if (e.kaskaT <= 0) {
+        e.kaskaDashI = 0;
+        kaskaStartDash(state, e, target);
+      }
+      return;
+    }
+    if (step === "dash_warn") {
+      e.rot = e.kaskaDashAng || 0;
+      e.flash = Math.max(e.flash || 0, 0.14);
+      if (e.kaskaT <= 0) {
+        var tx = e.kaskaDashTx;
+        var ty = e.kaskaDashTy;
+        if (!isFinite(tx) || !isFinite(ty)) {
+          tx = e.x + Math.cos(e.kaskaDashAng || 0) * 120;
+          ty = e.y + Math.sin(e.kaskaDashAng || 0) * 120;
+        }
+        var dx = tx - e.x;
+        var dy = ty - e.y;
+        var distDash = Math.hypot(dx, dy);
+        if (!isFinite(distDash) || distDash < 12) distDash = 12;
+        var dsp = 840;
+        var dashT = distDash / dsp;
+        if (dashT > 0.57) {
+          dsp = distDash / 0.57;
+          if (dsp > 1020) dsp = 1020;
+          dashT = distDash / dsp;
+        }
+        if (!isFinite(dashT) || dashT < 0.08) dashT = 0.08;
+        if (dashT > 0.77) dashT = 0.77;
+        e.vx = (dx / distDash) * dsp;
+        e.vy = (dy / distDash) * dsp;
+        e.kaskaStep = "dash";
+        e.kaskaT = dashT;
+        if (kaskaIsP2(e)) {
+          e.kaskaRingT = 0;
+          kaskaFireRing(state, e, 8, 9, 0.72);
+        }
+      }
+      return;
+    }
+    if (step === "dash") {
+      var stepLen = Math.hypot(e.vx || 0, e.vy || 0) * dt;
+      e.x += (e.vx || 0) * dt;
+      e.y += (e.vy || 0) * dt;
+      e.rot = Math.atan2(e.vy || 0, e.vx || 1);
+      var leftX = (e.kaskaDashTx != null ? e.kaskaDashTx : e.x) - e.x;
+      var leftY = (e.kaskaDashTy != null ? e.kaskaDashTy : e.y) - e.y;
+      var left = Math.hypot(leftX, leftY);
+      if (!isFinite(left) || left <= 14 || left <= stepLen) {
+        if (isFinite(e.kaskaDashTx) && isFinite(e.kaskaDashTy)) {
+          e.x = e.kaskaDashTx;
+          e.y = e.kaskaDashTy;
+        }
+        G.clampPlay(e, state);
+        if (target && dist(e, target) < e.def.size + target.def.size + 12 && e.contactCd <= 0) {
+          e.contactCd = 0.22;
+          if (!(G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e))) {
+            hurt(state, target, Math.round(e.def.dmg * 1.2), e.x, e.y);
+          }
+        }
+        if (kaskaIsP2(e)) kaskaFinishDash(e, state, target);
+        else kaskaStartHop(state, e);
+        return;
+      }
+      G.clampPlay(e, state);
+      if (kaskaIsP2(e)) {
+        e.kaskaRingT = (e.kaskaRingT || 0) - dt;
+        if (e.kaskaRingT <= 0) {
+          e.kaskaRingT = 0.22;
+          kaskaFireRing(state, e, 8, 9, 0.72);
+        }
+      }
+      if (target && d < e.def.size + target.def.size + 12 && e.contactCd <= 0) {
+        e.contactCd = 0.22;
+        if (!(G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e))) {
+          hurt(state, target, Math.round(e.def.dmg * 1.2), e.x, e.y);
+        }
+      }
+      if (e.kaskaT <= 0) {
+        if (kaskaIsP2(e)) kaskaFinishDash(e, state, target);
+        else kaskaStartHop(state, e);
+      }
+      return;
+    }
+    if (step === "hop") {
+      var hopMax = e.kaskaHopMax || 0.36;
+      if (!(hopMax > 0) || !isFinite(hopMax)) hopMax = 0.36;
+      var hk = 1 - e.kaskaT / hopMax;
+      if (!isFinite(hk)) hk = 1;
+      if (hk < 0) hk = 0;
+      else if (hk > 1) hk = 1;
+      var hopZ = Math.sin(hk * Math.PI) * 54;
+      if (!isFinite(hopZ) || hopZ < 0) hopZ = 0;
+      e.zDraw = Math.min(hopZ, 72);
+      e.flash = Math.max(e.flash || 0, 0.1);
+      if (e.kaskaT <= 0) {
+        kaskaStomp(state, e);
+        kaskaFinishDash(e, state, target);
+      }
+      return;
+    }
+    if (step === "dive_up") {
+      var upMax = e.kaskaHopMax || 0.58;
+      if (!(upMax > 0) || !isFinite(upMax)) upMax = 0.58;
+      var uk = 1 - e.kaskaT / upMax;
+      if (!isFinite(uk)) uk = 1;
+      if (uk < 0) uk = 0;
+      else if (uk > 1) uk = 1;
+      var upZ = uk * 96;
+      if (!isFinite(upZ) || upZ < 0) upZ = 0;
+      e.zDraw = Math.min(upZ, 120);
+      e.y -= 160 * dt;
+      e.rot += dt * 8;
+      if (e.kaskaT <= 0) {
+        e.kaskaStep = "dive_air";
+        e.kaskaT = 0.4;
+        e.zDraw = 110;
+      }
+      return;
+    }
+    if (step === "dive_air") {
+      e.zDraw = 110;
+      e.y = -70;
+      if (e.kaskaT <= 0) {
+        var fx = isFinite(e.kaskaDiveTx) ? e.kaskaDiveTx : e.x;
+        var fy = isFinite(e.kaskaDiveTy) ? e.kaskaDiveTy : e.y;
+        e.x = fx;
+        e.y = fy;
+        e.kaskaStep = "dive_fall";
+        e.kaskaT = 0.42;
+        e.kaskaHopMax = 0.42;
+        e.zDraw = 92;
+        if (G.audio && G.audio.thud) G.audio.thud();
+      }
+      return;
+    }
+    if (step === "dive_fall") {
+      var fallMax = e.kaskaHopMax || 0.42;
+      if (!(fallMax > 0) || !isFinite(fallMax)) fallMax = 0.42;
+      var fk = 1 - e.kaskaT / fallMax;
+      if (!isFinite(fk)) fk = 1;
+      if (fk < 0) fk = 0;
+      else if (fk > 1) fk = 1;
+      var fallZ = 92 * (1 - fk * fk);
+      if (!isFinite(fallZ) || fallZ < 0) fallZ = 0;
+      e.zDraw = Math.min(fallZ, 120);
+      if (isFinite(e.kaskaDiveTx)) e.x = e.kaskaDiveTx;
+      if (isFinite(e.kaskaDiveTy)) e.y = e.kaskaDiveTy;
+      if (e.kaskaT <= 0) kaskaDiveImpact(state, e, target);
+      return;
+    }
+    if (step === "dive_gap") {
+      e.zDraw = 0;
+      if (e.kaskaT <= 0) kaskaStartDive(state, e, target);
+      return;
+    }
+    if (step === "dash_gap") {
+      if (e.kaskaT <= 0) kaskaStartDash(state, e, target);
+      return;
+    }
+    if (step === "stun") {
+      e.vx = 0;
+      e.vy = 0;
+      e.zDraw = 0;
+      e.kaskaVuln = true;
+      e.flash = Math.max(e.flash || 0, 0.08);
+      if (e.kaskaT <= 0) {
+        e.kaskaVuln = false;
+        e.kaskaStep = "idle";
+        e.kaskaT = 0.45;
+      }
+      return;
+    }
+    e.kaskaStep = "idle";
+    e.kaskaT = 0.2;
+    e.kaskaVuln = false;
   }
 
   function invasaoHost(state, e) {
@@ -3664,7 +4218,7 @@
         target = { x: state.squad.x, y: state.squad.y, def: { size: 12 }, hp: 1, id: -1 };
       }
       var d = dist(e, target);
-      if (!(e.spinMode > 0 || e.seqMode > 0 || e.wormAct === "spin" || e.vultoAct === "strafe" || e.buried)) {
+      if (!(e.spinMode > 0 || e.seqMode > 0 || e.wormAct === "spin" || e.vultoAct === "strafe" || e.buried || e.kaskaStep === "spin" || e.kaskaStep === "spin_warn" || e.kaskaStep === "dash" || e.kaskaStep === "dash_warn" || e.kaskaStep === "hop" || e.kaskaStep === "stun" || kaskaAirborne(e))) {
         face(e, target.x, target.y, dt);
       }
       var kind = e.def.kind;
@@ -3911,6 +4465,25 @@
           e.x = host.x + Math.cos(oang) * orad;
           e.y = host.y + Math.sin(oang) * orad;
           e.rot = oang;
+          if (host.type === "chefe_comandante" && kaskaIsP2(host) && target && !kaskaAirborne(host)) {
+            e.shardT = (e.shardT || (0.35 + (e.orbitIndex || 0) * 0.22)) - dt;
+            if (e.shardT <= 0) {
+              e.shardT = 1.55;
+              var sx = target.x + (Math.random() - 0.5) * 64;
+              var sy = target.y + (Math.random() - 0.5) * 64;
+              if (!isFinite(sx)) sx = target.x;
+              if (!isFinite(sy)) sy = target.y;
+              kaskaWarn(state, {
+                kind: "airstrike",
+                x: sx,
+                y: sy,
+                t: 0.48,
+                r: 24,
+                dmg: Math.round((host.def.dmg || 28) * 0.55),
+                color: "#c48a20"
+              });
+            }
+          }
         }
       } else if (kind === "mini_beemote") {
         var preferM = 140;
@@ -3928,20 +4501,16 @@
         }
       } else if (kind === "boss_burst") {
         if (G.invasion) G.invasion.enterP2(state, e, "Kaska perde a carapaça");
-        if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
+        if (G.invasion && G.invasion.tookP2Hook(e)) {
           e.shellOff = true;
           e.shieldLockT = 0;
+          e.kaskaStep = "idle";
+          e.kaskaT = 0.55;
+          e.kaskaArrowI = 0;
+          e.kaskaDashI = 0;
+          e.kaskaDiveI = 0;
+          e.zDraw = 0;
           spawnDuskShields(state, e);
-          G.game.spawnAt(state, "kaska_sentry", e.x + 40, e.y, { noDrop: true });
-        }
-        if (e.invP2) {
-          if (G.invasion.countType(state, "kaska_sentry") < 1) {
-            e.sentryT = (e.sentryT == null ? 4 : e.sentryT) - dt;
-            if (e.sentryT <= 0) {
-              e.sentryT = 10;
-              G.game.spawnAt(state, "kaska_sentry", e.x + 36, e.y, { noDrop: true });
-            }
-          }
         }
         if (e.shieldLockT > 0) e.shieldLockT -= dt;
         if (!e.shieldInited) {
@@ -3954,122 +4523,7 @@
           if (!spawnDuskShields(state, e)) e.shieldPending = true;
         }
         if (e.shieldPending && spawnDuskShields(state, e)) e.shieldPending = false;
-        e.skillT -= dt;
-        if (e.spinMode > 0) {
-          var spinSpd = Math.PI * 2 / 1.25;
-          var drot = (e.spinMode === 1 ? spinSpd : -spinSpd) * dt;
-          e.rot = (e.rot || 0) + drot;
-          e.spinAcc = (e.spinAcc || 0) + Math.abs(drot);
-          e.spinShotT = (e.spinShotT || 0) - dt;
-          if (e.spinShotT <= 0) {
-            e.spinShotT = 0.07;
-            enemyFireAng(state, e, e.rot, "bullet");
-            enemyFireAng(state, e, e.rot + Math.PI, "bullet", { dmg: Math.round(e.def.dmg * 0.7) });
-          }
-          if (e.spinAcc >= Math.PI * 2) {
-            if (e.spinMode === 1) {
-              e.spinMode = 2;
-              e.spinAcc = 0;
-            } else {
-              e.spinMode = 0;
-              e.spinAcc = 0;
-              e.skillT = 4.2;
-              e.cooldown = 1.2;
-            }
-          }
-        } else if ((e.throwWindup || 0) > 0) {
-          e.throwWindup -= dt;
-          e.rot = Math.atan2(target.y - e.y, target.x - e.x);
-          if (e.throwWindup <= 0) {
-            flingCascaShields(state, e, target);
-            e.skillT = 3.6;
-          }
-        } else if ((e.chargeWindup || 0) > 0) {
-          e.chargeWindup = Math.max(0, e.chargeWindup - dt);
-          var cAng = e.chargeAim || Math.atan2(target.y - e.y, target.x - e.x);
-          e.rot = cAng;
-          e.flash = Math.max(e.flash || 0, 0.1);
-          e.x -= Math.cos(cAng) * 40 * dt;
-          e.y -= Math.sin(cAng) * 40 * dt;
-          G.clampPlay(e, state);
-          if (e.chargeWindup <= 0) {
-            var cSp = e.invP2 ? 720 : 520;
-            var end = rayExitPlay(G.playfield(state), e.x, e.y, Math.cos(cAng), Math.sin(cAng), 20);
-            e.vx = Math.cos(cAng) * cSp;
-            e.vy = Math.sin(cAng) * cSp;
-            e.cascaDashT = e.invP2 ? Math.max(0.35, end.dist / cSp) : 0.48;
-          }
-        } else if ((e.cascaDashT || 0) > 0) {
-          e.cascaDashT -= dt;
-          e.x += (e.vx || 0) * dt;
-          e.y += (e.vy || 0) * dt;
-          e.rot = Math.atan2(e.vy || 0, e.vx || 1);
-          G.clampPlay(e, state);
-          if (d < e.def.size + target.def.size + 6 && e.contactCd <= 0) {
-            e.contactCd = 0.2;
-            if (!(G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e))) {
-              hurt(state, target, Math.round(e.def.dmg * 1.25), e.x, e.y);
-            }
-          }
-          if (e.cascaDashT <= 0) e.skillT = 3.2;
-        } else if ((e.seqWindup || 0) > 0) {
-          e.seqWindup = Math.max(0, e.seqWindup - dt);
-          if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
-          e.flash = Math.max(e.flash || 0, 0.12);
-          if (e.seqWindup <= 0) startCascaSpin(e);
-        } else if ((e.seqBurst || 0) > 0) {
-          if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
-          e.seqBurstT = (e.seqBurstT || 0) - dt;
-          if (e.seqBurstT <= 0) {
-            e.seqBurst--;
-            e.seqBurstT = 0.11;
-            enemyFireAng(state, e, e.rot, "bullet", { muzzle: e.def.size * 0.9 });
-            enemyFireAng(state, e, e.rot + Math.PI, "bullet", { dmg: Math.round(e.def.dmg * 0.75), muzzle: e.def.size * 0.9 });
-          }
-        } else if (e.seqMode > 0) {
-          var seqSpd = Math.PI * 2 / 0.95;
-          var sdrot = seqSpd * dt;
-          e.rot = (e.rot || 0) + sdrot;
-          e.seqAcc = (e.seqAcc || 0) + sdrot;
-          e.seqShotT = (e.seqShotT || 0) - dt;
-          if (e.seqShotT <= 0) {
-            e.seqShotT = 0.08;
-            enemyFireAng(state, e, e.rot, "bullet", { muzzle: e.def.size * 0.9 });
-            enemyFireAng(state, e, e.rot + Math.PI, "bullet", { dmg: Math.round(e.def.dmg * 0.75), muzzle: e.def.size * 0.9 });
-          }
-          if (e.seqAcc >= Math.PI * 2) {
-            e.seqMode = 0;
-            e.seqAcc = 0;
-            e.cooldown = 1.15;
-          }
-        } else {
-          moveTowards(e, state.squad.x, state.squad.y, spd, dt);
-          if (e.skillT <= 0 && target) pickCascaSkill(state, e, target);
-          if (e.cooldown <= 0 && target && e.spinMode <= 0 && (e.throwWindup || 0) <= 0 && (e.chargeWindup || 0) <= 0) {
-            e.cascaVolley = (e.cascaVolley || 0) + 1;
-            e.cooldown = 1.25;
-            if (e.cascaVolley >= 3) {
-              e.cascaVolley = 0;
-              e.seqWindup = 0.85;
-              e.seqWindupMax = 0.85;
-              warnAt(state, {
-                kind: "spin",
-                x: e.x,
-                y: e.y,
-                t: 0.85,
-                max: 0.85,
-                r: (e.def.size || 32) + 42,
-                dmg: 0,
-                color: "#ffd24a",
-                followId: e.id
-              });
-              state.floaters.push(G.createFloater(e.x, e.y - 28, "giro", "#ffd24a"));
-            } else {
-              e.seqBurst = 4;
-              e.seqBurstT = 0;
-            }
-          }
-        }
+        tickKaskaP1(state, e, target, spd, dt, d);
       } else if (kind === "boss_charge") {
         e.miniT -= dt;
         if (e.miniT <= 0) {
@@ -4552,7 +5006,7 @@
         e.fuseCd = (e.fuseCd || 0) - dt;
       }
 
-      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && e.vultoAct !== "strafe" && e.wormAct !== "dive" && !e.buried) G.clampPlay(e, state);
+      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && e.vultoAct !== "strafe" && e.wormAct !== "dive" && !e.buried && !kaskaAirborne(e)) G.clampPlay(e, state);
     }
     separateBodies(state.enemies, state, true);
   }
@@ -4613,6 +5067,11 @@
         var t = list[j];
         if (!unitHittable(t) || p.hitIds[t.id]) continue;
         var rad = t.def.size + p.r;
+        if (p.kind === "horn") {
+          var hr = Number(p.r);
+          if (!isFinite(hr) || hr <= 0) hr = 10;
+          rad = t.def.size + Math.min(hr, 20);
+        }
         if (p.kind === "moonslash") rad += 16;
         var dx = t.x - p.x;
         var dy = t.y - p.y;
