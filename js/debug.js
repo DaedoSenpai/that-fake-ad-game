@@ -1,7 +1,8 @@
 (function (G) {
   G.debug = {
-    TAPS: 10,
-    taps: 0,
+    CODE: "HU3BR",
+    buf: "",
+    bufT: 0,
     selectedStage: 0,
     selectedInvasion: 0,
     dmgMul: 1,
@@ -13,14 +14,20 @@
     },
 
     resetTaps: function () {
-      this.taps = 0;
+      this.buf = "";
+      this.bufT = 0;
     },
 
-    tapCommander: function () {
-      if (this.isOn()) return "already";
-      this.taps += 1;
-      if (this.taps < this.TAPS) return this.taps;
-      this.taps = 0;
+    noteKey: function (ch) {
+      var now = Date.now();
+      if (now - (this.bufT || 0) > 2500) this.buf = "";
+      this.bufT = now;
+      ch = String(ch || "").toUpperCase();
+      if (ch.length !== 1) return 0;
+      this.buf = (this.buf + ch).slice(-this.CODE.length);
+      if (this.buf !== this.CODE) return this.buf.length;
+      this.buf = "";
+      if (this.isOn()) return "open";
       G.save.debugUnlocked = true;
       return "unlocked";
     },

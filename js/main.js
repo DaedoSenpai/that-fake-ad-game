@@ -520,15 +520,6 @@
     actList.innerHTML = "";
     G.drawPortrait(art, team, key, !known);
     codexSheet = team + ":" + key;
-    var artWrap = art && art.parentElement;
-    var secret = document.getElementById("codex-secret");
-    var isCmd = team === "player" && key === "comandante";
-    if (artWrap) artWrap.classList.toggle("debug-hot", isCmd);
-    if (secret) {
-      var showSecret = isCmd && G.debug && G.debug.isOn();
-      secret.textContent = showSecret ? "Debug Hu3 Mode · menu inicial" : "";
-      secret.classList.toggle("hidden", !showSecret);
-    }
 
     function addSkill(boxList, icon, title, extra, desc, hint) {
       var card = document.createElement("div");
@@ -630,9 +621,6 @@
   function closeCodexSheet() {
     document.getElementById("codex-modal").classList.add("hidden");
     codexSheet = null;
-    var artWrap = document.querySelector(".codex-art");
-    if (artWrap) artWrap.classList.remove("debug-hot", "tap-flash");
-    if (G.debug) G.debug.resetTaps();
   }
 
   function openMerge(pending) {
@@ -2087,36 +2075,6 @@
     if (ev.target.id === "codex-modal") closeCodexSheet();
   };
 
-  var cmdTapLock = 0;
-  var cmdTapFlash = 0;
-  document.querySelector(".codex-art").addEventListener("click", function () {
-    if (codexSheet !== "player:comandante" || !G.debug) return;
-    var now = Date.now();
-    if (now - cmdTapLock < 260) return;
-    cmdTapLock = now;
-    var result = G.debug.tapCommander();
-    if (result === "already") return;
-    var wrap = document.querySelector(".codex-art");
-    if (wrap) {
-      wrap.classList.remove("tap-flash");
-      if (cmdTapFlash) clearTimeout(cmdTapFlash);
-      void wrap.offsetWidth;
-      wrap.classList.add("tap-flash");
-      cmdTapFlash = setTimeout(function () {
-        wrap.classList.remove("tap-flash");
-      }, 180);
-    }
-    G.audio.ui();
-    if (result === "unlocked") {
-      syncIfcaraButton();
-      var secret = document.getElementById("codex-secret");
-      if (secret) {
-        secret.textContent = "Debug Hu3 Mode · menu inicial";
-        secret.classList.remove("hidden");
-      }
-    }
-  });
-
   document.getElementById("btn-ifcara").onclick = function () {
     G.audio.ui();
     openDebug();
@@ -2188,6 +2146,19 @@
   window.addEventListener("keydown", function (ev) {
     var tag = ((ev.target && ev.target.tagName) || "").toLowerCase();
     if (tag === "input" || tag === "textarea" || tag === "select" || (ev.target && ev.target.isContentEditable)) return;
+    if (G.debug && !ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key && /^[a-zA-Z0-9]$/.test(ev.key)) {
+      var codeResult = G.debug.noteKey(ev.key);
+      if (codeResult === "unlocked") {
+        syncIfcaraButton();
+        if (state.mode === "menu") {
+          G.audio.ui();
+          openDebug();
+        }
+      } else if (codeResult === "open" && state.mode === "menu") {
+        G.audio.ui();
+        openDebug();
+      }
+    }
     if (ev.key === "Escape") {
       if (!document.getElementById("codex-modal").classList.contains("hidden")) {
         closeCodexSheet();
@@ -2376,6 +2347,21 @@
   window.addEventListener("touchmove", onMove, { passive: false });
   window.addEventListener("touchend", onUp, { passive: false });
   window.addEventListener("resize", resize);
+  window.addEventListener("wheel", function (ev) {
+    if (ev.ctrlKey || ev.metaKey) ev.preventDefault();
+  }, { passive: false, capture: true });
+  window.addEventListener("keydown", function (ev) {
+    if (!(ev.ctrlKey || ev.metaKey)) return;
+    var k = ev.key;
+    var c = ev.code;
+    if (
+      k === "+" || k === "-" || k === "=" || k === "_" || k === "0" ||
+      c === "Equal" || c === "Minus" || c === "Digit0" ||
+      c === "NumpadAdd" || c === "NumpadSubtract" || c === "Numpad0"
+    ) {
+      ev.preventDefault();
+    }
+  }, true);
 
   function applySaveAudio() {
     G.audio.muted = !!G.save.muted;

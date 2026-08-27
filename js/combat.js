@@ -197,6 +197,10 @@
       unit.flash = 0.06;
       return;
     }
+    if (unit.team === "player" && (state.dashActive || (state.dashT || 0) > 0)) {
+      unit.flash = 0.06;
+      return;
+    }
     if (unit.stowed) return;
     if (fromPlayer && unit.stolen) return;
     var trueDmg = opts && opts.trueDmg;
@@ -3144,7 +3148,7 @@
   var SQUAD_SPEED = 210;
   var DASH_BOOST = 3.5;
   var DASH_DUR = 0.34;
-  var DASH_CD = 1.05;
+  var DASH_CD = 0.45;
   var DASH_SLIDE = 0.22;
   var AIM_SNAP = 64;
 
