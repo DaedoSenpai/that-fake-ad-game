@@ -10,7 +10,7 @@
     {
       name: "Campo aberto",
       theme: "field",
-      bg: "img/bg-01-campo.png",
+      bg: "img/cenarios/bg-01-campo.png",
       waves: [
         [{ type: "infantaria", n: 3 }],
         [{ type: "infantaria", n: 4 }, { type: "corredor", n: 2 }],
@@ -21,7 +21,7 @@
     {
       name: "Linha de frente",
       theme: "field",
-      bg: "img/bg-02-linha.png",
+      bg: "img/cenarios/bg-02-linha.png",
       waves: [
         [{ type: "infantaria", n: 5 }, { type: "atirador", n: 1 }],
         [{ type: "corredor", n: 5 }, { type: "escudeiro", n: 1 }, { type: "medico", n: 1 }],
@@ -32,7 +32,7 @@
     {
       name: "Ruínas da cidade",
       theme: "city",
-      bg: "img/bg-03-ruinas.png",
+      bg: "img/cenarios/bg-03-ruinas.png",
       waves: [
         [{ type: "infantaria", n: 5 }, { type: "escudeiro", n: 1 }, { type: "sombra", n: 2 }],
         [{ type: "atirador", n: 3 }, { type: "corredor", n: 4 }, { type: "fragmento", n: 2 }],
@@ -44,7 +44,7 @@
     {
       name: "Avenida sitiada",
       theme: "city",
-      bg: "img/bg-04-avenida.png",
+      bg: "img/cenarios/bg-04-avenida.png",
       waves: [
         [{ type: "drone", n: 4 }, { type: "kamikaze", n: 3 }, { type: "sombra", n: 2 }],
         [{ type: "escudeiro", n: 3 }, { type: "medico", n: 1 }, { type: "artilharia", n: 1 }],
@@ -55,7 +55,7 @@
     {
       name: "Deserto",
       theme: "desert",
-      bg: "img/bg-05-deserto.png",
+      bg: "img/cenarios/bg-05-deserto.png",
       waves: [
         [{ type: "corredor", n: 7 }, { type: "criomante", n: 2 }],
         [{ type: "tanque", n: 1 }, { type: "ninho", n: 1 }, { type: "drone", n: 3 }],
@@ -67,7 +67,7 @@
     {
       name: "Dunas escaldantes",
       theme: "desert",
-      bg: "img/bg-06-dunas.png",
+      bg: "img/cenarios/bg-06-dunas.png",
       waves: [
         [{ type: "drone", n: 5 }, { type: "sombra", n: 3 }, { type: "criomante", n: 2 }],
         [{ type: "tanque", n: 2 }, { type: "artilharia", n: 2 }, { type: "parasita", n: 3 }],
@@ -78,7 +78,7 @@
     {
       name: "Base noturna",
       theme: "night",
-      bg: "img/bg-07-base.png",
+      bg: "img/cenarios/bg-07-base.png",
       waves: [
         [{ type: "sombra", n: 5 }, { type: "sniper", n: 2 }],
         [{ type: "ninho", n: 1 }, { type: "parasita", n: 4 }, { type: "criomante", n: 2 }],
@@ -90,7 +90,7 @@
     {
       name: "Núcleo inimigo",
       theme: "night",
-      bg: "img/bg-08-nucleo.png",
+      bg: "img/cenarios/bg-08-nucleo.png",
       waves: [
         [{ type: "escudeiro", n: 3 }, { type: "sniper", n: 2 }, { type: "artilharia", n: 2 }, { type: "medico", n: 1 }],
         [{ type: "ninho", n: 2 }, { type: "tanque", n: 1 }, { type: "kamikaze", n: 5 }, { type: "parasita", n: 3 }],
@@ -394,7 +394,7 @@
       if (!state.defeat) G.audio.sync(state, dt);
       if (state.defeat) return "play";
 
-      if (!state.spawnQueue.length && !state.waitingClear && !state.stageOutro && !state.bossCutscene) {
+      if (!state.spawnQueue.length && !state.waitingClear && !state.stageOutro && !state.bossCutscene && !state.glinderDeath) {
         var hostilesLeft = 0;
         for (var he = 0; he < state.enemies.length; he++) {
           if (state.enemies[he].hp > 0 && !state.enemies[he].stolen) hostilesLeft++;
@@ -450,12 +450,16 @@
             state.vacuumLoot = false;
           }
         } else if (outro.phase === "wait") {
-          if (outro.t >= 0.7) {
-            outro.phase = "march";
+          if (outro.t >= 0.55) {
+            outro.phase = "fade";
             outro.t = 0;
-            var z = state.camZoom || 1;
-            outro.exitY = (0 - state.H / 2) / z + state.H / 2 - 120;
-            outro.step = 460;
+            outro.fadeMax = 1.2;
+          }
+        } else if (outro.phase === "fade") {
+          if (outro.t >= (outro.fadeMax || 1.2)) {
+            state.stageOutro = null;
+            state.vacuumLoot = false;
+            return "stageClear";
           }
         } else if (outro.phase === "march") {
           var step = (outro.step || 460) * dt;
@@ -479,6 +483,8 @@
       for (var c = 0; c < state.units.length; c++) {
         if (state.units[c].commander && state.units[c].hp > 0) cmdAlive = true;
       }
+      if (state.glinderBurn && !state.glinderAshDefeat) return "play";
+      if (state.glinderDeath) return "play";
       if (!cmdAlive || state.units.length === 0) return "dead";
       return "play";
     }

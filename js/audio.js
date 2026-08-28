@@ -108,6 +108,13 @@
       });
     },
 
+    laser: function () {
+      this.play(function (ctx) {
+        tone(ctx, 980, 0.09, "sawtooth", 0.055, 220);
+        tone(ctx, 1640, 0.07, "square", 0.03, 420);
+      });
+    },
+
     toss: function () {
       this.play(function (ctx) {
         tone(ctx, 420, 0.12, "square", 0.028, 160);
@@ -154,6 +161,32 @@
       this.play(function (ctx) {
         tone(ctx, 140, 0.18, "sawtooth", 0.05, 50);
       });
+    },
+
+    tinnitus: function () {
+      var self = this;
+      this._ringDuck = 3.2;
+      this.play(function (ctx) {
+        var now = ctx.currentTime;
+        function ring(freq, gain, dur) {
+          var osc = ctx.createOscillator();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now);
+          var g = ctx.createGain();
+          var m = G.audio.master || 0;
+          g.gain.setValueAtTime(0.0001, now);
+          g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain * m), now + 0.08);
+          g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain * 0.42 * m), now + 0.85);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+          osc.connect(g);
+          g.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + dur);
+        }
+        ring(4120, 0.1, 3.25);
+        ring(4310, 0.055, 2.7);
+      });
+      if (self._levels) self._levels();
     },
 
     ui: function () {
@@ -264,6 +297,9 @@
     },
 
     tick: function (dt) {
+      if (this._ringDuck > 0) {
+        this._ringDuck = Math.max(0, this._ringDuck - (dt || 0.016));
+      }
       if (!this._cross) {
         this._levels();
         return;
@@ -309,6 +345,10 @@
 
     _levels: function () {
       var v = this.muted || this._held ? 0 : this.bgmVol * (this.master == null ? 1 : this.master);
+      if ((this._ringDuck || 0) > 0) {
+        var duck = Math.min(1, this._ringDuck / 3.2);
+        v *= 1 - duck * 0.72;
+      }
       if (!this._cur) return;
       var k = this._fade;
       if (k < 0) k = 0;

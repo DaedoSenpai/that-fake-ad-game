@@ -85,6 +85,7 @@
     overlay.classList.toggle("field-visible", name === "cards");
     overlay.classList.remove("defeat", "lit");
     hud.classList.remove("defeat-hide");
+    hud.style.opacity = "";
     hud.classList.toggle("hidden", name !== "play");
     if (name !== "over") {
       state.defeat = null;
@@ -163,7 +164,13 @@
     }
     if (cmd) {
       cmd.hp = 0;
-      cmd.fallT = 0.001;
+      if (state.glinderAshDefeat) {
+        cmd.ashT = Math.max(cmd.ashT || 0, 1);
+        cmd.fallT = 0;
+        cmd.burnKill = cmd.burnKill || 3;
+      } else {
+        cmd.fallT = 0.001;
+      }
       cmd.flash = 0.35;
       cmd.held = false;
       cmd.stowed = false;
@@ -193,6 +200,7 @@
       t: 0,
       overlay: false,
       hit: false,
+      kind: state.glinderAshDefeat ? "ash" : "fall",
       cmdId: cmd ? cmd.id : 0,
       cx: cmd ? cmd.x : state.squad.x,
       cy: cmd ? cmd.y : state.squad.y,
@@ -205,7 +213,7 @@
     closePause();
     closeCodexSheet();
     hud.classList.add("defeat-hide");
-    state.camZoomTo = 4.85;
+    state.camZoomTo = state.glinderAshDefeat ? 3.4 : 4.85;
     state.shake = Math.max(state.shake || 0, 6);
     if (cmd) G.burst(state, cmd.x, cmd.y, "#ffe08a", 18, 90);
     if (!state.debugFight) {
@@ -257,12 +265,13 @@
         y: oy + (cmd.y - oy) * lookK
       };
     }
-    if (cmd && !d.hit && (cmd.fallT || 0) >= 2.52) {
+    if (cmd && !d.hit && (cmd.fallT || 0) >= 2.52 && d.kind !== "ash") {
       d.hit = true;
       state.shake = Math.max(state.shake || 0, 8);
       spawnFallDust(cmd);
     }
-    if (d.t >= 3.45) presentDefeatOverlay();
+    if (d.kind === "ash" && d.t >= 2.15) presentDefeatOverlay();
+    else if (d.kind !== "ash" && d.t >= 3.45) presentDefeatOverlay();
   }
 
   function syncIfcaraButton() {
@@ -1412,7 +1421,7 @@
     var boss = null;
     for (var b = 0; b < state.enemies.length; b++) {
       var be = state.enemies[b];
-      if (!be.def || !be.def.boss || be.hp <= 0 || be.fake) continue;
+      if (!be.def || !be.def.boss || be.hp <= 0 || be.fake || be.glinderDying) continue;
       if (be.type === "chefe_final") {
         boss = be;
         break;
@@ -1784,6 +1793,7 @@
       if (G.tactics && G.tactics.drawGround) G.tactics.drawGround(ctx, state);
       if (G.drawBossWorld) G.drawBossWorld(ctx, state);
       for (var ct = 0; ct < state.enemies.length; ct++) {
+        if (state.glinderMaze && state.glinderMaze.phase !== "done") break;
         if (G.drawChargeTelegraph) G.drawChargeTelegraph(ctx, state.enemies[ct]);
       }
       if (state.booms) {
@@ -1823,7 +1833,10 @@
       }
       for (var d = 0; d < state.drops.length; d++) G.drawDrop(ctx, state.drops[d]);
       for (var e = 0; e < state.enemies.length; e++) {
-        try { G.drawEnemy(ctx, state.enemies[e]); } catch (ee) {}
+        var enDraw = state.enemies[e];
+        if (state.glinderMaze && state.glinderMaze.phase !== "done") continue;
+        if (enDraw.mazeHide) continue;
+        try { G.drawEnemy(ctx, enDraw); } catch (ee) {}
       }
       for (var au = 0; au < state.units.length; au++) {
         if (!state.units[au].commander && !state.units[au].stowed) G.drawPlayerUnit(ctx, state.units[au], state.time);
@@ -1836,6 +1849,22 @@
       ctx.restore();
     }
     if (G.drawArenaDark) G.drawArenaDark(ctx, state);
+    if ((state.glinderHeat || 0) > 0.04) {
+      var hh = Math.min(1, state.glinderHeat);
+      ctx.save();
+      ctx.fillStyle = "rgba(255, 70, 18, " + (hh * 0.12) + ")";
+      ctx.fillRect(0, 0, state.W, state.H);
+      var hg = ctx.createRadialGradient(state.W / 2, state.H * 0.2, 20, state.W / 2, state.H / 2, Math.max(state.W, state.H) * 0.7);
+      hg.addColorStop(0, "rgba(255, 180, 40, " + (hh * 0.08) + ")");
+      hg.addColorStop(1, "rgba(80, 0, 0, " + (hh * 0.16) + ")");
+      ctx.fillStyle = hg;
+      ctx.fillRect(0, 0, state.W, state.H);
+      ctx.restore();
+    }
+    if ((state.vultoBlind || 0) > 0) {
+      ctx.fillStyle = "rgba(12, 4, 8, " + Math.min(0.92, state.vultoBlind * 0.38) + ")";
+      ctx.fillRect(0, 0, state.W, state.H);
+    }
     if (cmdDraw) G.drawPlayerUnit(ctx, cmdDraw, state.time);
     if ((state.vultoDark || 0) > 0.15 || (state.vultoBlind || 0) > 0) drawAim();
 
@@ -1962,6 +1991,20 @@
         var cs = pt.size;
         ctx.fillRect(pt.x - cs * 0.22, pt.y - cs, cs * 0.44, cs * 2);
         ctx.fillRect(pt.x - cs, pt.y - cs * 0.22, cs * 2, cs * 0.44);
+      } else if (pt.ash) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        var ashA = Math.max(0, pt.life / (pt.max || 1));
+        ctx.globalAlpha = ashA * 0.95;
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.ellipse(pt.x, pt.y, pt.size * 0.55, pt.size * 1.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 236, 180, " + (0.62 * ashA) + ")";
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, Math.max(0.8, pt.size * 0.36), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       } else if (pt.flame) {
         ctx.save();
         ctx.translate(pt.x, pt.y);
@@ -2041,6 +2084,87 @@
       ctx.fillText(state.banner.text, state.W / 2, state.H / 2);
       ctx.restore();
     }
+    if ((state.glinderNovaT || 0) > 0 && !state.defeat) {
+      var nt = state.glinderNovaT;
+      var nmax = state.glinderNovaMax || 3;
+      var num = Math.max(1, Math.ceil(nt));
+      var pulse = 0.7 + Math.sin(state.time * 14) * 0.3;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "bold 72px Segoe UI, sans-serif";
+      ctx.strokeStyle = "rgba(20, 0, 0, 0.85)";
+      ctx.lineWidth = 8;
+      ctx.strokeText(String(num), state.W / 2, 78);
+      ctx.fillStyle = num <= 1 ? "#ff3a18" : "#ffd24a";
+      ctx.globalAlpha = 0.55 + pulse * 0.45;
+      ctx.fillText(String(num), state.W / 2, 78);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(20, 4, 0, 0.55)";
+      ctx.fillRect(state.W / 2 - 70, 118, 140, 8);
+      ctx.fillStyle = num <= 1 ? "#ff3a18" : "#ff9a2a";
+      ctx.fillRect(state.W / 2 - 70, 118, 140 * Math.max(0, Math.min(1, nt / nmax)), 8);
+      ctx.restore();
+    }
+    if (state.glinderMaze && state.glinderMaze.phase === "run" && !state.defeat) {
+      var mt = Math.max(0, state.glinderMaze.timer);
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "bold 56px Segoe UI, sans-serif";
+      ctx.strokeStyle = "rgba(20, 0, 0, 0.85)";
+      ctx.lineWidth = 7;
+      ctx.strokeText(mt.toFixed(1), state.W / 2, 72);
+      ctx.fillStyle = mt < 8 ? "#ff3a18" : "#ffd24a";
+      ctx.fillText(mt.toFixed(1), state.W / 2, 72);
+      ctx.font = "bold 15px Segoe UI, sans-serif";
+      ctx.fillStyle = "#ffe08a";
+      ctx.fillText("ENCONTRE O ESQUADRÃO", state.W / 2, 112);
+      ctx.restore();
+    }
+    if (state.glinderRub && state.glinderRub.close && !state.defeat && !(state.glinderMaze && state.glinderMaze.phase !== "done")) {
+      var rub = state.glinderRub;
+      var rubY = state.H * 0.5;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (rub.near) {
+        ctx.font = "bold 64px Segoe UI, sans-serif";
+        ctx.strokeStyle = "rgba(20, 0, 0, 0.8)";
+        ctx.lineWidth = 8;
+        ctx.strokeText((rub.pct | 0) + "%", state.W / 2, rubY);
+        ctx.fillStyle = "#ffd24a";
+        ctx.globalAlpha = 0.75 + Math.sin(state.time * 14) * 0.25;
+        ctx.fillText((rub.pct | 0) + "%", state.W / 2, rubY);
+        ctx.globalAlpha = 1;
+        ctx.font = "bold 16px Segoe UI, sans-serif";
+        ctx.fillStyle = "#ffe08a";
+        ctx.fillText("E  ·  acender", state.W / 2, rubY + 46);
+        ctx.fillStyle = "rgba(20, 4, 0, 0.55)";
+        ctx.fillRect(state.W / 2 - 80, rubY + 64, 160, 10);
+        ctx.fillStyle = "#ff9a2a";
+        ctx.fillRect(state.W / 2 - 80, rubY + 64, 160 * Math.max(0, Math.min(1, (rub.pct || 0) / 100)), 10);
+      }
+      ctx.restore();
+    }
+    if ((state.glinderSuperT || 0) > 0 && !state.defeat) {
+      var st = state.glinderSuperT;
+      var smax = state.glinderSuperMax || 2.05;
+      var snap = st < 0.42;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = snap ? "bold 34px Segoe UI, sans-serif" : "bold 28px Segoe UI, sans-serif";
+      ctx.fillStyle = snap ? "#fff4c4" : "#ffe08a";
+      ctx.globalAlpha = snap ? (0.55 + Math.sin(state.time * 28) * 0.45) : (0.7 + Math.sin(state.time * 22) * 0.3);
+      ctx.fillText(snap ? "SHIFT  ·  AGORA" : "SHIFT  ·  no estalo", state.W / 2, 70);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "rgba(20, 0, 0, 0.55)";
+      ctx.fillRect(state.W / 2 - 80, 92, 160, 8);
+      ctx.fillStyle = snap ? "#ff3a18" : "#ffd24a";
+      ctx.fillRect(state.W / 2 - 80, 92, 160 * Math.max(0, Math.min(1, st / smax)), 8);
+      ctx.restore();
+    }
     if (state.defeat && !state.defeat.overlay) {
       var vt = Math.max(0, Math.min(1, state.defeat.t / 1.35));
       vt = vt * vt * (3 - 2 * vt);
@@ -2053,6 +2177,25 @@
       g.addColorStop(1, "rgba(4, 6, 12, " + (0.45 + vt * 0.42) + ")");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, state.W, state.H);
+    }
+    if ((state.glinderFlash || 0) > 0) {
+      var fa = Math.min(1, state.glinderFlash);
+      ctx.fillStyle = "rgba(255, 252, 245, " + fa + ")";
+      ctx.fillRect(0, 0, state.W, state.H);
+      if (fa > 0.15) {
+        var fg = ctx.createRadialGradient(state.W / 2, state.H / 2, 20, state.W / 2, state.H / 2, Math.max(state.W, state.H) * 0.72);
+        fg.addColorStop(0, "rgba(255, 255, 255, " + (fa * 0.35) + ")");
+        fg.addColorStop(1, "rgba(255, 210, 160, 0)");
+        ctx.fillStyle = fg;
+        ctx.fillRect(0, 0, state.W, state.H);
+      }
+    }
+    if (state.stageOutro && state.stageOutro.phase === "fade") {
+      var fo = Math.max(0, Math.min(1, state.stageOutro.t / (state.stageOutro.fadeMax || 1.2)));
+      fo = fo * fo * (3 - 2 * fo);
+      ctx.fillStyle = "rgba(6, 8, 16, " + fo + ")";
+      ctx.fillRect(0, 0, state.W, state.H);
+      hud.style.opacity = String(Math.max(0, 1 - fo));
     }
   }
 
@@ -2272,6 +2415,9 @@
         ev.preventDefault();
       }
       if (ev.key === "Shift" && !ev.repeat && !state.paused && !state.defeat) G.combat.tryDash(state);
+      if ((ev.code === "KeyE" || ev.key === "e" || ev.key === "E") && !ev.repeat && !state.paused && !state.defeat) {
+        if (G.combat.rubGlinderFire) G.combat.rubGlinderFire(state);
+      }
     }
     if (state.mode !== "play" || state.paused) return;
     var n = ev.key === "1" || ev.key === "2" || ev.key === "3" || ev.key === "4" || ev.key === "5" || ev.key === "6" || ev.key === "7" || ev.key === "8" || ev.key === "9"

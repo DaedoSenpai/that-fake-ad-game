@@ -180,6 +180,10 @@
 
   function hurt(state, unit, amount, srcX, srcY, fromPlayer, opts) {
     if (unit.hp <= 0) return;
+    if (unit.type === "fogueira" && unit.glinderCoal) {
+      unit.flash = 0.06;
+      return;
+    }
     if (unit.immortal) {
       unit.flash = 0.06;
       G.burst(state, unit.x, unit.y, "#ffe08a", 3, 28);
@@ -197,7 +201,7 @@
       unit.flash = 0.06;
       return;
     }
-    if (unit.team === "player" && (state.dashActive || (state.dashT || 0) > 0)) {
+    if (unit.team === "player" && (state.dashActive || (state.dashT || 0) > 0) && !(opts && opts.ignoreDash)) {
       unit.flash = 0.06;
       return;
     }
@@ -283,6 +287,10 @@
     }
     if (unit.hp <= 0) {
       if (unit.team === "enemy" && advanceCorePhase(state, unit)) return;
+      if (unit.type === "chefe_vulto" && !unit.glinderDying) {
+        startGlinderDeath(state, unit);
+        return;
+      }
       unit.hp = 0;
       if (unit.team === "enemy") killEnemy(state, unit);
     }
@@ -603,7 +611,9 @@
         hitsLeft: extra.hitsLeft || 1,
         fromBoss: !!(e.def && e.def.boss),
         fromId: e.id,
-        homing: !!extra.homing
+        homing: !!extra.homing,
+        boomR: extra.boomR || 0,
+        burn: !!extra.burn
       });
     if (extra.slashLen) proj.slashLen = extra.slashLen;
     if (extra.exposed) proj.exposed = true;
@@ -965,6 +975,7 @@
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
       if (u.hp <= 0 || u.stowed) continue;
+      if (glinderCoverHidesPoint(state, x, y, u.x, u.y)) continue;
       var hitR = halfW + ((u.def && u.def.size) || 10) * 0.55;
       if (inBeam(u.x, u.y, x, y, ang, range, hitR)) hurt(state, u, dmg, x, y);
     }
@@ -2773,6 +2784,1282 @@
     e.skillT = 2.2;
   }
 
+  function burnUnit(u, sec, dps) {
+    if (!u || u.hp <= 0 || u.stowed) return;
+    u.burnT = Math.max(u.burnT || 0, sec || 5);
+    u.burnDps = Math.max(u.burnDps || 0, dps || 8);
+  }
+
+  function burnSquadArea(state, x, y, r, dps) {
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.hp <= 0 || u.stowed) continue;
+      var dx = u.x - x;
+      var dy = u.y - y;
+      if (dx * dx + dy * dy <= r * r) burnUnit(u, 5, dps);
+    }
+  }
+
+  function burnSquadBeam(state, x, y, ang, range, halfW, dps) {
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.hp <= 0 || u.stowed) continue;
+      if (glinderCoverHidesPoint(state, x, y, u.x, u.y)) continue;
+      var hitR = halfW + ((u.def && u.def.size) || 10) * 0.55;
+      if (inBeam(u.x, u.y, x, y, ang, range, hitR)) burnUnit(u, 5, dps);
+    }
+  }
+
+  function lightGlinderFire(state, e) {
+    if (!e || e.lit) return;
+    e.lit = true;
+    e.glinderCoal = true;
+    e.rub = 1;
+    e.rubPct = 100;
+    G.burst(state, e.x, e.y, "#ffd24a", 22, 120);
+    G.burst(state, e.x, e.y, "#ff6a18", 16, 90);
+    state.floaters.push(G.createFloater(e.x, e.y - 22, "acesa", "#ffd24a"));
+    state.banner = { text: "A luz volta", t: 1.8 };
+    state.glinderNight = false;
+    state.glinderNightFade = true;
+    state.glinderRub = null;
+  }
+
+  function endGlinderNight(state, e) {
+    state.glinderNight = false;
+    state.glinderNightFade = false;
+    state.vultoDark = 0;
+    state.glinderNightT = 0;
+    state.glinderRub = null;
+    clearGlinderFires(state);
+    if (e && e.vultoAct === "dark") {
+      e.vultoAct = "";
+      e.vultoT = Math.max(e.vultoT || 0, 0.35);
+    }
+  }
+
+  function glinderCoalOf(state) {
+    var i;
+    for (i = 0; i < (state.enemies || []).length; i++) {
+      var f = state.enemies[i];
+      if (f.hp > 0 && f.glinderCoal && !f.lit) return f;
+    }
+    return null;
+  }
+
+  function tickGlinderRub(state, dt) {
+    state.glinderRub = null;
+    if (!state.glinderNight) return;
+    var coal = glinderCoalOf(state);
+    if (!coal) return;
+    var cmd = commanderOf(state);
+    var px = cmd ? cmd.x : state.squad.x;
+    var py = cmd ? cmd.y : state.squad.y;
+    var d = Math.hypot(px - coal.x, py - coal.y);
+    var near = d < 54;
+    coal.rubPct = Math.max(0, Math.min(100, coal.rubPct || 0));
+    coal.rubNear = near;
+    state.glinderRub = {
+      x: coal.x,
+      y: coal.y,
+      d: d,
+      near: near,
+      close: d < 78,
+      progress: (coal.rubPct || 0) / 100,
+      pct: coal.rubPct || 0
+    };
+  }
+
+  function rubGlinderFire(state) {
+    if (!state || !state.glinderNight || state.defeat) return false;
+    if (state.paused || (G.invasion && G.invasion.cinematic(state))) return false;
+    var coal = glinderCoalOf(state);
+    if (!coal) return false;
+    var cmd = commanderOf(state);
+    var px = cmd ? cmd.x : state.squad.x;
+    var py = cmd ? cmd.y : state.squad.y;
+    if (Math.hypot(px - coal.x, py - coal.y) > 54) return false;
+    coal.rubPct = Math.min(100, (coal.rubPct || 0) + 10);
+    coal.rub = coal.rubPct / 100;
+    G.burst(state, coal.x, coal.y - 6, "#ff9a2a", 6, 40);
+    G.burst(state, coal.x + (Math.random() - 0.5) * 10, coal.y - 8, "#ffe08a", 4, 28);
+    if (G.audio && G.audio.hit) G.audio.hit();
+    if (coal.rubPct >= 100) {
+      lightGlinderFire(state, coal);
+      if (G.audio && G.audio.explosion) G.audio.explosion();
+    }
+    return true;
+  }
+
+  function tickGlinderBeams(state, dt) {
+    if (!state.glinderBeams || !state.glinderBeams.length) return;
+    var i;
+    for (i = state.glinderBeams.length - 1; i >= 0; i--) {
+      state.glinderBeams[i].t -= dt;
+      if (state.glinderBeams[i].t <= 0) state.glinderBeams.splice(i, 1);
+    }
+  }
+
+  function clearGlinderFires(state) {
+    for (var i = 0; i < (state.enemies || []).length; i++) {
+      var f = state.enemies[i];
+      if (f.glinderCoal) {
+        f.hp = 0;
+        f.noDrop = true;
+      }
+    }
+  }
+
+  function spawnGlinderCoal(state, e) {
+    clearGlinderFires(state);
+    var b = G.playfield(state);
+    var pad = 58;
+    var corners = [
+      { x: b.x0 + pad, y: b.y0 + pad },
+      { x: b.x1 - pad, y: b.y0 + pad },
+      { x: b.x0 + pad, y: b.y1 - pad },
+      { x: b.x1 - pad, y: b.y1 - pad }
+    ];
+    var best = corners[0];
+    var bestD = -1;
+    var sx = (e && e.x) || state.squad.x;
+    var sy = (e && e.y) || state.squad.y;
+    for (var i = 0; i < corners.length; i++) {
+      var d1 = Math.hypot(corners[i].x - state.squad.x, corners[i].y - state.squad.y);
+      var d2 = Math.hypot(corners[i].x - sx, corners[i].y - sy);
+      var score = Math.min(d1, d2);
+      if (score > bestD) {
+        bestD = score;
+        best = corners[i];
+      }
+    }
+    G.game.spawnAt(state, "fogueira", best.x, best.y, {
+      noDrop: true,
+      glinderCoal: true,
+      lit: false,
+      immortal: true
+    });
+    state.banner = { text: "Ache a fogueira · aperte E", t: 2.4 };
+  }
+
+  function glinderCoverOf(state, e) {
+    return (e && e.cover) || state.glinderCover || null;
+  }
+
+  function glinderCoverHidesPoint(state, ox, oy, px, py, e) {
+    var c = glinderCoverOf(state, e);
+    if (!c) return false;
+    if (Math.hypot(px - c.x, py - c.y) < (c.r || 54) + 24) return true;
+    var fx = c.x - ox;
+    var fy = c.y - oy;
+    var coverDist = Math.hypot(fx, fy) || 1;
+    var pDist = Math.hypot(px - ox, py - oy);
+    if (pDist + 8 < coverDist) return false;
+    var coverAng = Math.atan2(fy, fx);
+    var pAng = Math.atan2(py - oy, px - ox);
+    var half = Math.asin(Math.min(0.95, ((c.r || 54) + 18) / coverDist));
+    var diff = Math.abs(Math.atan2(Math.sin(pAng - coverAng), Math.cos(pAng - coverAng)));
+    return diff < half * 1.2;
+  }
+
+  function glinderCoverSafeFrom(state, ox, oy, e) {
+    return glinderCoverHidesPoint(state, ox, oy, state.squad.x, state.squad.y, e);
+  }
+
+  function glinderCoverClipRange(state, ox, oy, ang, range) {
+    var c = state.glinderCover;
+    if (!c) return range;
+    var r = (c.r || 54) + 8;
+    var fx = Math.cos(ang);
+    var fy = Math.sin(ang);
+    var dx = ox - c.x;
+    var dy = oy - c.y;
+    var b = dx * fx + dy * fy;
+    var disc = b * b - (dx * dx + dy * dy - r * r);
+    if (disc < 0) return range;
+    var t = -b - Math.sqrt(disc);
+    if (t < 4) t = -b + Math.sqrt(disc);
+    if (!(t > 4) || t >= range) return range;
+    return t;
+  }
+
+  function glinderCoverSafe(state, e) {
+    var b = G.playfield(state);
+    return glinderCoverSafeFrom(state, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, e);
+  }
+
+  function glinderCoverBlocksShot(state, p) {
+    if (!p || p.kind !== "darkember") return false;
+    var c = state.glinderCover;
+    if (!c) return false;
+    var dx = p.x - c.x;
+    var dy = p.y - c.y;
+    var rad = (c.r || 54) + (p.r || 4) + 6;
+    return dx * dx + dy * dy <= rad * rad;
+  }
+
+  function fireGlinderLaser(state, e, target, dual) {
+    if (!target) return;
+    var ang = Math.atan2(target.y - e.y, target.x - e.x);
+    var beamLen = vultoBeamLen(state);
+    e.rot = ang;
+    var dmg = Math.round(e.def.dmg * 0.85);
+    function beamFrom(ox, oy, bang) {
+      var hitLen = glinderCoverClipRange(state, ox, oy, bang, beamLen);
+      var blocked = hitLen < beamLen - 2;
+      hurtBeam(state, ox, oy, bang, hitLen, 14, dmg);
+      burnSquadBeam(state, ox, oy, bang, hitLen, 16, Math.max(6, e.def.dmg * 0.28));
+      var ca = Math.cos(bang);
+      var sa = Math.sin(bang);
+      if (!state.glinderBeams) state.glinderBeams = [];
+      state.glinderBeams.push({
+        x: ox,
+        y: oy,
+        ang: bang,
+        len: hitLen,
+        t: 0.28,
+        max: 0.28,
+        w: 18
+      });
+      var sparks = blocked ? 22 : 36;
+      for (var n = 0; n < sparks; n++) {
+        var along = (n / Math.max(1, sparks - 1)) * hitLen;
+        var jitter = (Math.random() - 0.5) * 14;
+        state.particles.push({
+          x: ox + ca * along - sa * jitter,
+          y: oy + sa * along + ca * jitter,
+          vx: ca * (280 + Math.random() * 220) - sa * jitter * 8,
+          vy: sa * (280 + Math.random() * 220) + ca * jitter * 8,
+          life: 0.18 + Math.random() * 0.16,
+          max: 0.34,
+          size: n < 4 ? 10 : 3.2 + Math.random() * 5,
+          color: n < 6 ? "#fff4c4" : (Math.random() > 0.35 ? "#ff6a18" : "#ffe060")
+        });
+      }
+      if (blocked) {
+        var ix = ox + ca * hitLen;
+        var iy = oy + sa * hitLen;
+        G.burst(state, ix, iy, "#ff6a18", 10, 55);
+        G.burst(state, ix, iy, "#ffe08a", 6, 38);
+      }
+    }
+    if (dual) {
+      var px = Math.cos(ang + Math.PI / 2) * 16;
+      var py = Math.sin(ang + Math.PI / 2) * 16;
+      beamFrom(e.x + px, e.y + py, ang);
+      beamFrom(e.x - px, e.y - py, ang);
+    } else {
+      beamFrom(e.x, e.y, ang);
+    }
+    if (G.audio && G.audio.laser) G.audio.laser();
+    else if (G.audio && G.audio.shoot) G.audio.shoot();
+  }
+
+  function lockGlinderLaser(e, target) {
+    if (!target) return;
+    e.laserAimX = target.x;
+    e.laserAimY = target.y;
+  }
+
+  function warnGlinderLaser(state, e, dual, dur) {
+    if (e.laserAimX == null) return;
+    var ang = Math.atan2(e.laserAimY - e.y, e.laserAimX - e.x);
+    var beamLen = vultoBeamLen(state);
+    var wait = Math.max(0.12, dur || 0.4);
+    function lane(ox, oy) {
+      warnAt(state, {
+        kind: "glinder_lane",
+        x: ox,
+        y: oy,
+        ang: ang,
+        len: glinderCoverClipRange(state, ox, oy, ang, beamLen),
+        w: 16,
+        t: wait,
+        max: wait,
+        r: 10,
+        dmg: 0,
+        color: "#ffd24a"
+      });
+    }
+    e.rot = ang;
+    if (dual) {
+      var px = Math.cos(ang + Math.PI / 2) * 16;
+      var py = Math.sin(ang + Math.PI / 2) * 16;
+      lane(e.x + px, e.y + py);
+      lane(e.x - px, e.y - py);
+    } else {
+      lane(e.x, e.y);
+    }
+  }
+
+  function beginGlinderLaser(state, e, target, dual, count) {
+    e.vultoAct = "laser";
+    e.laserLeft = count;
+    e.vx = e.vy = 0;
+    lockGlinderLaser(e, target || state.squad);
+    e.laserWait = dual ? 0.95 : 0.9;
+    warnGlinderLaser(state, e, !!dual, e.laserWait);
+    state.floaters.push(G.createFloater(e.x, e.y - 24, dual ? "laser duplo" : "laser", "#ff7a2a"));
+  }
+
+  function tickGlinderLaser(state, e, target, dt, dual) {
+    e.vx = e.vy = 0;
+    e.laserWait = (e.laserWait || 0) - dt;
+    if (e.laserAimX != null) e.rot = Math.atan2(e.laserAimY - e.y, e.laserAimX - e.x);
+    else if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+    if (e.laserWait <= 0 && (e.laserLeft || 0) > 0) {
+      var aim = e.laserAimX != null ? { x: e.laserAimX, y: e.laserAimY } : (target || state.squad);
+      fireGlinderLaser(state, e, aim, !!dual);
+      e.laserLeft--;
+      if ((e.laserLeft || 0) > 0) {
+        lockGlinderLaser(e, target || state.squad);
+        e.laserWait = dual ? 0.58 : 0.62;
+        warnGlinderLaser(state, e, !!dual, e.laserWait);
+      }
+    }
+    if ((e.laserLeft || 0) <= 0 && e.laserWait <= 0) {
+      e.vultoAct = "";
+      e.vultoT = dual ? 1.55 : 1.85;
+    }
+  }
+
+  function tickGlinderFlash(state, dt) {
+    if (state.glinderFlashMax) {
+      state.glinderFlashT = (state.glinderFlashT || 0) + dt;
+      var t = state.glinderFlashT;
+      var fadeIn = 0.16;
+      var hold = 0.45;
+      var fadeOut = 2.55;
+      if (t < fadeIn) state.glinderFlash = t / fadeIn;
+      else if (t < fadeIn + hold) state.glinderFlash = 1;
+      else state.glinderFlash = Math.max(0, 1 - (t - fadeIn - hold) / fadeOut);
+      if (t >= fadeIn + hold + fadeOut) {
+        state.glinderFlash = 0;
+        state.glinderFlashT = 0;
+        state.glinderFlashMax = 0;
+      }
+      return;
+    }
+    if (state.glinderFlash) state.glinderFlash = Math.max(0, state.glinderFlash - dt * 1.8);
+  }
+
+  function startGlinderFlash(state) {
+    state.glinderFlashT = 0;
+    state.glinderFlashMax = 3.16;
+    state.glinderFlash = 0.05;
+    if (G.audio && G.audio.tinnitus) G.audio.tinnitus();
+  }
+
+  function glinderToNovaCenter(state, e) {
+    var b = G.playfield(state);
+    var cx = (b.x0 + b.x1) / 2;
+    var cy = (b.y0 + b.y1) / 2;
+    if (!e) return;
+    var dx = (e.x || 0) - cx;
+    var dy = (e.y || 0) - cy;
+    if (dx * dx + dy * dy > 64) {
+      G.burst(state, e.x, e.y, "#ff6a18", 12, 80);
+      G.burst(state, cx, cy, "#ff4a18", 18, 110);
+    }
+    e.x = cx;
+    e.y = cy;
+    e.vx = e.vy = 0;
+  }
+
+  function spawnGlinderCover(state, e, avoid) {
+    var b = G.playfield(state);
+    var cx = (b.x0 + b.x1) / 2;
+    var cy = (b.y0 + b.y1) / 2;
+    var sdx = state.squad.x - cx;
+    var sdy = state.squad.y - cy;
+    var pang = (sdx * sdx + sdy * sdy < 1600) ? Math.random() * Math.PI * 2 : Math.atan2(sdy, sdx);
+    var reach = Math.min((b.x1 - b.x0), (b.y1 - b.y0)) * 0.3;
+    var best = null;
+    var bestScore = -1;
+    var tries;
+    for (tries = 0; tries < 10; tries++) {
+      var ang = pang + (tries % 2 ? 1 : -1) * (0.35 + tries * 0.31 + Math.random() * 0.2);
+      var x = cx + Math.cos(ang) * reach;
+      var y = cy + Math.sin(ang) * reach;
+      x = Math.max(b.x0 + 70, Math.min(b.x1 - 70, x));
+      y = Math.max(b.y0 + 70, Math.min(b.y1 - 70, y));
+      var nearSquad = Math.hypot(x - state.squad.x, y - state.squad.y);
+      var away = avoid ? Math.hypot(x - avoid.x, y - avoid.y) : 220;
+      var score = Math.min(220, nearSquad) + away * 1.4;
+      if (away < 160) score -= 400;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x: x, y: y, r: 54 };
+      }
+    }
+    e.cover = best || { x: cx + 80, y: cy, r: 54 };
+    state.glinderCover = e.cover;
+  }
+
+  function glinderNovaBurst(state, e) {
+    glinderToNovaCenter(state, e);
+    var b = G.playfield(state);
+    var cx = (b.x0 + b.x1) / 2;
+    var cy = (b.y0 + b.y1) / 2;
+    var maxR = Math.hypot(b.x1 - b.x0, b.y1 - b.y0) * 0.72;
+    e.novaWave = { x: cx, y: cy, r: 12, maxR: maxR, t: 0.85, max: 0.85 };
+    state.shake = Math.max(state.shake || 0, 16);
+    G.burst(state, cx, cy, "#ff6a18", 36, 220);
+    G.burst(state, cx, cy, "#fff4c4", 22, 160);
+    if (G.audio && G.audio.explosion) G.audio.explosion();
+    if (!glinderCoverSafe(state, e)) {
+      for (var i = 0; i < state.units.length; i++) {
+        var u = state.units[i];
+        if (u.hp <= 0 || u.stowed) continue;
+        hurt(state, u, u.maxHp * 8, cx, cy, false, { trueDmg: true, ignoreDash: true });
+      }
+    } else {
+      state.floaters.push(G.createFloater(state.squad.x, state.squad.y - 26, "abrigado", "#ffe08a"));
+    }
+  }
+
+  function glinderP2(e) {
+    return !!(e && (e.p2 || e.invP2));
+  }
+
+  function spawnGlinderSun(state, e) {
+    var b = G.playfield(state);
+    var cx = (b.x0 + b.x1) / 2;
+    var cy = (b.y0 + b.y1) / 2;
+    var behind = Math.atan2(cy - (e && e.y || cy), cx - (e && e.x || cx));
+    if (e) behind = Math.atan2(e.y - cy, e.x - cx) + Math.PI;
+    var dist = Math.min((b.x1 - b.x0), (b.y1 - b.y0)) * 0.22;
+    var x = (e ? e.x : cx) + Math.cos(behind) * 70;
+    var y = (e ? e.y : cy) + Math.sin(behind) * 70;
+    x = Math.max(b.x0 + 50, Math.min(b.x1 - 50, x));
+    y = Math.max(b.y0 + 50, Math.min(b.y1 - 50, y));
+    if (Math.hypot(x - cx, y - cy) < 40) {
+      x = cx - dist;
+      y = cy;
+    }
+    state.glinderSun = {
+      x: x,
+      y: y,
+      r: 28,
+      absorb: 0,
+      maxR: 86,
+      shotT: 1.1,
+      waveT: 4.2,
+      wave: null,
+      novaT: 0,
+      novaPhase: "",
+      eaten: {}
+    };
+    G.burst(state, x, y, "#1a0808", 18, 80);
+    G.burst(state, x, y, "#ff4a18", 10, 60);
+  }
+
+  function sunScale(sun) {
+    return 1 + Math.min(1.8, (sun.absorb || 0) * 0.22);
+  }
+
+  function tickGlinderFoci(state, dt) {
+    var foci = state.glinderFoci;
+    if (!foci || !foci.length) return;
+    if (state.glinderMaze && state.glinderMaze.phase !== "done") return;
+    var i;
+    for (i = foci.length - 1; i >= 0; i--) {
+      var f = foci[i];
+      f.t -= dt;
+      if (f.t <= 0) {
+        foci.splice(i, 1);
+        continue;
+      }
+      var u;
+      for (u = 0; u < state.units.length; u++) {
+        var un = state.units[u];
+        if (un.hp <= 0 || un.stowed) continue;
+        if (Math.hypot(un.x - f.x, un.y - f.y) < (f.r || 26) + (un.def.size || 12) * 0.4) {
+          hurt(state, un, 11 * dt, f.x, f.y, false, { trueDmg: true });
+          burnUnit(un, 5, 6);
+        }
+      }
+    }
+  }
+
+  function tickGlinderSun(state, dt) {
+    var sun = state.glinderSun;
+    if (!sun || sun.dead) return;
+    if (state.glinderMaze && state.glinderMaze.phase !== "done") return;
+    if (state.glinderBurn) return;
+    sun.r = Math.min(sun.maxR, sun.r + dt * 1.15 + (sun.absorb || 0) * dt * 0.35);
+    var scale = sunScale(sun);
+    var pullR = sun.r * 4.2 * scale;
+    var pull = 38 * scale;
+    var i;
+    var sx = sun.x;
+    var sy = sun.y;
+    var dx = sx - state.squad.x;
+    var dy = sy - state.squad.y;
+    var d = Math.hypot(dx, dy) || 1;
+    var hidden = glinderCoverSafeFrom(state, sx, sy);
+    if (d < pullR && !hidden) {
+      var pk = (1 - d / pullR) * pull * dt;
+      state.squad.x += (dx / d) * pk;
+      state.squad.y += (dy / d) * pk;
+    }
+    if (d < sun.r * 0.72 + 16 && !hidden) {
+      for (i = 0; i < state.units.length; i++) {
+        var u = state.units[i];
+        if (u.hp <= 0 || u.stowed) continue;
+        hurt(state, u, 16 * dt * scale, sx, sy, false, { trueDmg: true });
+      }
+    }
+    for (i = 0; i < (state.enemies || []).length; i++) {
+      var en = state.enemies[i];
+      if (en.hp <= 0 || en.type === "chefe_vulto" || en.glinderCoal || en.type === "fogueira") continue;
+      var ex = sx - en.x;
+      var ey = sy - en.y;
+      var ed = Math.hypot(ex, ey) || 1;
+      if (ed < pullR * 1.15) {
+        var ep = (1 - ed / (pullR * 1.15)) * 70 * dt;
+        en.x += (ex / ed) * ep;
+        en.y += (ey / ed) * ep;
+      }
+      if (ed < sun.r * 0.85 + (en.def.size || 12) && !sun.eaten[en.id]) {
+        sun.eaten[en.id] = 1;
+        sun.absorb = (sun.absorb || 0) + 1;
+        en.hp = 0;
+        en.noDrop = true;
+        G.burst(state, en.x, en.y, "#3a1020", 12, 70);
+        sun.r = Math.min(sun.maxR, sun.r + 6);
+      }
+    }
+    if (sun.wave) {
+      sun.wave.t -= dt;
+      var wk = 1 - Math.max(0, sun.wave.t) / (sun.wave.max || 0.7);
+      sun.wave.r = 18 + wk * (sun.wave.maxR || 280);
+      var band = 18 * scale;
+      var wr = sun.wave.r;
+      var dashing = !!(state.dashActive || (state.dashT || 0) > 0);
+      var waveHid = glinderCoverSafeFrom(state, sx, sy);
+      if (waveHid) {
+        if (!sun.waveCovered) {
+          sun.waveCovered = true;
+          state.floaters.push(G.createFloater(state.squad.x, state.squad.y - 26, "abrigado", "#ffe08a"));
+        }
+      } else if (!dashing) {
+        for (i = 0; i < state.units.length; i++) {
+          var wu = state.units[i];
+          if (wu.hp <= 0 || wu.stowed) continue;
+          var wd = Math.hypot(wu.x - sx, wu.y - sy);
+          if (Math.abs(wd - wr) < band + (wu.def.size || 12)) {
+            hurt(state, wu, Math.round(18 * scale), sx, sy, false);
+            burnUnit(wu, 5, 8);
+          }
+        }
+      }
+      if (sun.wave.t <= 0) {
+        sun.wave = null;
+        sun.waveCovered = false;
+      }
+    }
+    if (sun.novaPhase === "warn") {
+      sun.novaT -= dt;
+      state.glinderSuperT = sun.novaT;
+      if (sun.novaT <= 0) {
+        sun.novaPhase = "boom";
+        var fresh = !!(state.dashActive && (state.dashT || 0) > 0.17 && (state.dashT || 0) < 0.31);
+        startGlinderFlash(state);
+        state.shake = Math.max(state.shake || 0, 22);
+        G.burst(state, sx, sy, "#fff4c4", 48, 280);
+        G.burst(state, sx, sy, "#1a0408", 32, 200);
+        if (G.audio && G.audio.explosion) G.audio.explosion();
+        if (!fresh) {
+          for (i = 0; i < state.units.length; i++) {
+            var su = state.units[i];
+            if (su.hp <= 0 || su.stowed) continue;
+            hurt(state, su, su.maxHp * 8, sx, sy, false, { trueDmg: true, ignoreDash: true });
+          }
+        } else {
+          state.floaters.push(G.createFloater(state.squad.x, state.squad.y - 28, "no fio", "#ffe08a"));
+          state.vultoBlind = Math.max(state.vultoBlind || 0, 2.8);
+        }
+        sun.dead = true;
+        sun.novaPhase = "done";
+        state.glinderSuperT = 0;
+        state.glinderSun = sun;
+      }
+      return;
+    }
+    if (sun.r >= sun.maxR - 0.4 || (sun.absorb || 0) >= 8) {
+      if (!sun.novaPhase) {
+        var b = G.playfield(state);
+        var coverR = Math.hypot(Math.max(sx - b.x0, b.x1 - sx), Math.max(sy - b.y0, b.y1 - sy)) + 40;
+        sun.novaPhase = "warn";
+        sun.novaT = 2.05;
+        sun.novaR = coverR;
+        state.glinderSuperT = 2.05;
+        state.glinderSuperMax = 2.05;
+        state.banner = { text: "SUPERNOVA · SHIFT no estalo", t: 2.1 };
+        warnAt(state, { kind: "mark", x: sx, y: sy, t: 2.05, max: 2.05, r: coverR, dmg: 0, color: "#fff4c4", followSquad: false });
+      }
+      return;
+    }
+    sun.shotT -= dt;
+    sun.waveT -= dt;
+    if ((sun.waveWarn || 0) > 0) {
+      sun.waveWarn -= dt;
+      if (sun.waveWarn <= 0) {
+        sun.wave = { r: 16, maxR: sun.waveMaxR || (260 + scale * 40), t: 0.72, max: 0.72 };
+        state.banner = { text: "Onda negra · SHIFT", t: 1.1 };
+      }
+    } else if (sun.waveT <= 0) {
+      sun.waveT = 5.4;
+      sun.waveMaxR = 260 + scale * 40;
+      sun.waveWarn = 0.85;
+      warnAt(state, { kind: "mark", x: sx, y: sy, t: 0.85, max: 0.85, r: sun.waveMaxR, dmg: 0, color: "#ff3a18", followSquad: false });
+      state.banner = { text: "Onda carregando", t: 0.85 };
+    }
+    if ((sun.shotWarn || 0) > 0) {
+      sun.shotWarn -= dt;
+      if (sun.shotWarn <= 0 && sun.shotPending) {
+        var pending = sun.shotPending;
+        var si;
+        for (si = 0; si < pending.n; si++) {
+          var sa = pending.base + (si - (pending.n - 1) / 2) * (0.18 * scale);
+          state.projectiles.push(G.createProjectile({
+            x: sx + Math.cos(sa) * sun.r * 0.4,
+            y: sy + Math.sin(sa) * sun.r * 0.4,
+            vx: Math.cos(sa) * 210,
+            vy: Math.sin(sa) * 210,
+            dmg: Math.round(10 * scale),
+            team: "enemy",
+            kind: "darkember",
+            life: 1.6,
+            r: 4 + scale,
+            burn: true,
+            color: "#4a1020",
+            fromBoss: true
+          }));
+        }
+        sun.shotPending = null;
+      }
+    } else if (sun.shotT <= 0) {
+      sun.shotT = Math.max(0.42, 1.05 - (sun.absorb || 0) * 0.06);
+      var n = 3 + Math.min(4, sun.absorb | 0);
+      var base = Math.atan2(state.squad.y - sy, state.squad.x - sx);
+      sun.shotWarn = 0.42;
+      sun.shotPending = { n: n, base: base };
+      var siw;
+      for (siw = 0; siw < n; siw++) {
+        var wa = base + (siw - (n - 1) / 2) * (0.18 * scale);
+        warnAt(state, {
+          kind: "lane",
+          x: sx,
+          y: sy,
+          ang: wa,
+          len: 220 + scale * 30,
+          w: 9,
+          t: 0.42,
+          max: 0.42,
+          r: 8,
+          dmg: 0,
+          color: "#ff4a18"
+        });
+      }
+    }
+  }
+
+  function mazeHit(state, x, y, rad) {
+    var maze = state.glinderMaze;
+    if (!maze || !maze.walls) return null;
+    var t = maze.t || 0;
+    var building = maze.phase === "build";
+    var best = null;
+    var bestD = 1e9;
+    var i;
+    for (i = 0; i < maze.walls.length; i++) {
+      var w = maze.walls[i];
+      if (building && (w.appear || 0) > t) continue;
+      var x0 = w.x0 != null ? w.x0 : w.x;
+      var y0 = w.y0 != null ? w.y0 : w.y;
+      var x1 = w.x1 != null ? w.x1 : w.x;
+      var y1 = w.y1 != null ? w.y1 : w.y;
+      var hitR = w.hitR != null ? w.hitR : 9;
+      var thick = hitR + rad;
+      var dx = x1 - x0;
+      var dy = y1 - y0;
+      var px;
+      var py;
+      var d;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        var xa = Math.min(x0, x1);
+        var xb = Math.max(x0, x1);
+        if (x < xa || x > xb) continue;
+        d = Math.abs(y - y0);
+        if (d >= thick) continue;
+        px = x;
+        py = y0;
+      } else {
+        var ya = Math.min(y0, y1);
+        var yb = Math.max(y0, y1);
+        if (y < ya || y > yb) continue;
+        d = Math.abs(x - x0);
+        if (d >= thick) continue;
+        px = x0;
+        py = y;
+      }
+      if (d * d < bestD) {
+        bestD = d * d;
+        best = { x: px, y: py, r: hitR };
+      }
+    }
+    return best;
+  }
+
+  function resolveMazeMove(state, ox, oy) {
+    var maze = state.glinderMaze;
+    if (!maze || maze.phase !== "run") return;
+    var nx = state.squad.x;
+    var ny = state.squad.y;
+    var steps = (state.dashActive || (state.dashT || 0) > 0) ? 14 : 8;
+    var i;
+    var hit = null;
+    for (i = 1; i <= steps; i++) {
+      var k = i / steps;
+      var x = ox + (nx - ox) * k;
+      var y = oy + (ny - oy) * k;
+      hit = mazeHit(state, x, y, 11);
+      if (hit) {
+        state.squad.x = x;
+        state.squad.y = y;
+        break;
+      }
+    }
+    if (!hit) return;
+    var dx = state.squad.x - hit.x;
+    var dy = state.squad.y - hit.y;
+    var d = Math.hypot(dx, dy) || 1;
+    var rad = (hit.r || 9) + 11;
+    state.squad.x = hit.x + (dx / d) * rad;
+    state.squad.y = hit.y + (dy / d) * rad;
+    if (state.dashActive || (state.dashT || 0) > 0) {
+      state.dashActive = false;
+      state.dashT = 0;
+      state.dashSlideT = 0;
+    }
+    var cmd = commanderOf(state);
+    if (cmd) {
+      hurt(state, cmd, 22, hit.x, hit.y, false, { trueDmg: true, ignoreDash: true });
+      burnUnit(cmd, 5, 10);
+    }
+  }
+
+  function addMazeWallSeg(walls, x0, y0, x1, y1, appear, rad) {
+    walls.push({
+      x0: x0,
+      y0: y0,
+      x1: x1,
+      y1: y1,
+      x: (x0 + x1) * 0.5,
+      y: (y0 + y1) * 0.5,
+      r: rad || 15,
+      hitR: 8,
+      appear: appear || 0
+    });
+  }
+
+  function mazeShuffle(arr) {
+    var i;
+    for (i = arr.length - 1; i > 0; i--) {
+      var j = (Math.random() * (i + 1)) | 0;
+      var t = arr[i];
+      arr[i] = arr[j];
+      arr[j] = t;
+    }
+    return arr;
+  }
+
+  function buildGlinderMaze(state) {
+    var b = G.playfield(state);
+    var pad = 8;
+    var minCell = 92;
+    var availW = Math.max(40, b.x1 - b.x0 - pad * 2);
+    var availH = Math.max(40, b.y1 - b.y0 - pad * 2);
+    var cols = Math.max(4, Math.floor(availW / minCell));
+    var rows = Math.max(3, Math.floor(availH / minCell));
+    var cellW = availW / cols;
+    var cellH = availH / rows;
+    var wallR = 15;
+    var ox = b.x0 + (b.x1 - b.x0 - availW) * 0.5;
+    var oy = b.y0 + (b.y1 - b.y0 - availH) * 0.5;
+    var grid = [];
+    var r;
+    var c;
+    for (r = 0; r < rows; r++) {
+      grid[r] = [];
+      for (c = 0; c < cols; c++) grid[r][c] = { n: 1, e: 1, s: 1, w: 1, vis: 0 };
+    }
+    var corners = [
+      { r: 0, c: 0 },
+      { r: 0, c: cols - 1 },
+      { r: rows - 1, c: 0 },
+      { r: rows - 1, c: cols - 1 }
+    ];
+    var start = corners[(Math.random() * corners.length) | 0];
+    var sr = start.r;
+    var sc = start.c;
+    var frontier = [{ r: sr, c: sc }];
+    grid[sr][sc].vis = 1;
+    function nbs(rr, cc) {
+      var d = [];
+      if (rr > 0) d.push({ r: rr - 1, c: cc, a: "n", b: "s" });
+      if (cc < cols - 1) d.push({ r: rr, c: cc + 1, a: "e", b: "w" });
+      if (rr < rows - 1) d.push({ r: rr + 1, c: cc, a: "s", b: "n" });
+      if (cc > 0) d.push({ r: rr, c: cc - 1, a: "w", b: "e" });
+      return d;
+    }
+    while (frontier.length) {
+      var idx = Math.random() < 0.56 ? frontier.length - 1 : ((Math.random() * frontier.length) | 0);
+      var cur = frontier[idx];
+      var dirs = nbs(cur.r, cur.c).filter(function (d) { return !grid[d.r][d.c].vis; });
+      if (!dirs.length) {
+        frontier.splice(idx, 1);
+        continue;
+      }
+      mazeShuffle(dirs);
+      var pick = dirs[0];
+      grid[cur.r][cur.c][pick.a] = 0;
+      grid[pick.r][pick.c][pick.b] = 0;
+      grid[pick.r][pick.c].vis = 1;
+      frontier.push({ r: pick.r, c: pick.c });
+    }
+    var dist = [];
+    for (r = 0; r < rows; r++) {
+      dist[r] = [];
+      for (c = 0; c < cols; c++) dist[r][c] = -1;
+    }
+    var q = [{ r: sr, c: sc }];
+    dist[sr][sc] = 0;
+    var far = { r: sr, c: sc, d: 0 };
+    while (q.length) {
+      var node = q.shift();
+      var cell = grid[node.r][node.c];
+      var walk = [];
+      if (!cell.n) walk.push({ r: node.r - 1, c: node.c });
+      if (!cell.s) walk.push({ r: node.r + 1, c: node.c });
+      if (!cell.e) walk.push({ r: node.r, c: node.c + 1 });
+      if (!cell.w) walk.push({ r: node.r, c: node.c - 1 });
+      var wi;
+      for (wi = 0; wi < walk.length; wi++) {
+        var n = walk[wi];
+        if (n.r < 0 || n.c < 0 || n.r >= rows || n.c >= cols) continue;
+        if (dist[n.r][n.c] >= 0) continue;
+        dist[n.r][n.c] = dist[node.r][node.c] + 1;
+        if (dist[n.r][n.c] > far.d) far = { r: n.r, c: n.c, d: dist[n.r][n.c] };
+        q.push(n);
+      }
+    }
+    var er = far.r;
+    var ec = far.c;
+    function openOuter(rr, cc) {
+      if (cc === 0) grid[rr][cc].w = 0;
+      if (cc === cols - 1) grid[rr][cc].e = 0;
+      if (rr === 0) grid[rr][cc].n = 0;
+      if (rr === rows - 1) grid[rr][cc].s = 0;
+    }
+    openOuter(sr, sc);
+    openOuter(er, ec);
+    var walls = [];
+    var appear = 0;
+    function cellX(cc) { return ox + (cc + 0.5) * cellW; }
+    function cellY(rr) { return oy + (rr + 0.5) * cellH; }
+    for (r = 0; r < rows; r++) {
+      for (c = 0; c < cols; c++) {
+        var cell = grid[r][c];
+        var x = cellX(c);
+        var y = cellY(r);
+        var hw = cellW / 2;
+        var hh = cellH / 2;
+        if (cell.n) {
+          addMazeWallSeg(walls, x - hw, y - hh, x + hw, y - hh, appear, wallR);
+          appear += 0.006;
+        }
+        if (cell.w) {
+          addMazeWallSeg(walls, x - hw, y - hh, x - hw, y + hh, appear, wallR);
+          appear += 0.006;
+        }
+        if (r === rows - 1 && cell.s) {
+          addMazeWallSeg(walls, x - hw, y + hh, x + hw, y + hh, appear, wallR);
+          appear += 0.006;
+        }
+        if (c === cols - 1 && cell.e) {
+          addMazeWallSeg(walls, x + hw, y - hh, x + hw, y + hh, appear, wallR);
+          appear += 0.006;
+        }
+      }
+    }
+    return {
+      phase: "build",
+      t: 0,
+      buildDur: Math.min(2.6, 0.7 + appear * 0.08),
+      timer: 36,
+      timerMax: 36,
+      walls: walls,
+      start: { x: cellX(sc), y: cellY(sr) },
+      goal: { x: cellX(ec), y: cellY(er) },
+      cols: cols,
+      rows: rows,
+      cellW: cellW,
+      cellH: cellH,
+      bounds: { x0: ox, y0: oy, x1: ox + availW, y1: oy + availH },
+      prisonR: 0,
+      stamped: -1
+    };
+  }
+
+  function spawnGlinderPrison(state) {
+    state.glinderFoci = [];
+  }
+
+  function startGlinderMaze(state, e) {
+    var maze = buildGlinderMaze(state);
+    state.glinderMaze = maze;
+    e.vultoAct = "maze";
+    e.mazeUsed = true;
+    e.immortal = true;
+    e.mazeHide = true;
+    e.vx = e.vy = 0;
+    e.zDraw = 0;
+    e.x = -500;
+    e.y = -500;
+    e.cover = null;
+    state.glinderCover = null;
+    spawnGlinderPrison(state);
+    state.projectiles = [];
+    state.warnings = [];
+    state.squad.x = maze.start.x;
+    state.squad.y = maze.start.y;
+    state.dashT = 0;
+    state.dashActive = false;
+    state.banner = { text: "Atravesse o labirinto · 36s", t: 2.2 };
+  }
+
+  function endGlinderMaze(state, e, ok) {
+    var maze = state.glinderMaze;
+    if (!maze) return;
+    maze.phase = "done";
+    maze.walls = [];
+    maze.layer = null;
+    if (e) {
+      e.vultoAct = "";
+      e.vultoT = 2.1;
+      e.immortal = false;
+      e.zDraw = 0;
+      e.mazeHide = false;
+      var b = G.playfield(state);
+      e.x = (b.x0 + b.x1) / 2;
+      e.y = (b.y0 + b.y1) / 2;
+    }
+    if (ok) {
+      state.banner = { text: "O esquadrão se reúne", t: 1.8 };
+      G.burst(state, state.squad.x, state.squad.y, "#ffe08a", 18, 90);
+    }
+  }
+
+  function startGlinderBurn(state, e) {
+    var cmd = commanderOf(state);
+    if (!cmd) return;
+    state.glinderBurn = {
+      t: 0,
+      max: 4.15,
+      phase: "fly",
+      cmdId: cmd.id,
+      fromX: e ? e.x : cmd.x,
+      fromY: e ? e.y : cmd.y
+    };
+    if (e) {
+      e.immortal = true;
+      e.vultoAct = "burn";
+    }
+    cmd.hp = Math.max(1, cmd.hp);
+    cmd.burnT = 8;
+    cmd.burnDps = 0;
+    state.dashT = 0;
+    state.dashActive = false;
+    state.banner = { text: "Ela te pega", t: 1.6 };
+  }
+
+  function tickGlinderBurn(state, dt) {
+    var burn = state.glinderBurn;
+    if (!burn) return false;
+    burn.t += dt;
+    var cmd = null;
+    var e = null;
+    var i;
+    for (i = 0; i < state.units.length; i++) {
+      if (state.units[i].id === burn.cmdId || state.units[i].commander) cmd = state.units[i];
+    }
+    for (i = 0; i < (state.enemies || []).length; i++) {
+      if (state.enemies[i].type === "chefe_vulto") e = state.enemies[i];
+    }
+    if (!cmd) {
+      state.glinderAshDefeat = true;
+      return false;
+    }
+    cmd.stowed = false;
+    cmd.held = false;
+    if (burn.t < 0.85 && e) {
+      var k = burn.t / 0.85;
+      k = k * k * (3 - 2 * k);
+      e.x = burn.fromX + (cmd.x - burn.fromX) * k;
+      e.y = burn.fromY + (cmd.y - 18 - burn.fromY) * k;
+      e.zDraw = 20 + k * 16;
+      e.rot = Math.atan2(cmd.y - e.y, cmd.x - e.x);
+      state.camLook = { x: e.x, y: e.y };
+      state.camZoomTo = 1.4 + k * 0.8;
+    } else if (burn.t < 2.35) {
+      burn.phase = "grab";
+      if (e) {
+        e.x = cmd.x;
+        e.y = cmd.y - 22;
+        e.zDraw = 36;
+        cmd.x = e.x;
+        cmd.y = e.y + 10;
+        cmd.burnKill = burn.t;
+        cmd.leapZ = 18;
+      }
+      state.squad.x = cmd.x;
+      state.squad.y = cmd.y;
+      state.camLook = { x: cmd.x, y: cmd.y - 20 };
+      state.camZoomTo = 2.4;
+      state.shake = Math.max(state.shake || 0, 8);
+      if ((burn.spark || 0) <= 0) {
+        burn.spark = 0.08;
+        G.burst(state, cmd.x, cmd.y, "#ff6a18", 8, 70);
+        G.burst(state, cmd.x, cmd.y, "#1a0808", 6, 40);
+      }
+      burn.spark = (burn.spark || 0) - dt;
+    } else if (burn.t < 3.35) {
+      burn.phase = "ash";
+      cmd.burnKill = burn.t;
+      cmd.ashT = (burn.t - 2.35) / 1.0;
+      cmd.leapZ = 4 * (1 - cmd.ashT);
+      if (e) {
+        e.zDraw = 24;
+        e.y = cmd.y - 16;
+      }
+      state.camZoomTo = 3.1;
+      if (cmd.ashT > 0.45 && !burn.ashed) {
+        burn.ashed = true;
+        G.burst(state, cmd.x, cmd.y, "#6a5438", 22, 50);
+        G.burst(state, cmd.x, cmd.y, "#1a0808", 14, 40);
+      }
+    } else {
+      cmd.hp = 0;
+      cmd.ashT = 1;
+      state.glinderAshDefeat = true;
+      if (e) {
+        e.immortal = false;
+        e.zDraw = 0;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  function spawnGlinderAsh(state, x, y, n, lift) {
+    var i;
+    for (i = 0; i < n; i++) {
+      var drift = (Math.random() - 0.5) * 1.15;
+      var up = -(55 + Math.random() * (lift ? 130 : 70));
+      var pick = Math.random();
+      var col = pick < 0.22 ? "#ffe08a" : pick < 0.58 ? "#ff4a28" : "#c01818";
+      var life = 0.85 + Math.random() * 1.15;
+      state.particles.push({
+        x: x + (Math.random() - 0.5) * 38,
+        y: y + (Math.random() - 0.5) * 26,
+        vx: drift * (22 + Math.random() * 48),
+        vy: up,
+        life: life,
+        max: life,
+        size: 1.6 + Math.random() * 3.8,
+        color: col,
+        ash: true
+      });
+    }
+  }
+
+  function startGlinderDeath(state, e) {
+    if (!e || e.glinderDying) return;
+    if (state.glinderMaze && state.glinderMaze.phase !== "done") {
+      endGlinderMaze(state, e, true);
+    }
+    endGlinderNight(state, e);
+    e.glinderDying = true;
+    e.immortal = true;
+    e.hp = Math.max(1, e.hp);
+    e.vx = 0;
+    e.vy = 0;
+    e.vultoAct = "death";
+    e.mazeHide = false;
+    e.glinderAsh = 0;
+    e.cover = null;
+    state.glinderCover = null;
+    state.glinderNovaT = 0;
+    e.novaWave = null;
+    e.novaDid = true;
+    if (state.glinderSun) state.glinderSun.dead = true;
+    state.glinderSun = null;
+    state.glinderBeams = [];
+    state.glinderFoci = [];
+    state.glinderDeath = {
+      t: 0,
+      max: 5.2,
+      id: e.id,
+      x: e.x,
+      y: e.y,
+      spark: 0
+    };
+    state.dashT = 0;
+    state.dashActive = false;
+    state.projectiles = [];
+    state.warnings = [];
+    state.shake = Math.max(state.shake || 0, 12);
+    if (G.audio && G.audio.explosion) G.audio.explosion();
+    G.burst(state, e.x, e.y, "#ff4a18", 24, 130);
+    G.burst(state, e.x, e.y, "#ffe08a", 14, 90);
+    spawnGlinderAsh(state, e.x, e.y, 16, false);
+  }
+
+  function tickGlinderDeath(state, dt) {
+    var death = state.glinderDeath;
+    if (!death) return false;
+    death.t += dt;
+    var e = null;
+    var i;
+    for (i = 0; i < (state.enemies || []).length; i++) {
+      if (state.enemies[i].id === death.id || state.enemies[i].type === "chefe_vulto") {
+        e = state.enemies[i];
+        break;
+      }
+    }
+    if (!e) {
+      state.glinderDeath = null;
+      return false;
+    }
+    e.glinderDying = true;
+    e.immortal = true;
+    e.hp = Math.max(1, e.hp);
+    e.vx = 0;
+    e.vy = 0;
+    e.vultoAct = "death";
+    e.mazeHide = false;
+    e.phase = (e.phase || 0) + dt * (2.4 + Math.min(3.2, death.t * 1.4));
+    var k = Math.max(0, Math.min(1, death.t / death.max));
+    var rise = k < 0.46 ? k / 0.46 : 1;
+    rise = rise * rise * (3 - 2 * rise);
+    var crumble = Math.max(0, Math.min(1, (death.t - 2.15) / 1.55));
+    e.glinderAsh = crumble;
+    e.zDraw = 16 + rise * 240 + crumble * 150;
+    e.x = death.x + Math.sin(death.t * 2.1) * (10 + rise * 18);
+    e.y = death.y;
+    e.rot = Math.sin(death.t * 1.8) * 0.18 * (1 - crumble * 0.4);
+    var spriteY = e.y - (e.zDraw || 0);
+    state.camLook = { x: e.x, y: spriteY + 28 };
+    state.camZoomTo = 1.12 + rise * 0.22 - crumble * 0.16;
+    state.glinderHeat = Math.max(0.08, 0.38 + rise * 0.32 - crumble * 0.48);
+    if (crumble > 0.12 && !death.broke) {
+      death.broke = true;
+      spawnGlinderAsh(state, e.x, spriteY, 24, true);
+      G.burst(state, e.x, spriteY, "#ff4a28", 14, 48);
+      G.burst(state, e.x, spriteY, "#ffe08a", 8, 36);
+      state.shake = Math.max(state.shake || 0, 10);
+    }
+    death.spark = (death.spark || 0) - dt;
+    var ashN = death.t < 0.45 ? 4 : crumble > 0.15 ? 9 : 5;
+    if (death.spark <= 0) {
+      death.spark = crumble > 0.2 ? 0.038 : 0.07;
+      spawnGlinderAsh(state, e.x, spriteY, ashN, true);
+      if (crumble > 0.35) G.burst(state, e.x, spriteY, "#ff4a28", 3, 28);
+    }
+    if (death.t >= death.max) {
+      spawnGlinderAsh(state, e.x, spriteY, 32, true);
+      G.burst(state, e.x, spriteY, "#ff6a28", 16, 64);
+      G.burst(state, e.x, spriteY, "#ffe08a", 10, 46);
+      e.x = death.x;
+      e.y = death.y;
+      e.zDraw = 0;
+      e.glinderAsh = 1;
+      e.mazeHide = true;
+      e.immortal = false;
+      e.hp = 0;
+      state.glinderDeath = null;
+      state.camLook = null;
+      state.camZoomTo = 1;
+      state.glinderHeat = 0;
+      killEnemy(state, e);
+      state.enemies = state.enemies.filter(function (en) { return en.hp > 0; });
+      return false;
+    }
+    return true;
+  }
+
+  function tickGlinderMaze(state, e, dt) {
+    var maze = state.glinderMaze;
+    if (!maze || maze.phase === "done") return;
+    maze.t = (maze.t || 0) + dt;
+    if (maze.phase === "build") {
+      if (e) {
+        e.vx = e.vy = 0;
+        e.zDraw = 0;
+        e.mazeHide = true;
+      }
+      if (maze.t >= maze.buildDur) {
+        maze.phase = "run";
+        maze.timer = maze.timerMax || 36;
+        state.banner = { text: "Corre pro esquadrão", t: 1.6 };
+      }
+      return;
+    }
+    if (maze.phase === "run") {
+      maze.timer -= dt;
+      if (e) {
+        e.vx = e.vy = 0;
+        e.zDraw = 0;
+        e.mazeHide = true;
+        e.x = -500;
+        e.y = -500;
+      }
+      var cmd = commanderOf(state);
+      var gx = maze.goal.x;
+      var gy = maze.goal.y;
+      var ghw = (maze.cellW || 92) * 0.48;
+      var ghh = (maze.cellH || 92) * 0.48;
+      var px = state.squad.x;
+      var py = state.squad.y;
+      if (Math.abs(px - gx) <= ghw && Math.abs(py - gy) <= ghh) {
+        endGlinderMaze(state, e, true);
+        return;
+      }
+      if (cmd && Math.hypot(cmd.x - gx, cmd.y - gy) < 52) {
+        endGlinderMaze(state, e, true);
+        return;
+      }
+      var raw = null;
+      var ui;
+      for (ui = 0; ui < state.units.length; ui++) {
+        if (state.units[ui].commander) raw = state.units[ui];
+      }
+      if (raw && raw.hp <= 0) {
+        raw.hp = 1;
+        endGlinderMaze(state, e, false);
+        startGlinderBurn(state, e);
+        return;
+      }
+      if (maze.timer <= 0) {
+        endGlinderMaze(state, e, false);
+        startGlinderBurn(state, e);
+      }
+    }
+  }
+
   function vultoDashSpd() {
     return 2800;
   }
@@ -2864,204 +4151,265 @@
     e.strafeDur = Math.max(0.06, e.strafeLen / vultoDashSpd());
   }
 
-  function tickVulto(state, e, target, dt, spd) {
-    state.vultoId = e.id;
-    state.vultoDark = Math.min(1, (state.vultoDark || 0) + dt * 0.55);
-    var rage = G.invasion ? G.invasion.rage(e) : e.hp <= e.maxHp * 0.5;
+  function tickVultoP2(state, e, target, dt, spd) {
+    if (state.glinderNight || state.glinderNightFade || (state.vultoDark || 0) > 0.04) {
+      endGlinderNight(state, e);
+    }
+    e.mazeCd = Math.max(0, (e.mazeCd || 0) - dt);
+    e.novaCd = Math.max(0, (e.novaCd || 0) - dt);
+    e.vultoT = (e.vultoT || 0) - dt;
+    if (e.novaWave) {
+      e.novaWave.t -= dt;
+      var wk = 1 - Math.max(0, e.novaWave.t) / (e.novaWave.max || 0.85);
+      e.novaWave.r = 16 + wk * (e.novaWave.maxR || 420);
+      if (e.novaWave.t <= 0) e.novaWave = null;
+    }
+    if (state.glinderMaze && state.glinderMaze.phase !== "done") {
+      tickGlinderMaze(state, e, dt);
+      return;
+    }
+    if (e.vultoAct === "laser") {
+      tickGlinderLaser(state, e, target, dt, true);
+      return;
+    }
+    if (e.vultoAct === "nova") {
+      e.vx = e.vy = 0;
+      e.novaT = (e.novaT || 0) - dt;
+      state.glinderNovaT = e.novaT;
+      if (e.novaT <= 0 && !e.novaDid) {
+        var prev = e.cover ? { x: e.cover.x, y: e.cover.y } : null;
+        glinderNovaBurst(state, e);
+        e.novaLeft = (e.novaLeft || 1) - 1;
+        if (e.novaLeft > 0) {
+          spawnGlinderCover(state, e, prev);
+          glinderToNovaCenter(state, e);
+          e.novaT = 4;
+          state.glinderNovaT = 4;
+          state.glinderNovaMax = 4;
+        } else {
+          e.novaDid = true;
+          state.glinderNovaT = 0;
+        }
+      }
+      if (e.novaDid && (!e.novaWave || e.novaWave.t <= 0)) {
+        e.vultoAct = "";
+        if (!(state.glinderSun && !state.glinderSun.dead)) {
+          e.cover = null;
+          state.glinderCover = null;
+        }
+        e.vultoT = 2.6;
+        e.novaCd = 11;
+      }
+      return;
+    }
+    var hover = 150 + Math.sin(e.phase * 1.7) * 26;
+    var hx = target.x + Math.cos(e.phase * 0.85) * hover;
+    var hy = target.y + Math.sin(e.phase * 0.85) * hover * 0.7;
+    moveTowards(e, hx, hy, spd * 1.08, dt);
     var d = dist(e, target);
-    if (G.invasion) G.invasion.enterP2(state, e, "Glinder · segunda barra");
-    if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
-      e.vultoT = Math.min(e.vultoT || 0, 0.4);
-    }
-    e.vultoT -= dt;
-    if (state.vultoBlind > 0) {
-      state.vultoBlind -= dt;
-      if (state.vultoBlind <= 0) state.vultoBlind = 0;
-    }
-    if (e.vultoAct === "arena") {
-      e.arenaT = (e.arenaT || 0) - dt;
-      if ((e.arenaT || 0) <= 0 && !e.arenaDid) {
-        e.arenaDid = true;
-        var sx = e.arenaSx;
-        var sy = e.arenaSy;
-        var sr = e.arenaR || (G.invasion && G.invasion.PHALANX_R) || 122;
-        var bA = G.playfield(state);
-        explode(state, (bA.x0 + bA.x1) / 2, (bA.y0 + bA.y1) / 2, 40, 0, "enemy", "#ff4a2a");
-        if (Math.hypot(state.squad.x - sx, state.squad.y - sy) > sr) {
-          hurtSquadArea(state, state.squad.x, state.squad.y, 80, Math.round(e.def.dmg * 2.4), e.x, e.y);
-        }
-        G.burst(state, sx, sy, "#ffd24a", 18, 90);
-      }
-      if ((e.arenaT || 0) <= -0.25) {
-        e.vultoAct = "";
-        e.vultoT = 2.6;
-      }
-      return;
-    }
-    if (e.vultoAct === "strafe") {
-      e.strafeT = (e.strafeT || 0) - dt;
-      if ((e.strafeWait || 0) > 0) {
-        e.strafeWait -= dt;
-        e.rot = e.strafeAng || 0;
-        if (e.strafeWait <= 0) e.strafeT = e.strafeDur || 0.2;
-      } else {
-        var sp = vultoDashSpd();
-        var path = e.strafePath || [];
-        if (path.length < 2) {
-          e.vultoAct = "";
-          return;
-        }
-        e.strafeDist = (e.strafeDist || 0) + sp * dt;
-        var pos = pointOnPoly(path, Math.min(e.strafeLen || polyLen(path), e.strafeDist));
-        e.x = pos.x;
-        e.y = pos.y;
-        e.rot = pos.ang;
-        e.napalmAcc = (e.napalmAcc || 0) + dt;
-        if (e.napalmAcc > 24 / sp) {
-          e.napalmAcc = 0;
-          pushZone(state, { kind: "napalm", x: e.x, y: e.y, r: 30, t: 5, max: 5, dmg: 18, hurtPlayer: true });
-        }
-        if (e.strafeDist >= (e.strafeLen || 1) || e.strafeT <= 0) {
-          if ((e.strafeLeft || 0) > 1) {
-            e.strafeLeft--;
-            e.strafePass = (e.strafePass || 0) + 1;
-            setupVultoPass(state, e, e.strafePass);
-            e.strafeWait = 0.22;
-            e.napalmAcc = 0;
-          } else {
-            e.vultoAct = "";
-            e.vultoT = rage ? 2.2 : 3.1;
-          }
-        }
-      }
-      return;
-    }
-    if (e.vultoAct === "cone") {
-      e.coneT -= dt;
-      e.rot = e.coneAng || e.rot;
-      if (e.coneT <= 0 && !e.coneDid) {
-        e.coneDid = true;
-        var beamLen = e.coneRange || vultoBeamLen(state);
-        var beamAng = e.coneAng || 0;
-        var beams = e.invP2 ? 5 : 1;
-        for (var bi = 0; bi < beams; bi++) {
-          var off = beams === 1 ? 0 : (bi - (beams - 1) / 2) * 0.16;
-          var bang = beamAng + off;
-          if (e.invP2 && target) bang = Math.atan2(target.y - e.y, target.x - e.x) + off;
-          hurtBeam(state, e.x, e.y, bang, beamLen, 11, Math.round(e.def.dmg * 1.8));
-          enemyFireAng(state, e, bang, "flame", { speed: 520, r: 5, dmg: Math.round(e.def.dmg * 0.55), life: 1.2, homing: !!e.invP2, color: "#ff6a18" });
-        }
-        var ca = Math.cos(beamAng);
-        var sa = Math.sin(beamAng);
-        for (var n = 0; n < 36; n++) {
-          var along = (n / 35) * beamLen;
-          var jitter = (Math.random() - 0.5) * 10;
-          state.particles.push({
-            x: e.x + ca * along - sa * jitter,
-            y: e.y + sa * along + ca * jitter,
-            vx: ca * (520 + Math.random() * 220) - sa * jitter * 8,
-            vy: sa * (520 + Math.random() * 220) + ca * jitter * 8,
-            life: 0.18 + Math.random() * 0.12,
-            max: 0.28,
-            size: n < 4 ? 8 : 3 + Math.random() * 4,
-            color: Math.random() > 0.45 ? "#ff6a18" : "#ffe060"
-          });
-        }
-        e.vultoT = 0.15;
-      }
-      if (e.coneT <= -0.18) {
-        e.vultoAct = "";
-        e.vultoT = 2.6;
-      }
-      return;
-    }
-    var hover = 168 + Math.sin(e.phase * 1.6) * 28;
-    var hx = target.x + Math.cos(e.phase * 0.8) * hover;
-    var hy = target.y + Math.sin(e.phase * 0.8) * hover * 0.7;
-    moveTowards(e, hx, hy, spd, dt);
-    if (e.cooldown <= 0 && d < e.def.range) {
-      e.cooldown = 0.85;
-      enemyFire(state, e, target, "flame", { speed: 420, r: 5, dmg: Math.round(e.def.dmg * 0.7), color: "#ff6a2a" });
+    if (e.cooldown <= 0 && d < e.def.range + 30) {
+      e.cooldown = 0.92;
+      enemyFire(state, e, target, "fireball", {
+        speed: 240,
+        r: 13,
+        dmg: Math.round(e.def.dmg * 0.95),
+        color: "#ff4a10",
+        boomR: 78,
+        burn: true,
+        life: 1.85
+      });
     }
     if (e.vultoT > 0) return;
-    var pool = ["strafe", "cone", "dark"];
+    var pool = ["laser", "laser", "laser", "nova"];
+    if (!e.mazeUsed && (e.mazeCd || 0) <= 0) pool.push("maze", "maze");
     if (e.vultoLast) {
       var vp = [];
       for (var vi = 0; vi < pool.length; vi++) if (pool[vi] !== e.vultoLast) vp.push(pool[vi]);
       pool = vp.length ? vp : pool;
     }
+    if ((e.novaCd || 0) > 0) pool = pool.filter(function (a) { return a !== "nova"; });
+    if (!pool.length) pool = ["laser"];
     var act = pool[(Math.random() * pool.length) | 0];
     e.vultoLast = act;
-    if (act === "strafe") {
-      if (e.invP2) {
-        e.vultoAct = "arena";
-        e.arenaT = 1.25;
-        e.arenaDid = false;
-        var safe = G.invasion.pickOpposite(state, target || state.squad);
-        e.arenaSx = safe.x;
-        e.arenaSy = safe.y;
-        e.arenaR = G.invasion.PHALANX_R;
-        warnAt(state, { kind: "mark", x: safe.x, y: safe.y, t: 1.25, max: 1.25, r: e.arenaR, dmg: 0, color: "#ffe08a" });
-        state.banner = { text: "Fica no círculo", t: 1.6 };
-        state.floaters.push(G.createFloater(e.x, e.y - 24, "carga total", "#ff6a18"));
-        return;
-      }
-      var lanes = rage ? 3 : 1;
-      e.vultoAct = "strafe";
-      e.strafeLanes = lanes;
-      e.strafeLeft = lanes;
-      e.strafePass = 0;
-      e.strafeShift = 36;
-      e.strafeCx = target.x;
-      e.strafeCy = target.y;
-      e.strafeAngs = [];
-      e.strafeTwist = [];
-      for (var ln = 0; ln < lanes; ln++) {
-        e.strafeAngs.push(pickVultoDashAng(e, target) + (Math.random() - 0.5) * 0.7);
-        e.strafeTwist.push({
-          side: Math.random() < 0.5 ? 1 : -1,
-          amp: 80 + Math.random() * 150,
-          double: Math.random() < 0.6
-        });
-      }
-      e.strafeAng = e.strafeAngs[0];
-      setupVultoPass(state, e, 0);
-      e.strafeWait = 0.7;
-      e.napalmAcc = 0;
-      for (var lp = 0; lp < lanes; lp++) {
-        var p0 = vultoLaneCenter(e, lp);
-        var path0 = planVultoPath(state, p0.x, p0.y, e.strafeAngs[lp], e.strafeTwist[lp]);
-        warnVultoPath(state, path0, 0.7);
-      }
-      state.floaters.push(G.createFloater(e.x, e.y - 24, lanes > 1 ? "três linhas" : "razante", "#ff6a18"));
-    } else if (act === "cone") {
-      var cAng = Math.atan2(target.y - e.y, target.x - e.x);
-      var beamLen = vultoBeamLen(state);
-      e.vultoAct = "cone";
-      e.coneAng = cAng;
-      e.coneRange = beamLen;
-      e.coneT = 0.7;
-      e.coneDid = false;
-      warnAt(state, {
-        kind: "lane",
-        x: e.x,
-        y: e.y,
-        ang: cAng,
-        len: beamLen,
-        w: 9,
-        t: 0.7,
-        max: 0.7,
-        r: 12,
-        dmg: 0,
-        color: "#ff7a2a"
-      });
-      state.floaters.push(G.createFloater(e.x, e.y - 24, "laser", "#ff7a2a"));
+    if (act === "laser") {
+      beginGlinderLaser(state, e, target, true, 20);
+    } else if (act === "maze") {
+      startGlinderMaze(state, e);
     } else {
-      state.vultoBlind = 5;
-      state.banner = { text: "A visão some", t: 1.6 };
+      e.vultoAct = "nova";
+      e.novaT = 4;
+      e.novaDid = false;
+      e.novaLeft = 3 + ((Math.random() * 3) | 0);
+      e.novaCd = 11;
+      spawnGlinderCover(state, e);
+      glinderToNovaCenter(state, e);
+      state.glinderNovaT = 4;
+      state.glinderNovaMax = 4;
+      state.banner = { text: "Inferno em cadeia · " + e.novaLeft, t: 1.7 };
+      state.floaters.push(G.createFloater(e.x, e.y - 24, "inferno", "#ff4a18"));
+    }
+  }
+
+  function tickVulto(state, e, target, dt, spd) {
+    state.vultoId = e.id;
+    if (!e.glinderKit) {
+      e.glinderKit = 1;
+      e.darkCd = 5;
+      e.novaCd = 8;
+      e.vultoT = Math.max(e.vultoT || 0, 1.15);
+    }
+    if (G.invasion) G.invasion.enterP2(state, e, "Glinder · a lua queima");
+    if (G.invasion && G.invasion.tookP2Hook(e)) {
+      endGlinderNight(state, e);
+      e.vultoT = 1.25;
+      e.mazeCd = 8;
+      e.novaCd = 5;
+    }
+    if (glinderP2(e)) {
+      tickVultoP2(state, e, target, dt, spd);
+      return;
+    }
+    e.vultoT = (e.vultoT || 0) - dt;
+    e.darkCd = Math.max(0, (e.darkCd || 0) - dt);
+    e.novaCd = Math.max(0, (e.novaCd || 0) - dt);
+    if (e.novaWave) {
+      e.novaWave.t -= dt;
+      var wk = 1 - Math.max(0, e.novaWave.t) / (e.novaWave.max || 0.85);
+      e.novaWave.r = 16 + wk * (e.novaWave.maxR || 420);
+      if (e.novaWave.t <= 0) e.novaWave = null;
+    }
+    if (!state.glinderNight && !state.glinderNightFade) {
+      state.vultoDark = Math.max(0, (state.vultoDark || 0) - dt * 0.7);
+    }
+    if (state.glinderNight) {
+      state.vultoDark = Math.min(1, (state.vultoDark || 0) + dt * 0.62);
+      state.glinderNightT = (state.glinderNightT || 0) + dt;
+      var ni;
+      for (ni = 0; ni < (state.enemies || []).length; ni++) {
+        if (state.enemies[ni].glinderCoal) state.enemies[ni].coalAge = state.glinderNightT;
+      }
+    } else if (state.glinderNightFade) {
+      state.vultoDark = Math.max(0, (state.vultoDark || 0) - dt * 0.48);
+      if (state.vultoDark <= 0.02) {
+        state.glinderNightFade = false;
+        state.vultoDark = 0;
+        clearGlinderFires(state);
+        e.vultoAct = "";
+        e.vultoT = 2.2;
+      }
+    }
+
+    if (e.vultoAct === "laser") {
+      tickGlinderLaser(state, e, target, dt, false);
+      return;
+    }
+
+    if (e.vultoAct === "dark") {
+      var hunt = commanderOf(state) || (state.squad && { x: state.squad.x, y: state.squad.y, def: { size: 12 } });
+      if (state.glinderNight && hunt) {
+        var rush = Math.min(1, (state.glinderNightT || 0) / 12);
+        moveTowards(e, hunt.x, hunt.y, spd * (1.35 + rush * 2.15), dt);
+        e.rot = Math.atan2(hunt.y - e.y, hunt.x - e.x);
+        if ((state.vultoDark || 0) > 0.42) {
+          var touchR = (e.def.size || 30) + 18;
+          if (Math.hypot(e.x - state.squad.x, e.y - state.squad.y) < touchR) {
+            e.contactCd = (e.contactCd || 0) - dt;
+            if (e.contactCd <= 0) {
+              e.contactCd = 0.42;
+              hurtSquadArea(state, e.x, e.y, touchR, Math.round(e.def.dmg * 0.9), e.x, e.y);
+            }
+          }
+          for (var ni = 0; ni < state.units.length; ni++) {
+            var nu = state.units[ni];
+            if (nu.hp <= 0 || nu.stowed) continue;
+            hurt(state, nu, nu.maxHp * 0.01 * dt, e.x, e.y, false, { trueDmg: true });
+          }
+        }
+      }
+      if (!state.glinderNight && !state.glinderNightFade) {
+        e.vultoAct = "";
+        e.vultoT = 2.2;
+      }
+      return;
+    }
+
+    if (e.vultoAct === "nova") {
+      e.vx = e.vy = 0;
+      e.novaT = (e.novaT || 0) - dt;
+      state.glinderNovaT = e.novaT;
+      if (e.novaT <= 0 && !e.novaDid) {
+        e.novaDid = true;
+        glinderNovaBurst(state, e);
+        state.glinderNovaT = 0;
+      }
+      if (e.novaDid && (!e.novaWave || e.novaWave.t <= 0)) {
+        e.vultoAct = "";
+        e.cover = null;
+        state.glinderCover = null;
+        e.vultoT = 3.4;
+        e.novaCd = 8;
+      }
+      return;
+    }
+
+    if (state.glinderNight || state.glinderNightFade) return;
+
+    var hover = 168 + Math.sin(e.phase * 1.6) * 28;
+    var hx = target.x + Math.cos(e.phase * 0.8) * hover;
+    var hy = target.y + Math.sin(e.phase * 0.8) * hover * 0.7;
+    moveTowards(e, hx, hy, spd, dt);
+    var d = dist(e, target);
+    if (e.cooldown <= 0 && d < e.def.range) {
+      e.cooldown = 1.05;
+      enemyFire(state, e, target, "flame", {
+        speed: 260,
+        r: 8,
+        dmg: Math.round(e.def.dmg * 0.75),
+        color: "#ff6a18",
+        boomR: 46,
+        burn: true,
+        life: 1.7
+      });
+    }
+    if (e.vultoT > 0) return;
+    var pool = ["laser", "laser", "laser", "dark", "nova"];
+    if (e.vultoLast) {
+      var vp = [];
+      for (var vi = 0; vi < pool.length; vi++) if (pool[vi] !== e.vultoLast) vp.push(pool[vi]);
+      pool = vp.length ? vp : pool;
+    }
+    if ((e.darkCd || 0) > 0) {
+      pool = pool.filter(function (a) { return a !== "dark"; });
+    }
+    if ((e.novaCd || 0) > 0) {
+      pool = pool.filter(function (a) { return a !== "nova"; });
+    }
+    if (!pool.length) pool = ["laser"];
+    var act = pool[(Math.random() * pool.length) | 0];
+    e.vultoLast = act;
+    if (act === "laser") {
+      beginGlinderLaser(state, e, target, false, 10);
+    } else if (act === "dark") {
+      e.vultoAct = "dark";
+      e.darkCd = 14;
+      e.nightDmgT = 1;
+      e.contactCd = 0.2;
+      state.glinderNight = true;
+      state.glinderNightFade = false;
+      state.glinderNightT = 0;
+      spawnGlinderCoal(state, e);
       state.floaters.push(G.createFloater(e.x, e.y - 24, "escuridão", "#3a1020"));
-      e.vultoT = 5.4;
-      if (e.invP2 && G.invasion && !G.invasion.firesAlive(state)) G.invasion.spawnFires(state);
+    } else {
+      e.vultoAct = "nova";
+      e.novaT = 3;
+      e.novaDid = false;
+      e.novaCd = 8;
+      spawnGlinderCover(state, e);
+      glinderToNovaCenter(state, e);
+      state.glinderNovaT = 3;
+      state.glinderNovaMax = 3;
+      state.banner = { text: "Inferno", t: 1.6 };
+      state.floaters.push(G.createFloater(e.x, e.y - 24, "inferno", "#ff4a18"));
     }
   }
 
@@ -3754,6 +5102,7 @@
 
   function tryDash(state) {
     if (state.paused || state.userPaused || state.stageOutro || state.defeat || (G.invasion && G.invasion.cinematic(state))) return false;
+    if (state.glinderBurn || (state.glinderMaze && state.glinderMaze.phase === "build")) return false;
     if (state.timeLock && state.timeLock.phase !== "slow") return false;
     if ((state.dashCd || 0) > 0) return false;
     var md = readMoveDir(state);
@@ -3861,7 +5210,7 @@
   function steerSquad(state, dt) {
     if (state.dashCd > 0) state.dashCd = Math.max(0, state.dashCd - dt);
     state.dashStep = null;
-    if (state.stageOutro || (state.timeLock && state.timeLock.phase !== "slow") || (G.invasion && G.invasion.cinematic(state))) {
+    if (state.stageOutro || (state.timeLock && state.timeLock.phase !== "slow") || (G.invasion && G.invasion.cinematic(state)) || (state.glinderMaze && state.glinderMaze.phase === "build") || state.glinderBurn || state.glinderDeath) {
       state.dashActive = false;
       state.dashT = 0;
       state.dashSlideT = 0;
@@ -3935,6 +5284,7 @@
     var oy = state.squad.y;
     state.squad.x = Math.max(b.x0, Math.min(b.x1, state.squad.x + vx * dt));
     state.squad.y = Math.max(b.y0, Math.min(b.y1, state.squad.y + vy * dt));
+    if (state.glinderMaze && state.glinderMaze.phase === "run") resolveMazeMove(state, ox, oy);
     if (state.dashActive) {
       state.dashStep = { x: state.squad.x - ox, y: state.squad.y - oy };
     }
@@ -4032,6 +5382,13 @@
         u.y = state.squad.y;
         u.vx = state.squad.vx || 0;
         u.vy = state.squad.vy || 0;
+      } else if (state.glinderMaze && state.glinderMaze.phase !== "done") {
+        u.stowed = true;
+        u.packed = false;
+        u.x = state.glinderMaze.goal.x;
+        u.y = state.glinderMaze.goal.y;
+        u.vx = 0;
+        u.vy = 0;
       } else if (G.tactics && G.tactics.holdingLeap && G.tactics.holdingLeap(u)) {
         u.stowed = false;
         u.packed = false;
@@ -4087,6 +5444,11 @@
         u.poisonT -= dt;
         hurt(state, u, u.maxHp * 0.05 * dt / 5, u.x, u.y, false, { trueDmg: true });
       }
+      if (u.burnT > 0) {
+        u.burnT -= dt;
+        hurt(state, u, (u.burnDps || 8) * dt, u.x, u.y, false, { trueDmg: true });
+        if (u.burnT <= 0) u.burnDps = 0;
+      }
       var cursor = aimPoint(state);
       if (!(state.stageOutro && state.stageOutro.phase === "march")) {
         face(u, cursor.x, cursor.y, dt);
@@ -4103,6 +5465,8 @@
   }
 
   function playerShoot(state, dt) {
+    if (state.glinderMaze && state.glinderMaze.phase !== "done") return;
+    if (state.glinderBurn) return;
     if (G.tactics && G.tactics.playerShoot) G.tactics.playerShoot(state, dt);
   }
 
@@ -4139,6 +5503,11 @@
     for (var i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
       if (e.hp <= 0) continue;
+      if (state.glinderMaze && state.glinderMaze.phase !== "done" && e.type !== "chefe_vulto") {
+        e.vx = 0;
+        e.vy = 0;
+        continue;
+      }
       e.phase += dt;
       e.cooldown -= dt;
       e.burstCd -= dt;
@@ -4213,12 +5582,17 @@
         }
         if (G.tactics && G.tactics.enemyAim) target = G.tactics.enemyAim(state, e, target);
       }
+      if (e.type === "chefe_vulto" && (state.glinderNight || e.vultoAct === "dark")) {
+        var huntCmd = commanderOf(state);
+        if (huntCmd) target = huntCmd;
+        else target = { x: state.squad.x, y: state.squad.y, def: { size: 12 }, hp: 1, id: -1 };
+      }
       if (!target) {
         if (e.def.kind !== "nest") continue;
         target = { x: state.squad.x, y: state.squad.y, def: { size: 12 }, hp: 1, id: -1 };
       }
       var d = dist(e, target);
-      if (!(e.spinMode > 0 || e.seqMode > 0 || e.wormAct === "spin" || e.vultoAct === "strafe" || e.buried || e.kaskaStep === "spin" || e.kaskaStep === "spin_warn" || e.kaskaStep === "dash" || e.kaskaStep === "dash_warn" || e.kaskaStep === "hop" || e.kaskaStep === "stun" || kaskaAirborne(e))) {
+      if (!(e.spinMode > 0 || e.seqMode > 0 || e.wormAct === "spin" || e.vultoAct === "strafe" || e.vultoAct === "laser" || e.vultoAct === "nova" || e.vultoAct === "maze" || e.vultoAct === "burn" || e.buried || e.kaskaStep === "spin" || e.kaskaStep === "spin_warn" || e.kaskaStep === "dash" || e.kaskaStep === "dash_warn" || e.kaskaStep === "hop" || e.kaskaStep === "stun" || kaskaAirborne(e))) {
         face(e, target.x, target.y, dt);
       }
       var kind = e.def.kind;
@@ -5006,7 +6380,7 @@
         e.fuseCd = (e.fuseCd || 0) - dt;
       }
 
-      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && e.vultoAct !== "strafe" && e.wormAct !== "dive" && !e.buried && !kaskaAirborne(e)) G.clampPlay(e, state);
+      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && e.vultoAct !== "strafe" && e.vultoAct !== "maze" && e.vultoAct !== "burn" && e.wormAct !== "dive" && !e.buried && !kaskaAirborne(e)) G.clampPlay(e, state);
     }
     separateBodies(state.enemies, state, true);
   }
@@ -5057,6 +6431,11 @@
         state.projectiles.splice(i, 1);
         continue;
       }
+      if (glinderCoverBlocksShot(state, p)) {
+        G.burst(state, p.x, p.y, "#ff6a18", 6, 36);
+        state.projectiles.splice(i, 1);
+        continue;
+      }
       if (p.team === "enemy" && G.tactics && G.tactics.absorbBumper && G.tactics.absorbBumper(state, p)) {
         state.projectiles.splice(i, 1);
         continue;
@@ -5103,9 +6482,14 @@
         continue;
       }
       if (p.kind === "grenade" || p.kind === "missile" || p.kind === "crate") explode(state, p.x, p.y, p.kind === "missile" ? (p.boomR || 72) : (p.boomR || 52), p.dmg, p.team);
-      else {
+      else if (p.team === "enemy" && ((p.boomR || 0) > 0 || p.kind === "ember")) {
+        var boomR = p.boomR || 42;
+        explode(state, p.x, p.y, boomR, p.dmg, "enemy", "#ff6a18");
+        burnSquadArea(state, p.x, p.y, boomR + 10, Math.max(6, p.dmg * 0.32));
+      } else {
         hurt(state, hit, p.dmg, p.x, p.y, p.team === "player");
         if (p.kind === "ice") hit.slowT = Math.max(hit.slowT, 1.4);
+        if ((p.kind === "flame" || p.burn) && hit.team === "player") burnUnit(hit, 5, Math.max(6, p.dmg * 0.32));
       }
       p.hitIds[hit.id] = 1;
       p.hitsLeft--;
@@ -5318,6 +6702,10 @@
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.life -= dt;
+      if (p.ash) {
+        p.vy -= 28 * dt;
+        p.vx *= Math.max(0.2, 1 - dt * 0.55);
+      }
       if (p.life <= 0) state.particles.splice(i, 1);
     }
     for (var j = state.floaters.length - 1; j >= 0; j--) {
@@ -5520,6 +6908,18 @@
         if (state.enemies[vt].hp > 0 && state.enemies[vt].type === "chefe_vulto") hasVulto = true;
       }
       if (!hasVulto) {
+        if (state.glinderNight || state.glinderNightFade || state.glinderCover || (state.glinderNovaT || 0) > 0 || state.glinderSun || state.glinderMaze) {
+          state.glinderNight = false;
+          state.glinderNightFade = false;
+          state.glinderCover = null;
+          state.glinderNovaT = 0;
+          state.glinderSun = null;
+          state.glinderMaze = null;
+          state.glinderFoci = [];
+          state.glinderBeams = [];
+          state.glinderHeat = Math.max(0, (state.glinderHeat || 0) - dt * 0.8);
+          clearGlinderFires(state);
+        }
         if (G.invasion && G.invasion.firesAlive(state)) {
           state.vultoDark = Math.max(state.vultoDark || 0, 0.85);
         } else {
@@ -5529,6 +6929,7 @@
       }
       if (state.defeat) {
         updateFx(state, dt);
+        tickGlinderFlash(state, dt);
         if (state.vfx) {
           for (var v = 0; v < state.vfx.length; v++) state.vfx[v].t -= dt;
           state.vfx = state.vfx.filter(function (fx) { return fx.t > 0; });
@@ -5546,6 +6947,29 @@
           cu.fallT = (cu.fallT || 0) + dt;
         }
         state.shake *= Math.max(0, 1 - dt * 3.2);
+        return;
+      }
+      if (state.glinderBurn) {
+        tickGlinderBurn(state, dt);
+        tickGlinderFoci(state, dt);
+        updateFx(state, dt);
+        if (state.vfx) {
+          for (var bv = 0; bv < state.vfx.length; bv++) state.vfx[bv].t -= dt;
+          state.vfx = state.vfx.filter(function (fx) { return fx.t > 0; });
+        }
+        state.shake *= Math.max(0, 1 - dt * 2.2);
+        tickGlinderFlash(state, dt);
+        return;
+      }
+      if (state.glinderDeath) {
+        tickGlinderDeath(state, dt);
+        updateFx(state, dt);
+        if (state.vfx) {
+          for (var dv = 0; dv < state.vfx.length; dv++) state.vfx[dv].t -= dt;
+          state.vfx = state.vfx.filter(function (fx) { return fx.t > 0; });
+        }
+        state.shake *= Math.max(0, 1 - dt * 2.4);
+        tickGlinderFlash(state, dt);
         return;
       }
       if (G.invasion && G.invasion.cinematic(state)) {
@@ -5572,9 +6996,30 @@
         return;
       }
       updateSquad(state, dt);
+      if (state.glinderMaze && state.glinderMaze.phase === "build") {
+        var ge = null;
+        for (var gi = 0; gi < (state.enemies || []).length; gi++) {
+          if (state.enemies[gi].type === "chefe_vulto") ge = state.enemies[gi];
+        }
+        tickGlinderMaze(state, ge, dt);
+        updateFx(state, dt);
+        tickGlinderFlash(state, dt);
+        return;
+      }
       if (G.tactics && G.tactics.update) G.tactics.update(state, dt);
       playerShoot(state, dt);
       updateEnemies(state, dt);
+      tickGlinderSun(state, dt);
+      tickGlinderFoci(state, dt);
+      if ((state.glinderHeat || 0) > 0.32 && !glinderP2({ p2: !!(state.glinderSun) })) {
+        state.glinderHeat = Math.max(0, state.glinderHeat - dt * 0.25);
+      } else if (state.glinderSun && !state.glinderSun.dead) {
+        state.glinderHeat = Math.min(0.55, (state.glinderHeat || 0.3) + dt * 0.04);
+      }
+      if (state.vultoBlind > 0) state.vultoBlind = Math.max(0, state.vultoBlind - dt);
+      tickGlinderFlash(state, dt);
+      tickGlinderBeams(state, dt);
+      tickGlinderRub(state, dt);
       if (G.tactics && G.tactics.shieldPhysics) G.tactics.shieldPhysics(state);
       updateProjectiles(state, dt);
       updateMines(state, dt);
@@ -5609,6 +7054,9 @@
     spawnDashBurst: spawnDashBurst,
     pickupRadius: pickupRadius,
     applyDrop: applyDrop,
+    spawnGlinderSun: spawnGlinderSun,
+    endGlinderNight: endGlinderNight,
+    rubGlinderFire: rubGlinderFire,
     dashCd: function () { return DASH_CD; }
   };
 })(window.TFAG = window.TFAG || {});

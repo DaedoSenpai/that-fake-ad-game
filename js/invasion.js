@@ -62,7 +62,7 @@
     wantsTwoBars: function (state, e) {
       if (!e || !e.def || !e.def.boss || e.fake || e.def.codexHide) return false;
       if (e.type === "beeprincess" || e.type === "chefe_final") return false;
-      if (e.type === "chefe_comandante") return true;
+      if (e.type === "chefe_comandante" || e.type === "chefe_vulto") return true;
       return this.enraged(state, state.stageIndex | 0);
     },
 
@@ -157,11 +157,11 @@
       e.hpBars = 1;
       e.flash = Math.max(e.flash || 0, 0.55);
       if (state) state.bossShown = 1;
-      var text = label || (e.type === "chefe_comandante" ? "Kaska perde a carapaça" : "Segunda fase");
+      var text = label || (e.type === "chefe_comandante" ? "Kaska perde a carapaça" : (e.type === "chefe_vulto" ? "Glinder · a lua queima" : "Segunda fase"));
       G.burst(state, e.x, e.y, "#ffe08a", 22, 150);
       G.burst(state, e.x, e.y, e.def.color || "#ff6a3a", 18, 120);
       if (state) state.shake = Math.max(state.shake || 0, 10);
-      if (e.inv || e.type === "chefe_comandante") this.startCutscene(state, e, text);
+      if (e.inv || e.type === "chefe_comandante" || e.type === "chefe_vulto") this.startCutscene(state, e, text);
       else if (state) state.banner = { text: text, t: 2.2 };
       return true;
     },
@@ -593,6 +593,221 @@
           }
           state.banner = { text: "Desvia dos cacos", t: 1.8 };
         }
+      },
+      chefe_vulto: {
+        dur: 8.7,
+        zoom: 1.18,
+        onStart: function (state, e, cs) {
+          var b = G.playfield(state);
+          cs.cx = (b.x0 + b.x1) / 2;
+          cs.cy = (b.y0 + b.y1) / 2;
+          cs.rx = Math.max(90, (b.x1 - b.x0) * 0.32);
+          cs.ry = Math.max(64, (b.y1 - b.y0) * 0.28);
+          cs.fires = [];
+          cs.nextFire = 0.18;
+          cs.scream = false;
+          cs.pulse = false;
+          cs.rings = [];
+          state.glinderHeat = 0.15;
+          state.glinderFoci = [];
+          if (G.combat && G.combat.endGlinderNight) G.combat.endGlinderNight(state, e);
+          if (e) {
+            e.zDraw = 18;
+            e.vx = 0;
+            e.vy = 0;
+          }
+          state.banner = { text: "Sua ira incendia o campo de batalha.", t: 2.4 };
+        },
+        tick: function (state, e, cs, dt) {
+          var t = cs.t;
+          if (!e || e.hp <= 0) return;
+          var flyEnd = 5.15;
+          var heatEnd = 6.35;
+          var screamAt = 6.85;
+          var k;
+          var b = G.playfield(state);
+          var x0 = 14;
+          var y0 = 14;
+          var x1 = state.W - 14;
+          var y1 = state.H - 14;
+          function edgeOf(px, py) {
+            var dx = px - cs.cx;
+            var dy = py - cs.cy;
+            var len = Math.hypot(dx, dy);
+            if (len < 1) {
+              var a = Math.random() * Math.PI * 2;
+              dx = Math.cos(a);
+              dy = Math.sin(a);
+            } else {
+              dx /= len;
+              dy /= len;
+            }
+            var hit = 1e9;
+            if (dx > 0.001) hit = Math.min(hit, (x1 - cs.cx) / dx);
+            else if (dx < -0.001) hit = Math.min(hit, (x0 - cs.cx) / dx);
+            if (dy > 0.001) hit = Math.min(hit, (y1 - cs.cy) / dy);
+            else if (dy < -0.001) hit = Math.min(hit, (y0 - cs.cy) / dy);
+            if (!isFinite(hit) || hit < 20) hit = Math.max(b.x1 - b.x0, b.y1 - b.y0) * 0.5;
+            return { x: cs.cx + dx * hit, y: cs.cy + dy * hit };
+          }
+          function shoveFires(spd) {
+            var foci = state.glinderFoci || [];
+            var i;
+            for (i = 0; i < foci.length; i++) {
+              var f = foci[i];
+              if (!f.tx) {
+                var dest = edgeOf(f.x, f.y);
+                f.tx = dest.x;
+                f.ty = dest.y;
+                f.prison = true;
+                f.t = 999;
+              }
+              var ddx = f.tx - f.x;
+              var ddy = f.ty - f.y;
+              var dd = Math.hypot(ddx, ddy);
+              if (dd < 3) {
+                f.x = f.tx;
+                f.y = f.ty;
+                continue;
+              }
+              var step = Math.min(dd, spd * dt);
+              f.x += (ddx / dd) * step;
+              f.y += (ddy / dd) * step;
+            }
+          }
+          if (t < flyEnd) {
+            k = t / flyEnd;
+            var ang = k * Math.PI * 2.15;
+            e.x = cs.cx + Math.cos(ang) * cs.rx;
+            e.y = cs.cy + Math.sin(ang * 1.35) * cs.ry;
+            e.zDraw = 22 + Math.sin(t * 9) * 8;
+            e.rot = ang + Math.PI / 2;
+            cs.nextFire -= dt;
+            if (cs.nextFire <= 0) {
+              cs.nextFire = 0.48;
+              cs.fires.push({ x: e.x, y: e.y, t: 0 });
+              if (!state.glinderFoci) state.glinderFoci = [];
+              state.glinderFoci.push({ x: e.x, y: e.y, r: 26, t: 999 });
+              G.burst(state, e.x, e.y, "#ff6a18", 14, 90);
+              G.burst(state, e.x, e.y, "#3a0808", 8, 50);
+              if (G.audio && G.audio.hit) G.audio.hit();
+            }
+            state.glinderHeat = Math.min(1, (state.glinderHeat || 0) + dt * 0.18);
+            state.camLook = { x: e.x, y: e.y - 10 };
+            state.camZoomTo = 1.12 + Math.sin(t * 2) * 0.04;
+          } else if (t < heatEnd) {
+            k = (t - flyEnd) / (heatEnd - flyEnd);
+            e.x = e.x + (cs.cx - e.x) * Math.min(1, dt * 3.2);
+            e.y = e.y + (cs.cy - e.y) * Math.min(1, dt * 3.2);
+            e.zDraw = 16 + (1 - k) * 10;
+            state.glinderHeat = 0.55 + k * 0.45;
+            state.shake = Math.max(state.shake || 0, 5 + k * 6);
+            state.camLook = { x: (e.x + cs.cx) / 2, y: (e.y + cs.cy) / 2 };
+            state.camZoomTo = 1.2 + k * 0.18;
+            if (!cs.pushed) {
+              cs.pushed = true;
+              state.banner = { text: "As chamas engolem as saídas, você está preso.", t: 2.2 };
+            }
+            shoveFires(420);
+          } else {
+            e.x = cs.cx;
+            e.y = cs.cy;
+            e.zDraw = 8 + Math.sin(t * 14) * 3;
+            e.rot += dt * (cs.scream ? 2.4 : 0.4);
+            state.camLook = { x: cs.cx, y: cs.cy };
+            shoveFires(cs.scream ? 980 : 560);
+            if (t >= screamAt && !cs.scream) {
+              cs.scream = true;
+              state.shake = Math.max(state.shake || 0, 18);
+              state.camZoomTo = 1.72;
+              state.glinderHeat = 1;
+              G.burst(state, e.x, e.y, "#fff4c4", 36, 220);
+              G.burst(state, e.x, e.y, "#ff3a18", 28, 180);
+              if (G.audio && G.audio.explosion) G.audio.explosion();
+              state.banner = { text: "GLINDER, A CHAMA ETERNA DA LEGIÃO", t: 3.4 };
+              var ri;
+              for (ri = 0; ri < 5; ri++) {
+                cs.rings.push({ r: 12, max: 70 + ri * 48, t: 0.12 * ri, life: 0.55 });
+              }
+            }
+            if (cs.scream && !cs.pulse && t >= screamAt + 0.42) {
+              cs.pulse = true;
+              e.novaWave = { x: cs.cx, y: cs.cy, r: 10, maxR: 160, t: 0.55, max: 0.55 };
+              state.shake = Math.max(state.shake || 0, 14);
+              var fj;
+              var foci = state.glinderFoci || [];
+              for (fj = 0; fj < foci.length; fj++) {
+                if (foci[fj].tx != null) {
+                  foci[fj].x = foci[fj].tx;
+                  foci[fj].y = foci[fj].ty;
+                  foci[fj].prison = true;
+                }
+              }
+            }
+            var r;
+            for (r = 0; r < cs.rings.length; r++) {
+              cs.rings[r].t += dt;
+            }
+          }
+          var f;
+          for (f = 0; f < cs.fires.length; f++) cs.fires[f].t += dt;
+        },
+        draw: function (ctx, state, e, cs) {
+          var t = cs.t || 0;
+          var heat = Math.min(1, state.glinderHeat || 0);
+          var a = Math.min(1, t / 0.35) * 0.55;
+          if (t > (cs.dur || 8.7) - 0.4) a *= Math.max(0, ((cs.dur || 8.7) - t) / 0.4);
+          ctx.save();
+          var g = ctx.createRadialGradient(cs.cx || state.W / 2, cs.cy || state.H / 2, 30, cs.cx || state.W / 2, cs.cy || state.H / 2, Math.max(state.W, state.H) * 0.7);
+          g.addColorStop(0, "rgba(80, 18, 4, 0)");
+          g.addColorStop(0.5, "rgba(40, 8, 2, " + (a * 0.28 + heat * 0.12) + ")");
+          g.addColorStop(1, "rgba(8, 2, 2, " + (a * 0.72) + ")");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, state.W, state.H);
+          var i;
+          for (i = 0; i < (cs.rings || []).length; i++) {
+            var rg = cs.rings[i];
+            if (rg.t < 0) continue;
+            var kk = Math.min(1, rg.t / (rg.life || 0.55));
+            ctx.strokeStyle = "rgba(255, 220, 180, " + (0.7 * (1 - kk)) + ")";
+            ctx.lineWidth = 3 + (1 - kk) * 8;
+            ctx.beginPath();
+            ctx.arc(cs.cx, cs.cy, 16 + kk * (rg.max || 120), 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          if (cs.scream) {
+            ctx.fillStyle = "rgba(255, 240, 210, " + (0.18 * Math.max(0, 1 - (t - 6.85) * 2.4)) + ")";
+            ctx.fillRect(0, 0, state.W, state.H);
+          }
+          ctx.restore();
+        },
+        onEnd: function (state, e) {
+          if (e) {
+            e.zDraw = 0;
+            var b = G.playfield(state);
+            var cx = (b.x0 + b.x1) / 2;
+            var cy = (b.y0 + b.y1) / 2;
+            e.x = cx;
+            e.y = cy;
+            e.vultoAct = "";
+            e.vultoT = 1.35;
+            e.mazeCd = 9;
+            e.novaCd = 6;
+            if (G.combat && G.combat.spawnGlinderSun) G.combat.spawnGlinderSun(state, e);
+          }
+          var foci = state.glinderFoci || [];
+          var fi;
+          for (fi = 0; fi < foci.length; fi++) {
+            if (foci[fi].tx != null) {
+              foci[fi].x = foci[fi].tx;
+              foci[fi].y = foci[fi].ty;
+            }
+            foci[fi].prison = true;
+            foci[fi].t = 999;
+          }
+          state.glinderHeat = 0.38;
+          state.camZoomTo = 1;
+        }
       }
     },
 
@@ -640,7 +855,11 @@
     },
 
     firesAlive: function (state) {
-      return this.countType(state, "fogueira") > 0;
+      for (var i = 0; i < (state.enemies || []).length; i++) {
+        var f = state.enemies[i];
+        if (f.hp > 0 && f.type === "fogueira" && !f.glinderCoal) return true;
+      }
+      return false;
     },
 
     pickOpposite: function (state, from) {
