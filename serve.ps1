@@ -62,6 +62,56 @@ function Get-RawUrl([string]$RelPath) {
   return "https://raw.githubusercontent.com/$Owner/$Repo/$Branch/$($parts -join '/')"
 }
 
+function Get-LegacyPaths([string]$Rel) {
+  $n = ConvertTo-UnixPath $Rel
+  $list = New-Object System.Collections.ArrayList
+  if ($n -match '^img/(aliados|inimigos)/(portrait-.+\.png)$') {
+    [void]$list.Add("img/$($Matches[2])")
+  }
+  if ($n -match '^img/cenarios/(bg-.+\.png)$') {
+    [void]$list.Add("img/$($Matches[1])")
+  }
+  return @($list)
+}
+
+function Find-LocalAsset([string]$Rel) {
+  $exact = Get-LocalPath $Rel
+  if (Test-Path -LiteralPath $exact) { return $exact }
+  foreach ($alt in Get-LegacyPaths $Rel) {
+    $p = Get-LocalPath $alt
+    if (Test-Path -LiteralPath $p) { return $p }
+  }
+  return $null
+}
+
+function Copy-FileIfMissing([string]$From, [string]$To) {
+  if (-not (Test-Path -LiteralPath $From)) { return $false }
+  if (Test-Path -LiteralPath $To) { return $false }
+  $dir = Split-Path -Parent $To
+  if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  }
+  Copy-Item -LiteralPath $From -Destination $To
+  return $true
+}
+
+function Repair-LegacyImages {
+  $img = Join-Path $Root "img"
+  if (-not (Test-Path -LiteralPath $img)) { return 0 }
+  $n = 0
+  $cen = Join-Path $img "cenarios"
+  $ally = Join-Path $img "aliados"
+  $enemy = Join-Path $img "inimigos"
+  Get-ChildItem -LiteralPath $img -Filter "bg-*.png" -File -ErrorAction SilentlyContinue | ForEach-Object {
+    if (Copy-FileIfMissing $_.FullName (Join-Path $cen $_.Name)) { $n++ }
+  }
+  Get-ChildItem -LiteralPath $img -Filter "portrait-*.png" -File -ErrorAction SilentlyContinue | ForEach-Object {
+    if (Copy-FileIfMissing $_.FullName (Join-Path $ally $_.Name)) { $n++ }
+    if (Copy-FileIfMissing $_.FullName (Join-Path $enemy $_.Name)) { $n++ }
+  }
+  return $n
+}
+
 function Invoke-GitHubGet([string]$Url) {
   try {
     return Invoke-RestMethod -Uri $Url -Headers $ApiHeaders
@@ -104,7 +154,7 @@ function Get-UpdatePlan {
 
   $same = New-Object System.Collections.ArrayList
   $download = New-Object System.Collections.ArrayList
-  $keepLocal = New-Object System.Collections.ArrayList
+  $migrate = New-Object System.Collections.ArrayList
   $missing = New-Object System.Collections.ArrayList
 
   foreach ($entry in @($tree.tree)) {
@@ -112,38 +162,38 @@ function Get-UpdatePlan {
     $rel = ConvertTo-UnixPath ([string]$entry.path)
     if (Test-UpdateSkipPath $rel) { continue }
 
-    $local = Get-LocalPath $rel
     $remoteSha = ([string]$entry.sha).ToLowerInvariant()
+    $found = Find-LocalAsset $rel
+    $exact = Get-LocalPath $rel
 
-    if (-not (Test-Path -LiteralPath $local)) {
+    if (-not $found) {
       [void]$missing.Add($rel)
       [void]$download.Add(@{ path = $rel; reason = "missing" })
       continue
     }
 
-    $localSha = Get-GitBlobSha $local
+    $localSha = Get-GitBlobSha $found
     if ($localSha -eq $remoteSha) {
-      [void]$same.Add($rel)
+      if ($found.ToLowerInvariant() -eq $exact.ToLowerInvariant()) {
+        [void]$same.Add($rel)
+      } else {
+        $fromRel = $null
+        foreach ($alt in Get-LegacyPaths $rel) {
+          if ((Get-LocalPath $alt).ToLowerInvariant() -eq $found.ToLowerInvariant()) {
+            $fromRel = $alt
+            break
+          }
+        }
+        if ($fromRel) {
+          [void]$migrate.Add(@{ path = $rel; from = $fromRel })
+        } else {
+          [void]$same.Add($rel)
+        }
+      }
       continue
     }
 
-    $remoteTime = Get-RemoteCommitTime $rel
-    $localTime = [System.IO.File]::GetLastWriteTimeUtc($local)
-    if ($null -eq $remoteTime -or $remoteTime -gt $localTime.AddSeconds(2)) {
-      $item = @{
-        path = $rel
-        reason = "newer"
-        localTime = $localTime.ToString("o")
-      }
-      if ($null -ne $remoteTime) { $item.remoteTime = $remoteTime.ToString("o") }
-      [void]$download.Add($item)
-    } else {
-      [void]$keepLocal.Add(@{
-        path = $rel
-        remoteTime = $remoteTime.ToString("o")
-        localTime = $localTime.ToString("o")
-      })
-    }
+    [void]$download.Add(@{ path = $rel; reason = "newer" })
   }
 
   return @{
@@ -152,7 +202,8 @@ function Get-UpdatePlan {
     branch = $Branch
     same = $same.Count
     download = $download.ToArray()
-    keepLocal = $keepLocal.ToArray()
+    migrate = $migrate.ToArray()
+    keepLocal = @()
     missing = $missing.ToArray()
   }
 }
@@ -170,23 +221,100 @@ function Save-RemoteFile([string]$RelPath) {
   Move-Item -LiteralPath $tmp -Destination $dest -Force
 }
 
+function Test-ShouldZip($Plan) {
+  $dl = @($Plan.download)
+  if ($dl.Count -ge 12) { return $true }
+  foreach ($item in $dl) {
+    if ([string]$item.path -match '^img/(aliados|inimigos|cenarios)/') { return $true }
+  }
+  return $false
+}
+
+function Apply-UpdateFromZip {
+  $zipUrl = "https://github.com/$Owner/$Repo/archive/refs/heads/$Branch.zip"
+  $stamp = Get-Date -Format "yyyyMMddHHmmss"
+  $tmpZip = Join-Path $env:TEMP "tfag-update-$stamp.zip"
+  $tmpDir = Join-Path $env:TEMP "tfag-update-$stamp"
+  $updated = New-Object System.Collections.ArrayList
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri $zipUrl -OutFile $tmpZip -Headers @{ "User-Agent" = $UserAgent }
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+    Expand-Archive -LiteralPath $tmpZip -DestinationPath $tmpDir -Force
+    $src = Get-ChildItem -LiteralPath $tmpDir -Directory | Select-Object -First 1
+    if (-not $src) { throw "Zip do GitHub veio vazio." }
+    Get-ChildItem -LiteralPath $src.FullName -Recurse -File | ForEach-Object {
+      $rel = $_.FullName.Substring($src.FullName.Length).TrimStart("\", "/")
+      $unix = ConvertTo-UnixPath $rel
+      if (Test-UpdateSkipPath $unix) { return }
+      $dest = Get-LocalPath $unix
+      $dir = Split-Path -Parent $dest
+      if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+      }
+      Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
+      [void]$updated.Add($unix)
+    }
+  } finally {
+    if (Test-Path -LiteralPath $tmpZip) { Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue }
+    if (Test-Path -LiteralPath $tmpDir) { Remove-Item -LiteralPath $tmpDir -Recurse -Force -ErrorAction SilentlyContinue }
+  }
+  return $updated
+}
+
 function Apply-UpdatePlan($Plan) {
   $updated = New-Object System.Collections.ArrayList
+  $migrated = New-Object System.Collections.ArrayList
   $failed = New-Object System.Collections.ArrayList
-  foreach ($item in @($Plan.download)) {
-    $rel = [string]$item.path
+
+  foreach ($item in @($Plan.migrate)) {
+    $dest = [string]$item.path
+    $from = [string]$item.from
     try {
-      Save-RemoteFile $rel
-      [void]$updated.Add($rel)
+      if ($from -and (Copy-FileIfMissing (Get-LocalPath $from) (Get-LocalPath $dest))) {
+        [void]$migrated.Add($dest)
+      }
     } catch {
-      [void]$failed.Add(@{ path = $rel; error = $_.Exception.Message })
+      [void]$failed.Add(@{ path = $dest; error = $_.Exception.Message })
     }
   }
+
+  try {
+    if (Test-ShouldZip $Plan) {
+      $copied = @(Apply-UpdateFromZip)
+      foreach ($rel in $copied) { [void]$updated.Add($rel) }
+    } else {
+      foreach ($item in @($Plan.download)) {
+        $rel = [string]$item.path
+        try {
+          Save-RemoteFile $rel
+          [void]$updated.Add($rel)
+        } catch {
+          [void]$failed.Add(@{ path = $rel; error = $_.Exception.Message })
+        }
+      }
+    }
+  } catch {
+    [void]$failed.Add(@{ path = "(pacote)"; error = $_.Exception.Message })
+    foreach ($item in @($Plan.download)) {
+      $rel = [string]$item.path
+      try {
+        Save-RemoteFile $rel
+        [void]$updated.Add($rel)
+      } catch {
+        [void]$failed.Add(@{ path = $rel; error = $_.Exception.Message })
+      }
+    }
+  }
+
+  $n = Repair-LegacyImages
+  if ($n -gt 0) { [void]$migrated.Add("img/* (pasta antiga)") }
+
   return @{
     ok = ($failed.Count -eq 0)
     updated = $updated.ToArray()
+    migrated = $migrated.ToArray()
     failed = $failed.ToArray()
-    keepLocal = $Plan.keepLocal
+    keepLocal = @()
     same = $Plan.same
   }
 }
@@ -364,8 +492,21 @@ function Handle-Static($Context, [string]$UrlPath) {
   }
   $full = Get-LocalPath $rel
   if (-not (Test-Path -LiteralPath $full) -or (Get-Item -LiteralPath $full).PSIsContainer) {
-    Write-HttpText $Context 404 "text/plain; charset=utf-8" "Nao encontrado."
-    return
+    $unix = ConvertTo-UnixPath $rel
+    $alts = @(Get-LegacyPaths $unix)
+    $resolved = $null
+    foreach ($alt in $alts) {
+      $try = Get-LocalPath $alt
+      if (Test-Path -LiteralPath $try -and -not (Get-Item -LiteralPath $try).PSIsContainer) {
+        $resolved = $try
+        break
+      }
+    }
+    if (-not $resolved) {
+      Write-HttpText $Context 404 "text/plain; charset=utf-8" "Nao encontrado."
+      return
+    }
+    $full = $resolved
   }
   $bytes = [IO.File]::ReadAllBytes($full)
   Write-HttpBytes $Context 200 (Get-Mime $full) $bytes
@@ -426,6 +567,7 @@ function Start-GameServer {
 
   $url = "http://127.0.0.1:$port/"
   $indexPath = [System.IO.Path]::GetFullPath((Join-Path $Root "index.html"))
+  try { Repair-LegacyImages | Out-Null } catch { }
   Write-Host ""
   Write-Host "That Fake Ad Game"
   Write-Host "Abrindo o jogo (mesmo save do index.html)."

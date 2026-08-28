@@ -438,11 +438,43 @@
 
   G.portraitImgs = {};
 
+  G.loadImg = function (urls) {
+    var list = Array.isArray(urls) ? urls.slice() : [urls];
+    var img = new Image();
+    var i = 0;
+    function next() {
+      while (i < list.length && !list[i]) i++;
+      if (i >= list.length) return;
+      img.src = list[i++];
+    }
+    img.onerror = function () {
+      if (i < list.length) next();
+    };
+    next();
+    return img;
+  };
+
+  G.portraitUrls = function (k, folder) {
+    var name = "portrait-" + k + ".png";
+    var urls = [];
+    if (folder) urls.push("img/" + folder + "/" + name);
+    if (folder !== "aliados") urls.push("img/aliados/" + name);
+    if (folder !== "inimigos") urls.push("img/inimigos/" + name);
+    urls.push("img/" + name);
+    return urls;
+  };
+
+  G.stageBgUrls = function (src) {
+    var s = String(src || "");
+    var urls = [s];
+    if (s.indexOf("img/cenarios/") === 0) urls.push(s.replace("img/cenarios/", "img/"));
+    else if (/^img\/bg-/.test(s)) urls.push(s.replace("img/", "img/cenarios/"));
+    return urls;
+  };
+
   function loadPortrait(k, folder) {
     if (G.portraitImgs[k]) return;
-    var img = new Image();
-    img.src = "img/" + folder + "/portrait-" + k + ".png";
-    G.portraitImgs[k] = img;
+    G.portraitImgs[k] = G.loadImg(G.portraitUrls(k, folder));
   }
 
   G.preloadPortraits = function () {

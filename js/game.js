@@ -156,8 +156,8 @@
     for (var i = 0; i < G.STAGES.length; i++) {
       var src = G.STAGES[i].bg;
       if (!src || G.stageBgs[src]) continue;
-      var img = new Image();
-      img.src = src;
+      var img = (G.loadImg ? G.loadImg(G.stageBgUrls(src)) : new Image());
+      if (!G.loadImg) img.src = src;
       G.stageBgs[src] = img;
     }
   };

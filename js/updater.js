@@ -89,7 +89,7 @@
     busy = !!on;
     if (checkBtn) checkBtn.disabled = busy;
     if (closeBtn) closeBtn.disabled = busy;
-    if (applyBtn) applyBtn.disabled = busy || !pendingPlan || !asList(pendingPlan.download).length;
+    if (applyBtn) applyBtn.disabled = busy || !pendingPlan || !(asList(pendingPlan.download).length || asList(pendingPlan.migrate).length);
   }
 
   function showStatus(title, text, rows) {
@@ -137,6 +137,31 @@
   function skipPath(p) {
     var n = unixPath(p);
     return /(^|\/)\.git(\/|$)/.test(n) || /(^|\/)\.cursor(\/|$)/.test(n) || /(^|\/)data(\/|$)/.test(n);
+  }
+
+  function legacyAliases(rel) {
+    var n = unixPath(rel);
+    var out = [];
+    var m = n.match(/^img\/(aliados|inimigos)\/(portrait-.+\.png)$/);
+    if (m) out.push("img/" + m[2]);
+    var m2 = n.match(/^img\/cenarios\/(bg-.+\.png)$/);
+    if (m2) out.push("img/" + m2[1]);
+    return out;
+  }
+
+  function readLocalAny(root, rel) {
+    return readLocalFile(root, rel).then(function (exact) {
+      if (exact) return { rel: rel, local: exact, via: "exact" };
+      var alts = legacyAliases(rel);
+      function tryAlt(i) {
+        if (i >= alts.length) return Promise.resolve(null);
+        return readLocalFile(root, alts[i]).then(function (found) {
+          if (found) return { rel: alts[i], local: found, via: "legacy" };
+          return tryAlt(i + 1);
+        });
+      }
+      return tryAlt(0);
+    });
   }
 
   function hexSha(buf) {
@@ -218,7 +243,7 @@
         return entry.type === "blob" && !skipPath(entry.path);
       });
       var download = [];
-      var keepLocal = [];
+      var migrate = [];
       var missing = [];
       var same = 0;
       var i = 0;
@@ -231,7 +256,8 @@
             branch: BRANCH,
             same: same,
             download: download,
-            keepLocal: keepLocal,
+            migrate: migrate,
+            keepLocal: [],
             missing: missing
           };
         }
@@ -239,26 +265,20 @@
         var rel = unixPath(entry.path);
         showStatus("Verificando", "Comparando " + i + "/" + entries.length + " · " + rel, []);
         bumpLoader((i / Math.max(1, entries.length)) * 100, "COMPARANDO");
-        return readLocalFile(root, rel).then(function (local) {
-          if (!local) {
+        return readLocalAny(root, rel).then(function (hit) {
+          if (!hit) {
             missing.push(rel);
             download.push({ path: rel, reason: "missing" });
             return next();
           }
-          return gitBlobSha(local.buf).then(function (sha) {
+          return gitBlobSha(hit.local.buf).then(function (sha) {
             if (sha === String(entry.sha || "").toLowerCase()) {
-              same += 1;
+              if (hit.via === "legacy") migrate.push({ path: rel, from: hit.rel });
+              else same += 1;
               return next();
             }
-            return remoteCommitTime(rel).then(function (remoteMs) {
-              var localMs = local.file.lastModified || 0;
-              if (remoteMs == null || remoteMs > localMs + 2000) {
-                download.push({ path: rel, reason: "newer" });
-              } else {
-                keepLocal.push({ path: rel });
-              }
-              return next();
-            });
+            download.push({ path: rel, reason: "newer" });
+            return next();
           });
         });
       }
@@ -267,19 +287,99 @@
     });
   }
 
+  function copyLocalFile(root, fromRel, toRel) {
+    return readLocalFile(root, fromRel).then(function (local) {
+      if (!local) return Promise.reject(new Error("sumiu: " + fromRel));
+      return writeLocalFile(root, toRel, local.buf);
+    });
+  }
+
+  function copyLocalIfMissing(root, fromRel, toRel) {
+    return readLocalFile(root, toRel).then(function (exists) {
+      if (exists) return null;
+      return copyLocalFile(root, fromRel, toRel);
+    });
+  }
+
+  function listDirFiles(dir) {
+    if (!dir) return Promise.resolve([]);
+    return new Promise(function (resolve, reject) {
+      var items = [];
+      var it = dir.values();
+      function step() {
+        Promise.resolve(it.next()).then(function (r) {
+          if (!r || r.done) return resolve(items);
+          items.push(r.value);
+          step();
+        }).catch(reject);
+      }
+      step();
+    });
+  }
+
+  function migrateLegacyTree(root) {
+    return root.getDirectoryHandle("img").then(function (imgDir) {
+      return listDirFiles(imgDir).then(function (items) {
+        var jobs = [];
+        items.forEach(function (h) {
+          if (h.kind !== "file") return;
+          var name = h.name || "";
+          if (/^bg-.+\.png$/i.test(name)) jobs.push(copyLocalIfMissing(root, "img/" + name, "img/cenarios/" + name));
+          if (/^portrait-.+\.png$/i.test(name)) {
+            jobs.push(copyLocalIfMissing(root, "img/" + name, "img/aliados/" + name));
+            jobs.push(copyLocalIfMissing(root, "img/" + name, "img/inimigos/" + name));
+          }
+        });
+        return Promise.all(jobs.map(function (p) {
+          return p.catch(function () { return null; });
+        })).then(function () {
+          return jobs.length;
+        });
+      });
+    }).catch(function () {
+      return 0;
+    });
+  }
+
   function applyPlanToHandle(root, plan) {
-    var files = asList(plan.download);
+    var moved = asList(plan.migrate);
+    var files = asList(plan.download).slice();
     var updated = [];
+    var migrated = [];
     var failed = [];
+    var mi = 0;
     var i = 0;
 
-    function next() {
+    function nextMove() {
+      if (mi >= moved.length) return nextDownload();
+      var item = moved[mi++];
+      var dest = unixPath(item.path);
+      var from = unixPath(item.from);
+      showStatus("Reorganizando", mi + "/" + moved.length + " · " + dest, []);
+      bumpLoader((mi / Math.max(1, moved.length + files.length)) * 40, "PASTAS");
+      return copyLocalFile(root, from, dest).then(function () {
+        migrated.push(dest);
+      }).catch(function () {
+        files.push({ path: dest, reason: "missing" });
+      }).then(nextMove);
+    }
+
+    function nextDownload() {
       if (i >= files.length) {
-        return { ok: failed.length === 0, updated: updated, failed: failed, keepLocal: asList(plan.keepLocal), same: plan.same || 0 };
+        return migrateLegacyTree(root).then(function () {
+          return {
+            ok: failed.length === 0,
+            updated: updated,
+            migrated: migrated,
+            failed: failed,
+            keepLocal: [],
+            same: plan.same || 0
+          };
+        });
       }
       var rel = unixPath(files[i++].path);
       showStatus("Baixando", i + "/" + files.length + " · " + rel, []);
-      bumpLoader((i / Math.max(1, files.length)) * 100, "BAIXANDO");
+      bumpLoader(40 + (i / Math.max(1, files.length)) * 60, "BAIXANDO");
       return fetch(rawUrl(rel), { cache: "no-store", headers: { "User-Agent": UA } }).then(function (res) {
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.arrayBuffer();
@@ -289,10 +389,10 @@
         updated.push(rel);
       }).catch(function (err) {
         failed.push({ path: rel, error: err && err.message ? err.message : String(err) });
-      }).then(next);
+      }).then(nextDownload);
     }
 
-    return next();
+    return nextMove();
   }
 
   function pickGameFolder() {
@@ -340,23 +440,28 @@
   function renderPlan(plan) {
     pendingPlan = plan;
     var download = asList(plan.download);
+    var migrate = asList(plan.migrate);
     var keep = asList(plan.keepLocal);
     var rows = [
       ["Iguais", String(plan.same || 0)],
       ["Mais novos no GitHub", String(download.length)],
-      ["Mais novos nesta máquina", String(keep.length)]
+      ["Imagens da pasta antiga", String(migrate.length)]
     ];
-    if (download.length) {
-      showStatus("Atualização disponível", "O GitHub tem arquivos mais novos. O save do jogo não mexe.", rows.concat(
-        download.slice(0, 8).map(function (item) {
+    if (keep.length) rows.push(["Mantidos nesta máquina", String(keep.length)]);
+    if (download.length || migrate.length) {
+      showStatus("Atualização disponível", "O GitHub tem arquivos novos. Se a sua pasta ainda for a antiga (sem aliados/inimigos/cenarios), eu reorganizo as imagens. O save não mexe.", rows.concat(
+        download.slice(0, 6).map(function (item) {
           return ["Baixar", item.path || item];
-        })
+        }).concat(migrate.slice(0, 4).map(function (item) {
+          return ["Mover", (item.from || "") + " → " + (item.path || "")];
+        }))
       ));
       if (applyBtn) {
         applyBtn.classList.remove("hidden");
-        applyBtn.textContent = "Baixar " + download.length + (download.length === 1 ? " arquivo" : " arquivos");
+        var n = download.length + migrate.length;
+        applyBtn.textContent = n === 1 ? "Atualizar 1 arquivo" : "Atualizar " + n + " arquivos";
       }
-      setHint(download.length + " arquivo(s) mais novo(s) no GitHub.");
+      setHint((download.length + migrate.length) + " arquivo(s) pra atualizar.");
     } else {
       showStatus("Tudo atualizado", "Nenhum arquivo do GitHub é mais novo do que o da sua pasta.", rows);
       if (applyBtn) applyBtn.classList.add("hidden");
@@ -369,35 +474,39 @@
   function renderApply(result) {
     pendingPlan = null;
     var updated = asList(result.updated);
+    var migrated = asList(result.migrated);
     var failed = asList(result.failed);
     var rows = [
       ["Baixados", String(updated.length)],
-      ["Mantidos (sua pasta é mais nova)", String(asList(result.keepLocal).length)],
+      ["Imagens reorganizadas", String(migrated.length)],
       ["Falharam", String(failed.length)]
     ];
-    updated.slice(0, 8).forEach(function (p) {
+    updated.slice(0, 6).forEach(function (p) {
       rows.push(["Novo", typeof p === "string" ? p : p.path]);
+    });
+    migrated.slice(0, 4).forEach(function (p) {
+      rows.push(["Pasta", typeof p === "string" ? p : p.path]);
     });
     failed.slice(0, 4).forEach(function (item) {
       rows.push(["Erro", (item.path || "") + " " + (item.error || "")]);
     });
-    if (failed.length && !updated.length) {
+    if (failed.length && !updated.length && !migrated.length) {
       showStatus("Não deu pra atualizar", "O GitHub respondeu, mas a pasta não recebeu os arquivos.", rows);
       setHint("Falha ao baixar.");
     } else {
-      showStatus("Atualizado", updated.length ? "Arquivos novos já estão na pasta. Recarrega pra valer." : "Nada pra baixar.", rows);
-      setHint(updated.length ? "Atualizado. Recarrega a página." : "Tudo atualizado.");
+      showStatus("Atualizado", (updated.length || migrated.length) ? "Pronto. Recarrega pra valer — as imagens antigas também entram nas pastas novas." : "Nada pra baixar.", rows);
+      setHint((updated.length || migrated.length) ? "Atualizado. Recarrega a página." : "Tudo atualizado.");
     }
     setBusy(false);
-    if (applyBtn && updated.length && !(failed.length && !updated.length)) {
+    if (applyBtn && (updated.length || migrated.length) && !(failed.length && !updated.length && !migrated.length)) {
       applyBtn.classList.remove("hidden");
       applyBtn.textContent = "Recarregar agora";
       applyBtn.disabled = false;
       applyBtn.dataset.reload = "1";
-    } else if (applyBtn && !updated.length) {
+    } else if (applyBtn && !updated.length && !migrated.length) {
       applyBtn.classList.add("hidden");
     }
-    stopLoader(failed.length && !updated.length ? false : true);
+    stopLoader(failed.length && !updated.length && !migrated.length ? false : true);
   }
 
   function runCheck() {
@@ -432,7 +541,7 @@
       location.reload();
       return;
     }
-    if (busy || !pendingPlan || !asList(pendingPlan.download).length) return;
+    if (busy || !pendingPlan || !(asList(pendingPlan.download).length || asList(pendingPlan.migrate).length)) return;
     uiClick();
     showStatus("Baixando", "Baixando os arquivos mais novos do GitHub...", []);
     setBusy(true);
