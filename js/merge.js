@@ -65,8 +65,21 @@
     return run.intel;
   }
 
-  function promoteCost(gen) {
+  var COLOSSO_COST = 100;
+
+  function pickCost(kinds) {
+    if (!kinds) return 0;
+    for (var i = 0; i < kinds.length; i++) {
+      if (kinds[i] === "colosso") return COLOSSO_COST;
+    }
+    return 0;
+  }
+
+  function promoteCost(gen, kinds) {
+    var special = pickCost(kinds);
+    if (special) return special;
     var g = Math.max(0, gen | 0);
+    if (g >= 4) return COLOSSO_COST;
     return 2 << g;
   }
 
@@ -105,6 +118,8 @@
     },
 
     promoteCost: promoteCost,
+    pickCost: pickCost,
+    colossoCost: COLOSSO_COST,
     openOptions: openOptions,
 
     listRoster: function (state) {
@@ -128,7 +143,7 @@
       var options = openOptions(state, u.def.merge);
       if (!options.length) return null;
       var intel = ensureIntel(state.run);
-      var cost = promoteCost(u.gen | 0);
+      var cost = promoteCost(u.gen | 0, options);
       if (intel.arquivo < cost) return null;
       intel.arquivo -= cost;
       return {
@@ -182,13 +197,20 @@
       if (!canEvolve(a) || !canEvolve(b)) return null;
       var options = openOptions(state, a.def.merge);
       if (!options.length) return null;
+      var cost = pickCost(options);
+      if (cost > 0) {
+        var intel = ensureIntel(state.run);
+        if ((intel.arquivo | 0) < cost) return null;
+      }
       var pending = {
         a: a,
         b: b,
         x: (a.x + b.x) / 2,
         y: (a.y + b.y) / 2,
-        options: options
+        options: options,
+        cost: cost
       };
+      if (cost) pending.token = "arquivo";
       if (extra) {
         var k;
         for (k in extra) pending[k] = extra[k];
@@ -198,6 +220,12 @@
 
     confirm: function (state, pick, pending) {
       if (!pending || !pick || !G.canAddKind(state, pick)) return null;
+      var cost = pending.fromBank ? 0 : (pending.cost | 0);
+      if (cost > 0) {
+        var paid = ensureIntel(state.run);
+        if ((paid.arquivo | 0) < cost) return null;
+        paid.arquivo -= cost;
+      }
       pending.consumed = true;
       pending.a.hp = 0;
       if (pending.b) pending.b.hp = 0;

@@ -28,7 +28,7 @@
     { id: "berserk", title: "Último suspiro", desc: "Quanto menos HP, mais dano.", unique: true, apply: function (run) { run.berserk = true; } },
     { id: "regen", title: "Rações", desc: "O esquadrão regenera HP no combate.", apply: function (run) { run.regen = (run.regen || 0) + 0.006; } },
     { id: "boom", title: "Carga extra", desc: "Explosão (morte, míssil, granada) fica maior.", favor: { projectile: ["missile", "grenade"], explode: true }, apply: function (run) { run.boom = (run.boom || 0) + 10; } },
-    { id: "clone", title: "Cópia de guerra", desc: "Duplica o soldado de menor nível. Respeita o limite de 2 cópias (recruta livre). Se lotou, vira arquivo de guerra.", apply: function (run, state) {
+    { id: "clone", title: "Cópia de guerra", desc: "Duplica o soldado de menor nível. Respeita o limite de cópias (recruta livre; Míssil, Inferno e Colosso são únicos). Se lotou, vira arquivo de guerra.", apply: function (run, state) {
       var soldiers = [];
       for (var i = 0; i < state.units.length; i++) {
         if (state.units[i].hp > 0 && !state.units[i].commander) soldiers.push(state.units[i]);
@@ -50,42 +50,42 @@
       id: "extraStart",
       title: "Unidade extra no começo",
       max: 4,
-      cost: function (lv) { return 80 * Math.pow(2, lv); },
+      cost: function (lv) { return 250 * Math.pow(2, lv); },
       desc: function (lv) { return "Começa com +" + (lv + 1) + " recruta."; }
     },
     {
       id: "dmg",
       title: "Dano permanente",
       max: 10,
-      cost: function (lv) { return 50 * (lv + 1); },
+      cost: function (lv) { return Math.round(150 * (lv + 1) * (1 + lv * 0.35)); },
       desc: function (lv) { return "+" + ((lv + 1) * 8) + "% de dano em toda run."; }
     },
     {
       id: "hp",
       title: "HP permanente",
       max: 10,
-      cost: function (lv) { return 50 * (lv + 1); },
+      cost: function (lv) { return Math.round(150 * (lv + 1) * (1 + lv * 0.35)); },
       desc: function (lv) { return "+" + ((lv + 1) * 10) + "% de HP em toda run."; }
     },
     {
       id: "fireRate",
       title: "Gatilho permanente",
       max: 8,
-      cost: function (lv) { return 60 * (lv + 1); },
+      cost: function (lv) { return Math.round(180 * (lv + 1) * (1 + lv * 0.35)); },
       desc: function (lv) { return "+" + ((lv + 1) * 8) + "% de cadência em toda run."; }
     },
     {
       id: "speed",
       title: "Marcha permanente",
       max: 8,
-      cost: function (lv) { return 55 * (lv + 1); },
+      cost: function (lv) { return Math.round(170 * (lv + 1) * (1 + lv * 0.35)); },
       desc: function (lv) { return "+" + ((lv + 1) * 6) + "% de velocidade em toda run."; }
     },
     {
       id: "earlyTier",
       title: "Merge antecipado",
       max: 4,
-      cost: function (lv) { return [200, 450, 900, 1600][lv]; },
+      cost: function (lv) { return [550, 1200, 2600, 4800][lv]; },
       desc: function (lv) {
         var kind = G.EARLY_KINDS[Math.min(G.EARLY_KINDS.length - 1, lv + 1)];
         return "Só o primeiro soldado começa como " + G.UNIT_DEFS[kind].name + ". O resto entra recruta.";
@@ -95,42 +95,35 @@
       id: "luck",
       title: "Sorte permanente",
       max: 5,
-      cost: function (lv) { return 90 * (lv + 1); },
+      cost: function (lv) { return Math.round(270 * (lv + 1) * (1 + lv * 0.35)); },
       desc: function (lv) { return "Mais chance do reforço nascer um nível acima."; }
     },
     {
       id: "gold",
       title: "Saque permanente",
       max: 5,
-      cost: function (lv) { return 80 * (lv + 1); },
+      cost: function (lv) { return Math.round(240 * (lv + 1) * (1 + lv * 0.35)); },
       desc: function (lv) { return "+" + ((lv + 1) * 12) + "% de moedas em toda run."; }
     },
     {
       id: "regen",
       title: "Rações permanentes",
       max: 5,
-      cost: function (lv) { return 100 * (lv + 1); },
+      cost: function (lv) { return Math.round(300 * (lv + 1) * (1 + lv * 0.35)); },
       desc: function (lv) { return "Regenera HP no combate."; }
     },
     {
       id: "magnet",
       title: "Ímã permanente",
       max: 5,
-      cost: function (lv) { return 70 * (lv + 1); },
+      cost: function (lv) { return Math.round(210 * (lv + 1) * (1 + lv * 0.35)); },
       desc: function (lv) { return "Puxa loot de mais longe."; }
-    },
-    {
-      id: "maxUnits",
-      title: "Limite do esquadrão",
-      max: 5,
-      cost: function (lv) { return [180, 320, 520, 840, 1300][lv]; },
-      desc: function (lv) { return "O esquadrão cabe até " + (5 + lv + 1) + " soldados."; }
     },
     {
       id: "rerolls",
       title: "Fichas de arquivo",
       max: 2,
-      cost: function (lv) { return [650, 2200][lv]; },
+      cost: function (lv) { return [1800, 6500][lv]; },
       desc: function (lv) { return "Começa cada run com " + (lv + 1) + " ficha pra trocar carta."; }
     }
   ];

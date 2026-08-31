@@ -3,16 +3,24 @@
     MAX: 8,
     PHALANX_R: 122,
 
-    hpMul: function (level) {
-      return 1 + 0.2 * Math.max(0, level | 0);
+    hpMul: function (level, boss) {
+      return 1 + (boss ? 0.30 : 0.50) * Math.max(0, level | 0);
+    },
+
+    dmgMul: function (level, boss) {
+      return 1 + (boss ? 0.20 : 0.25) * Math.max(0, level | 0);
+    },
+
+    fireMul: function (level, boss) {
+      return 1 + (boss ? 0.05 : 0.10) * Math.max(0, level | 0);
     },
 
     spawnMul: function (level) {
       return 1 + 0.1 * Math.max(0, level | 0);
     },
 
-    speedMul: function (level) {
-      return 1 + 0.02 * Math.max(0, level | 0);
+    speedMul: function (level, boss) {
+      return 1 + (boss ? 0.02 : 0.05) * Math.max(0, level | 0);
     },
 
     selected: function () {
@@ -130,17 +138,25 @@
 
     stamp: function (state, e) {
       if (!e || !e.def || !state || !state.run) return e;
-      var mul = this.hpMul(state.run.invasion | 0);
-      if (mul !== 1) {
-        e.maxHp = Math.round(e.maxHp * mul);
+      if (e._invStamped) return e;
+      var level = state.run.invasion | 0;
+      var boss = !!e.def.boss;
+      var hpMul = this.hpMul(level, boss);
+      if (hpMul !== 1) {
+        e.maxHp = Math.round(e.maxHp * hpMul);
         e.hp = e.maxHp;
       }
-      var spdMul = this.speedMul(state.run.invasion | 0);
-      if (spdMul !== 1 && e.def && (e.def.speed || 0) > 0 && !e.def._invScaled) {
+      var dmgMul = this.dmgMul(level, boss);
+      var fireMul = this.fireMul(level, boss);
+      var spdMul = this.speedMul(level, boss);
+      if (dmgMul !== 1 || fireMul !== 1 || spdMul !== 1) {
         e.def = Object.assign({}, e.def);
-        e.def.speed *= spdMul;
+        if (dmgMul !== 1 && (e.def.dmg || 0) > 0) e.def.dmg *= dmgMul;
+        if (fireMul !== 1 && (e.def.fire || 0) > 0) e.def.fire *= fireMul;
+        if (spdMul !== 1 && (e.def.speed || 0) > 0) e.def.speed *= spdMul;
         e.def._invScaled = true;
       }
+      e._invStamped = true;
       var twoBar = this.wantsTwoBars(state, e);
       if (this.p2Eligible(e) && this.enraged(state, this.homeStageIndex(e.type))) {
         e.inv = true;

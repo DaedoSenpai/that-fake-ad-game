@@ -1406,6 +1406,9 @@
     }
   }
 
+  var COLO_SLASH_N = 5;
+  var COLO_SLASH_T = 3.84;
+
   function coloEnergySlash(state, u, ang) {
     if (!u) return;
     var c = Math.cos(ang);
@@ -1417,29 +1420,72 @@
     var y1 = u.y + s * len;
     var halfW = 118;
     var dmg = Math.round(u.def.dmg * C().dmgMul(state) * 1.25);
-    eatShotsOnLine(state, x0, y0, x1, y1, halfW);
-    for (var i = 0; i < state.enemies.length; i++) {
-      var e = state.enemies[i];
-      if (e.hp <= 0 || e.scenery) continue;
-      if (distToSeg(e.x, e.y, x0, y0, x1, y1) > halfW + (e.def.size || 10)) continue;
-      C().hurt(state, e, dmg, u.x, u.y, true);
-    }
     state.vfx = state.vfx || [];
     state.vfx.push({
       coloSlash: true,
+      live: true,
       x0: x0,
       y0: y0,
       x1: x1,
       y1: y1,
       ang: ang,
-      t: 0.48,
-      max: 0.48,
+      t: COLO_SLASH_T,
+      max: COLO_SLASH_T,
       seed: (u.id || 1) + (state.time || 0),
-      w: halfW
+      w: halfW,
+      dmg: dmg,
+      ox: u.x,
+      oy: u.y,
+      hitIds: {},
+      _fly: 0
     });
     G.burst(state, x0 + c * 40, y0 + s * 40, "#7af7ff", 14, 120);
     G.burst(state, x0 + c * 40, y0 + s * 40, "#e8ffff", 8, 70);
     if (G.audio && G.audio.shoot) G.audio.shoot();
+  }
+
+  function tickColoSlashDamage(state) {
+    if (!state.vfx) return;
+    for (var i = 0; i < state.vfx.length; i++) {
+      var fx = state.vfx[i];
+      if (!fx.coloSlash || !fx.live) continue;
+      var k = Math.max(0, fx.t / (fx.max || COLO_SLASH_T));
+      var age = 1 - k;
+      var fly = Math.min(1, age * 1.55);
+      var prev = fx._fly || 0;
+      if (fly <= prev + 0.0001 && fly >= 1) {
+        fx.live = false;
+        continue;
+      }
+      var x0 = fx.x0;
+      var y0 = fx.y0;
+      var dx = fx.x1 - x0;
+      var dy = fx.y1 - y0;
+      var px = x0 + dx * prev;
+      var py = y0 + dy * prev;
+      var cx = x0 + dx * fly;
+      var cy = y0 + dy * fly;
+      var hitR = fx.w || 118;
+      eatShotsOnLine(state, px, py, cx, cy, hitR);
+      if (!fx.hitIds) fx.hitIds = {};
+      for (var ei = 0; ei < state.enemies.length; ei++) {
+        var e = state.enemies[ei];
+        if (e.hp <= 0 || e.scenery || fx.hitIds[e.id]) continue;
+        if (distToSeg(e.x, e.y, px, py, cx, cy) > hitR + (e.def.size || 10)) continue;
+        fx.hitIds[e.id] = 1;
+        C().hurt(state, e, fx.dmg || 0, fx.ox || x0, fx.oy || y0, true);
+      }
+      fx._fly = fly;
+      if (fly >= 1) fx.live = false;
+    }
+  }
+
+  function endColoBlade(state, msg) {
+    if ((state.coloOverT || 0) <= 0 && !(state.coloSlashLeft > 0)) return;
+    state.coloOverT = 0;
+    state.coloSlashLeft = 0;
+    for (var i = 0; i < state.units.length; i++) state.units[i].coloGlow = false;
+    if (msg) state.floaters.push(G.createFloater(state.squad.x, state.squad.y - 22, msg, "#7af7ff"));
   }
 
   function coloAimAng(state, u) {
@@ -1563,6 +1609,10 @@
         u.leapZ = 0;
         var bang = coloAimAng(state, u);
         u.rot = bang;
+        if ((state.coloSlashLeft || 0) <= 0) {
+          endColoBlade(state, "lâmina off");
+          continue;
+        }
         u.coloSlashCd = (u.coloSlashCd || 0) - dt;
         if (state.pointer && state.pointer.fireHold && u.coloSlashCd <= 0) {
           var bRate = C().fireMul(state);
@@ -1570,6 +1620,8 @@
           u.coloSlashCd = 1 / (Math.max(0.2, bRate) * 2.8);
           coloEnergySlash(state, u, bang);
           u.coloSlashK = 1;
+          state.coloSlashLeft = Math.max(0, (state.coloSlashLeft || 0) - 1);
+          if ((state.coloSlashLeft || 0) <= 0) endColoBlade(state, "lâmina off");
         }
         continue;
       }
@@ -3229,6 +3281,7 @@
     tickSquadContact(state, dt);
     tickBannerSword(state, dt);
     tickColosso(state, dt);
+    tickColoSlashDamage(state);
     tickSpearLeap(state, dt);
     tickWarlord(state, dt);
     if ((state.suppressT || 0) > 0) state.suppressT = Math.max(0, state.suppressT - dt);
@@ -4137,8 +4190,7 @@
     decay("bannerGoldT", function () { state.run.gold = Math.max(0, (state.run.gold || 0) - 0.5); });
     decay("bannerKnockT", function () { if (!state.run._permKnock) state.run.knockback = false; });
     decay("coloOverT", function () {
-      for (var i = 0; i < state.units.length; i++) state.units[i].coloGlow = false;
-      state.floaters.push(G.createFloater(state.squad.x, state.squad.y - 22, "lâmina off", "#7af7ff"));
+      endColoBlade(state, "lâmina off");
     });
     if ((state.bannerFireT || 0) > 0) {
       zone(state, { kind: "fire", x: state.squad.x, y: state.squad.y, r: 22, t: 0.35, dmg: 10 });
@@ -5212,10 +5264,13 @@
     if (id === "energy_blade" || id === "overcharge") {
       state.coloOverT = 10;
       state.coloOverMax = 10;
+      state.coloSlashLeft = COLO_SLASH_N;
+      state.coloSlashMax = COLO_SLASH_N;
       for (var ci = 0; ci < state.units.length; ci++) {
         if (state.units[ci].kind === "colosso" && state.units[ci].hp > 0) {
           state.units[ci].coloGlow = true;
           state.units[ci].coloAct = null;
+          state.units[ci].coloSlashCd = 0;
         }
       }
       state.floaters.push(G.createFloater(u.x, u.y - 22, "lâmina de energia", "#7af7ff"));
@@ -5908,7 +5963,7 @@
   }
 
   function drawColoSlash(ctx, fx) {
-    var k = Math.max(0, fx.t / (fx.max || 0.48));
+    var k = Math.max(0, fx.t / (fx.max || COLO_SLASH_T));
     var age = 1 - k;
     var fade = k > 0.28 ? 1 : Math.max(0, k / 0.28);
     var dx = fx.x1 - fx.x0;
@@ -7701,7 +7756,18 @@
     if ((state.bannerFireT || 0) > 0) add("chamas", "🔥", "Chamas", "O esquadrão deixa fogo no chão.", "#ff7a2a", state.bannerFireT, 5);
     if ((state.bannerGoldT || 0) > 0) add("fortuna", "$", "Fortuna", "+50% de ouro coletado.", "#ffd24a", state.bannerGoldT, 8);
     if ((state.bannerKnockT || 0) > 0) add("impacto", "💥", "Impacto", "Os tiros empurram inimigos.", "#ff8a4a", state.bannerKnockT, 6);
-    if ((state.coloOverT || 0) > 0) add("energy_blade", "⚔", "Lâmina de energia", "Atirar lança slashes elétricos de alcance infinito e largura enorme.", "#7af7ff", state.coloOverT, state.coloOverMax || 10);
+    if ((state.coloOverT || 0) > 0) {
+      var left = state.coloSlashLeft | 0;
+      add(
+        "energy_blade",
+        "⚔",
+        "Lâmina de energia",
+        left === 1 ? "1 slash de luz restante. Bem mais lento." : "Atirar: " + left + " slashes de luz restantes. Bem mais lentos.",
+        "#7af7ff",
+        left,
+        state.coloSlashMax || COLO_SLASH_N
+      );
+    }
     if ((run.fluidT || 0) > 0) add("fluido", "⚗", "Fluido", "+50% de dano.", "#ff8a2a", run.fluidT, 3);
     for (var i = 0; i < (state.zones || []).length; i++) {
       var z = state.zones[i];

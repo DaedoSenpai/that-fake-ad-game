@@ -308,7 +308,7 @@
         ? "Termina uma run no nível anterior pra abrir."
         : n === 0
           ? "Campanha padrão."
-          : "Inimigos +" + (n * 20) + "% de vida, +" + (n * 10) + "% de quantidade, +" + (n * 2) + "% de velocidade. Chefes das fases 1–" + n + " entram em segunda barra.";
+          : "Bichos +" + (n * 50) + "% HP, +" + (n * 25) + "% dano, +" + (n * 10) + "% cadência, +" + (n * 5) + "% velocidade. Bosses +" + (n * 30) + "% HP, +" + (n * 20) + "% dano, +" + (n * 5) + "% cadência, +" + (n * 2) + "% velocidade. +" + (n * 10) + "% de quantidade. Chefes das fases 1–" + n + " entram em segunda barra.";
       btn.onclick = function () {
         if (locked) return;
         G.audio.ui();
@@ -687,7 +687,9 @@
     document.getElementById("merge-from").textContent = pending.a.def.name;
     document.querySelector("#merge-modal .tagline").textContent = intel
       ? "Gasta os arquivos e escolhe no que essa unidade vira. Passe o mouse pra ver o dossiê."
-      : "Escolhe o caminho da pirâmide. Passe o mouse na carta pra ver o dossiê.";
+      : pending.cost
+        ? "O Colosso custa " + pending.cost + " arquivos de guerra. Passe o mouse na carta pra ver o dossiê."
+        : "Escolhe o caminho da pirâmide. Passe o mouse na carta pra ver o dossiê.";
     var box = document.getElementById("merge-options");
     box.innerHTML = "";
     pending.options.forEach(function (kind, idx) {
@@ -726,9 +728,9 @@
     stats.innerHTML = "";
     var chips = [
       "HP " + def.hp,
-      def.role === "warlord" || def.role === "paladin" || def.role === "reaper" ? "Dano " + def.dmg : def.projectile === "none" ? "suporte" : "Dano " + def.dmg,
-      def.role === "warlord" || def.role === "paladin" || def.role === "reaper" ? "Alcance " + def.range : def.projectile === "none" ? "" : "Alcance " + def.range,
-      def.role === "reaper" ? "AoE " + (def.aoe || 60) : "",
+      def.role === "warlord" || def.role === "paladin" || def.role === "reaper" || def.role === "colossus" ? "Dano " + def.dmg : def.projectile === "none" ? "suporte" : "Dano " + def.dmg,
+      def.role === "warlord" || def.role === "paladin" || def.role === "reaper" || def.role === "colossus" ? "Alcance " + def.range : def.projectile === "none" ? "" : "Alcance " + def.range,
+      def.role === "reaper" ? "AoE " + (def.aoe || 60) : def.role === "colossus" ? "AoE " + (def.aoe || 250) : "",
       def.fire ? def.fire.toFixed(2) + "/s" : ""
     ];
     chips.forEach(function (line) {
@@ -918,7 +920,7 @@
       }
     });
     if (!G.merge.canEvolve(unit)) setArchiveHint(unit.def.name + " já está no topo da pirâmide.");
-    else if (!G.merge.openOptions(state, unit.def.merge).length) setArchiveHint("Já tem 2 de cada evolução possível.");
+    else if (!G.merge.openOptions(state, unit.def.merge).length) setArchiveHint("Já tem o máximo dessa evolução.");
     else setArchiveHint("Solta em cima de outro " + unit.def.name + " pra merge.");
   }
 
@@ -939,7 +941,14 @@
     if (over && over.classList.contains("merge-ok")) {
       over.classList.add("merge-hover");
       var other = archiveUnitById(over.dataset.id | 0);
-      if (other) setArchiveHint("Solta pra fundir dois " + other.def.name + ".");
+      if (other) {
+        var mergeCost = G.merge.pickCost(G.merge.openOptions(state, other.def.merge));
+        setArchiveHint(
+          mergeCost
+            ? "Solta pra fundir dois " + other.def.name + " — Colosso custa " + mergeCost + " arquivos."
+            : "Solta pra fundir dois " + other.def.name + "."
+        );
+      }
     }
   }
 
@@ -956,8 +965,17 @@
       openMerge(pending);
       return;
     }
+    if (over && a && b && a.kind === b.kind && G.merge.canEvolve(a)) {
+      var opts = G.merge.openOptions(state, a.def.merge);
+      var need = G.merge.pickCost(opts);
+      var have = G.merge.ensureIntel(state.run).arquivo | 0;
+      if (need > have) {
+        setArchiveHint("Colosso custa " + need + " arquivos. Faltam " + (need - have) + ".");
+        return;
+      }
+    }
     if (over && a && b && a.kind === b.kind) {
-      setArchiveHint("Já tem 2 de cada evolução possível, ou esses não sobem mais.");
+      setArchiveHint("Já tem o máximo dessa evolução, ou esses não sobem mais.");
     } else if (over && a && b) {
       setArchiveHint("Merge só com o mesmo tipo.");
     } else {
@@ -1041,7 +1059,7 @@
     }
     roster.forEach(function (u) {
       var can = G.merge.canEvolve(u) && G.merge.openOptions(state, u.def.merge).length > 0;
-      var cost = G.merge.promoteCost(u.gen | 0);
+      var cost = G.merge.promoteCost(u.gen | 0, G.merge.openOptions(state, u.def.merge));
       var afford = n >= cost;
       addRow({
         kind: u.kind,
@@ -1049,7 +1067,7 @@
         sub: !G.merge.canEvolve(u)
           ? "Nível " + (u.gen | 0) + " · no topo da pirâmide"
           : !can
-            ? "Nível " + (u.gen | 0) + " · já tem 2 de cada evolução"
+            ? "Nível " + (u.gen | 0) + " · já tem o máximo dessa evolução"
             : "Nível " + (u.gen | 0) + " · " + G.unitStatsLine(u.def),
         price: !can ? "—" : afford ? cost + " arq." : "faltam " + (cost - n),
         ok: can && afford,

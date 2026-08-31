@@ -363,6 +363,7 @@
       kind: "inferno", name: "Inferno", short: "NFR", gen: 4,
       hp: 180, dmg: 15, range: 135, fire: 2.7, speed: 130, size: 19,
       color: "#ff4a18", accent: "#ffe08a", projectile: "flame", role: "inferno",
+      unique: true,
       blurb: "Piromaniaco veterno que só está em atividade por ser altamente eficiente. Quem morre queimado deixa uma poça de fogo no chão.",
       active: { id: "firewave", name: "Maré de fogo", cd: 12, desc: "Onda de fogo branco sai do Inferno e varre o mapa inteiro." },
       merge: []
@@ -371,6 +372,7 @@
       kind: "missil", name: "Míssil", short: "MIS", gen: 4,
       hp: 150, dmg: 36, range: 250, fire: 0.55, speed: 120, size: 18,
       color: "#c46bff", accent: "#f0c8ff", projectile: "missile", role: "missile",
+      unique: true,
       blurb: "Saraivada de cinco misseis. Mira parada no chefe orbita. Em movimento, espalha.",
       active: { id: "salvo", name: "Salva", cd: 13, desc: "Dispara 6 mísseis teleguiados na mira." },
       merge: []
@@ -393,11 +395,12 @@
     }),
     colosso: u({
       kind: "colosso", name: "Colosso", short: "COL", gen: 5,
-      hp: 650, dmg: 65, range: 180, fire: 0.85, speed: 115, size: 32,
+      hp: 325, dmg: 32, range: 180, fire: 0.425, speed: 115, size: 32,
       aoe: 250,
       color: "#e8f6ff", accent: "#7af7ff", projectile: "none", role: "colossus",
-      blurb: "Gundam de combate corpo a corpo. Salta no inimigo mais perto e cicla slam elétrico, escudo de energia e rocket punch que ricocheteia.",
-      active: { id: "energy_blade", name: "Lâmina de energia", cd: 30, dur: 10, desc: "Por 10s o Colosso empunha uma espada de energia. Ao atirar, lança slashes de luz elétrica de alcance infinito e largura enorme." },
+      unique: true,
+      blurb: "Gundam de combate corpo a corpo. Salta no inimigo mais perto e cicla slam elétrico, escudo de energia e rocket punch que ricocheteia. Caríssimo: 100 arquivos de guerra pra fazer.",
+      active: { id: "energy_blade", name: "Lâmina de energia", cd: 30, dur: 10, desc: "Empunha a espada de energia. Ao atirar, lança até 5 slashes de luz lentos, de alcance infinito e largura enorme." },
       merge: []
     }),
     comandante: u({
@@ -486,8 +489,8 @@
     storm: { icon: "⚡", color: "#a8f6ff", detail: "Choque em volta da Tesla." },
     coil: { icon: "⚡", color: "#a8f6ff", detail: "Planta uma bobina. O feixe da Tesla carrega a bateria. Sem carga, ela desliga. Duas no alcance se alimentam e duram o dobro." },
     pulse: { icon: "💥", color: "#7af7ff", detail: "Onda de choque em volta do Colosso. Empurra e fere." },
-    energy_blade: { icon: "⚔", color: "#7af7ff", detail: "Por 10s o Colosso empunha uma espada de energia. Ao atirar, lança slashes de luz elétrica de alcance infinito e largura enorme." },
-    overcharge: { icon: "⚔", color: "#7af7ff", detail: "Por 10s o Colosso empunha uma espada de energia. Ao atirar, lança slashes de luz elétrica de alcance infinito e largura enorme." },
+    energy_blade: { icon: "⚔", color: "#7af7ff", detail: "Empunha a espada de energia. Ao atirar, lança até 5 slashes de luz lentos, de alcance infinito e largura enorme." },
+    overcharge: { icon: "⚔", color: "#7af7ff", detail: "Empunha a espada de energia. Ao atirar, lança até 5 slashes de luz lentos, de alcance infinito e largura enorme." },
     scalpel_rain: { icon: "💉", color: "#ffd0d0", detail: "Chuva de bisturis na mira. Dano em área, sangramento, e o dano causado cura o esquadrão na hora." },
     bucknade: { icon: "💣", color: "#ff8a4a", detail: "Granada que, no impacto, atira pra todos os lados como a escopeta do Fora-da-lei." },
     strafe: { icon: "✈", color: "#3ef0ff", detail: "Explosão em anel embaixo de cada drone pequeno perto do cursor." },
@@ -509,7 +512,7 @@
     standard: { icon: "🚩", color: "#e8d080", detail: "Finca um estandarte na mira por 15s. +40% de dano, cadência e velocidade. Loot dentro é coletado sozinho. O cooldown só começa quando ele cai." },
     airstrike: { icon: "💣", color: "#5ad0c8", detail: "Desenha uma linha. Explosões caem no caminho." },
     carpetbomb: { icon: "✈", color: "#2ad8ff", detail: "Bombas caem sem parar sob a mira." },
-    archive: { icon: "⭐", color: "#ffd24a", detail: "O esquadrão pega o reforço caído e vira arquivo. R abre a lista: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois." },
+    archive: { icon: "⭐", color: "#ffd24a", detail: "O esquadrão pega o reforço caído e vira arquivo. R abre a lista: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Colosso custa 100." },
     guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito e abre um menu radial no clique. Cima: aura em volta do comandante — cura 2% da vida máxima por segundo durante 5s (15s de recarga). Direita: airstrike com fogo no chão (20s). Esquerda: recruta nasce perto do comandante — máx. 2 por fase (30s). Solta na fatia pra disparar no centro do menu; volta pro centro pra cancelar." }
   };
 
@@ -603,6 +606,7 @@
     ];
     rows = rows.filter(function (line) { return !!line; });
     if (def.flying) rows.push("Aérea");
+    if (def.unique) rows.push("Único no esquadrão — só 1");
     G.auraLines(def.aura).forEach(function (line) { rows.push(line); });
     if (def.merge && def.merge.length) {
       rows.push("Vira: " + def.merge.map(function (k) { return G.UNIT_DEFS[k].name; }).join(", "));
@@ -649,7 +653,7 @@
     tanque: { id: "heavycannon", name: "Couraça pesada", desc: "Escudo de 10 pontos. Três modos de tiro, incluindo barragem na tela." },
     gunship: { id: "lockgun", name: "Metralhadora teleguiada", desc: "As balas seguem a mira." },
     colosso: { id: "melee", name: "Tríade do Colosso", desc: "Salta no inimigo mais perto e dá slam (250px, slow, rachadura elétrica). Escudo de energia azul que empurra. Rocket punch: o punho voa e ricocheteia 10 vezes. Mantém o escudo de 10 pontos da linha do caminhão." },
-    comandante: { id: "archive", name: "Arquivo de guerra", desc: "O esquadrão pega o reforço caído e vira arquivo. R gasta: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois." },
+    comandante: { id: "archive", name: "Arquivo de guerra", desc: "O esquadrão pega o reforço caído e vira arquivo. R gasta: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Colosso custa 100." },
     designado: { id: "marksman", name: "Fuzil longo", desc: "Alcance infinito. Atira como fuzileiro, com cadência maior." },
     giratoria: { id: "spinup", name: "Aquecimento", desc: "Precisa aquecer. Depois o cano não para, mas o esquadrão fica bem mais lento." },
     oficina: { id: "scrap", name: "Carrinho de sucata", desc: "Carrinho rápido que atropela inimigos, coleta moedas e explode após 5s." },

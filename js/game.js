@@ -191,6 +191,7 @@
         cit.guardianFor = e.id;
         e.guardianId = cit.id;
         e.bossPhase = 1;
+        if (G.invasion) G.invasion.stamp(state, cit);
         state.enemies.push(cit);
         state.banner = { text: "Camada 1 · A Colmeia protege o núcleo", t: 2.2 };
       }
@@ -198,6 +199,7 @@
         var king = G.createEnemy("chefe_beeking", e.x - 70, e.y + 20, scaleFor(state.stageIndex));
         king.queenId = e.id;
         e.kingId = king.id;
+        if (G.invasion) G.invasion.stamp(state, king);
         state.enemies.push(king);
         state.banner = { text: "A rainha e o rei", t: 2.0 };
         if (G.combat && G.combat.ensureHive) G.combat.ensureHive(state);

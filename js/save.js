@@ -62,9 +62,19 @@
       gold: clamp(p.gold, 5),
       regen: clamp(p.regen, 5),
       magnet: clamp(p.magnet, 5),
-      maxUnits: clamp(p.maxUnits, 5),
+      maxUnits: 0,
       rerolls: clamp(p.rerolls, 2)
     };
+  }
+
+  function refundRetiredMaxUnits(rawPerm, vault) {
+    var lv = (rawPerm && rawPerm.maxUnits) | 0;
+    if (lv <= 0) return vault | 0;
+    var costs = [180, 320, 520, 840, 1300];
+    var back = vault | 0;
+    var i;
+    for (i = 0; i < lv && i < costs.length; i++) back += costs[i];
+    return back;
   }
 
   function normalizeSlot(raw, i) {
@@ -72,7 +82,7 @@
     if (!raw) return base;
     return {
       name: (raw.name && String(raw.name).trim()) || base.name,
-      vault: raw.vault | 0,
+      vault: refundRetiredMaxUnits(raw.perm, raw.vault),
       bestStage: raw.bestStage | 0,
       perm: normalizePerm(raw.perm),
       invasion: clamp(raw.invasion, 8),
@@ -90,7 +100,7 @@
       var parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
       if (!parsed) return null;
       var slot = emptySlot(0);
-      slot.vault = parsed.vault | 0;
+      slot.vault = refundRetiredMaxUnits(parsed.perm, parsed.vault);
       slot.bestStage = parsed.bestStage | 0;
       slot.perm = normalizePerm(parsed.perm);
       slot.codex = {

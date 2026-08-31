@@ -439,7 +439,7 @@
   })();
 
   G.maxUnits = function () {
-    return G.MAX_UNITS + (G.save.data.perm.maxUnits | 0);
+    return G.MAX_UNITS;
   };
 
   G.soldierCount = function (state) {
@@ -451,9 +451,12 @@
   };
 
   G.KIND_COPY_CAP = 2;
+  G.UNIQUE_KINDS = { missil: 1, inferno: 1, colosso: 1 };
 
   G.kindCopyCap = function (kind) {
     if (!kind || kind === "recruta" || kind === "comandante") return 99;
+    var def = G.UNIT_DEFS && G.UNIT_DEFS[kind];
+    if ((def && def.unique) || G.UNIQUE_KINDS[kind]) return 1;
     return G.KIND_COPY_CAP;
   };
 
