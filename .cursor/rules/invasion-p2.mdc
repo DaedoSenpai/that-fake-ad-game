@@ -1,0 +1,38 @@
+---
+description: Second phase de boss só via invasão cumulativa — vale pra todos os chefes
+globs: js/invasion.js,js/combat.js,js/game.js,js/entities.js
+alwaysApply: true
+---
+
+# P2 de invasão
+
+Invasão **N** libera a second phase das **fases 1 até N**. Campanha (invasão 0) não libera nenhuma. A trava é o chefe daquela fase, não o mapa atual.
+
+| Inv | P2 |
+|---|---|
+| 1 | Irwin |
+| 2 | + Kaska |
+| 3 | + Glinder |
+| 4 | + Beequeen |
+| 5 | + Arklan |
+| 6 | + Fortilax |
+| 7 | + Espectro |
+| 8 | as anteriores (núcleo: 3 camadas da campanha; P2 de invasão entra no rework) |
+
+Reworks feitos: Irwin, Kaska, Glinder. Falta rainha, Arklan, Fortilax, Espectro, núcleo.
+
+## Obrigatório
+
+- Kit de P2 só depois de `G.invasion.enterP2` / `e.invP2` / `e.p2`.
+- Desbloqueio só por `wantsTwoBars` → `enraged(homeStageIndex(type))`. Nunca `return true` por tipo.
+- Mini, clone, `helperOf`, `guardianFor`, `beeprincess` e `codexHide` não ganham barra de invasão.
+- `chefe_final` fica fora de `wantsTwoBars` até o rework (as 3 camadas quebram se ganhar 2 barras agora). No rework, tirar essa exceção.
+
+```javascript
+// ❌ BAD
+if (e.type === "chefe_vulto") return true;
+if (e.hp < e.maxHp * 0.5) startSun();
+
+// ✅ GOOD
+if (G.invasion.enterP2(state, e, "label") || e.invP2) startSun();
+```

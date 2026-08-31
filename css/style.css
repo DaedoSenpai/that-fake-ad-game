@@ -153,7 +153,21 @@ body {
   display: none;
 }
 
-#boss-name {
+#boss-hud.duo {
+  width: min(460px, 70vw);
+}
+
+.boss-row {
+  margin: 0 0 6px;
+}
+
+.boss-row.hidden {
+  display: none;
+}
+
+.boss-name,
+#boss-name,
+#boss-name-b {
   margin: 0;
   font-family: Palatino, "Palatino Linotype", Georgia, serif;
   font-size: clamp(11px, 1.8vw, 14px);
@@ -163,7 +177,9 @@ body {
   text-shadow: 0 1px 0 #000, 0 0 8px rgba(180, 40, 20, 0.45);
 }
 
-#boss-title {
+.boss-title,
+#boss-title,
+#boss-title-b {
   margin: 1px 0 4px;
   font-size: 9px;
   letter-spacing: 0.08em;
@@ -181,20 +197,60 @@ body {
 }
 
 #souls-delay,
-#souls-fill {
+#souls-fill,
+#souls-delay-b,
+#souls-fill-b {
   position: absolute;
   inset: 0 auto 0 0;
   width: 100%;
 }
 
-#souls-delay {
+#souls-delay,
+#souls-delay-b {
   background: #d4a44a;
   z-index: 1;
 }
 
-#souls-fill {
+#souls-fill,
+#souls-fill-b {
   background: linear-gradient(180deg, #e85a4a, #8a1212);
   z-index: 2;
+}
+
+.boss-row.queen .souls-track {
+  border-color: #e8c050;
+}
+
+.boss-row.queen #souls-fill,
+.boss-row.queen .souls-fill {
+  background: linear-gradient(180deg, #ffe08a, #d4a024 55%, #8a6810);
+}
+
+.boss-row.queen #souls-delay,
+.boss-row.queen .souls-delay {
+  background: #c49a3a;
+}
+
+.boss-row.king .souls-track {
+  border-color: #e87830;
+}
+
+.boss-row.king #souls-fill,
+.boss-row.king #souls-fill-b,
+.boss-row.king .souls-fill {
+  background: linear-gradient(180deg, #ffb070, #e05020 55%, #7a1808);
+}
+
+.boss-row.king #souls-delay,
+.boss-row.king #souls-delay-b,
+.boss-row.king .souls-delay {
+  background: #c46828;
+}
+
+.boss-row.king .boss-name,
+.boss-row.king #boss-name-b {
+  color: #ffd0a0;
+  text-shadow: 0 1px 0 #000, 0 0 8px rgba(232, 90, 40, 0.45);
 }
 
 #boss-hud.p2 .souls-track {
@@ -224,6 +280,9 @@ body {
   gap: 4px;
   margin-top: 4px;
   justify-content: center;
+}
+.souls-pips.hidden {
+  display: none;
 }
 .souls-pips .pip {
   width: 10px;
@@ -940,6 +999,12 @@ h2 {
 
 .active-slot.cd {
   opacity: 0.7;
+}
+
+.active-slot.stuck {
+  border-color: #e89020;
+  opacity: 0.55;
+  box-shadow: none;
 }
 
 .active-slot.cd::after {

@@ -47,7 +47,7 @@
   }
 
   function knockEnemy(state, e, srcX, srcY, push) {
-    if (!e || e.hp <= 0) return;
+    if (!e || e.hp <= 0 || e.scenery) return;
     var dx = e.x - srcX;
     var dy = e.y - srcY;
     var len = hypot(dx, dy) || 1;
@@ -1476,7 +1476,7 @@
     var pull = !!opt.pull;
     for (var i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
-      if (e.hp <= 0) continue;
+      if (e.hp <= 0 || e.scenery) continue;
       var dist = hypot(e.x - x, e.y - y);
       if (dist > r + (e.def.size || 10)) continue;
       if (pull && dist > 4) {
@@ -2254,7 +2254,7 @@
     }
     for (var i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
-      if (e.hp <= 0 || (e.def && e.def.kind === "orbit_shield")) continue;
+      if (e.hp <= 0 || e.scenery || (e.def && e.def.kind === "orbit_shield")) continue;
       var boss = !!(e.def && e.def.boss);
       var es = e.def.size || 10;
       if (z.mode === "thermo") {
@@ -3979,7 +3979,7 @@
         if (z.t > 0.78) {
           for (var bh = 0; bh < state.enemies.length; bh++) {
             var be = state.enemies[bh];
-            if (be.hp <= 0) continue;
+            if (be.hp <= 0 || be.scenery) continue;
             var bdx = z.x - be.x;
             var bdy = z.y - be.y;
             var bd = hypot(bdx, bdy);
@@ -3994,7 +3994,7 @@
       if (z.kind === "bubble") {
         for (var bb = 0; bb < state.enemies.length; bb++) {
           var bbe = state.enemies[bb];
-          if (bbe.hp <= 0 || bbe.def.kind === "orbit_shield") continue;
+          if (bbe.hp <= 0 || bbe.scenery || bbe.def.kind === "orbit_shield") continue;
           var bbd = hypot(bbe.x - z.x, bbe.y - z.y) || 0.001;
           var minR = z.r + (bbe.def.size || 10);
           if (bbd < minR) {
@@ -4088,9 +4088,15 @@
           }
         }
       }
-      if (z.kind === "honey" && hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r) {
-        state.honeyT = Math.max(state.honeyT || 0, 0.4);
-        if (z.pin) state.honeyPin = Math.max(state.honeyPin || 0, 0.35);
+      if (z.kind === "honey") {
+        if (z.ripe != null) {
+          z.ripe -= dt;
+          if (z.ripe <= 0) z.liquid = true;
+        }
+        if (hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r) {
+          state.honeyT = Math.max(state.honeyT || 0, z.liquid ? 0.25 : 0.4);
+          if (z.pin) state.honeyPin = Math.max(state.honeyPin || 0, 0.35);
+        }
       }
       if (z.kind === "sandstorm" && hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r + 20) {
         var px = z.x - state.squad.x;
@@ -4520,7 +4526,7 @@
       var best = 1e9;
       for (var ri = 0; ri < state.enemies.length; ri++) {
         var o = state.enemies[ri];
-        if (o.id === e.id || o.hp <= 0) continue;
+        if (o.id === e.id || o.hp <= 0 || o.scenery) continue;
         var rd = hypot(o.x - e.x, o.y - e.y);
         if (rd < best) {
           best = rd;
@@ -4556,7 +4562,7 @@
     e.allyHitCd = (e.allyHitCd || 0) - dt;
     for (var i = 0; i < state.enemies.length; i++) {
       var o = state.enemies[i];
-      if (o.id === e.id || o.hp <= 0) continue;
+      if (o.id === e.id || o.hp <= 0 || o.scenery) continue;
       var dx = o.x - e.x;
       var dy = o.y - e.y;
       var d = hypot(dx, dy);
@@ -6091,12 +6097,36 @@
         ctx.lineWidth = 2;
         ctx.stroke();
       } else if (z.kind === "honey") {
-        ctx.fillStyle = "rgba(232, 180, 48, 0.28)";
-        circle(ctx, z.x, z.y, z.r);
+        var liq = !!z.liquid;
+        ctx.save();
+        ctx.translate(z.x, z.y);
+        ctx.fillStyle = liq ? "rgba(196, 120, 20, 0.32)" : "rgba(0,0,0,0.16)";
+        ctx.beginPath();
+        ctx.ellipse(2, 6, z.r * 0.95, z.r * 0.38, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "rgba(255, 220, 120, 0.45)";
-        circle(ctx, z.x, z.y, z.r * 0.62);
+        ctx.fillStyle = liq ? "rgba(232, 150, 32, 0.55)" : "rgba(232, 180, 48, 0.28)";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, z.r, z.r * 0.62, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = liq ? "rgba(255, 210, 90, 0.5)" : "rgba(255, 220, 120, 0.4)";
+        ctx.beginPath();
+        ctx.ellipse(-z.r * 0.18, -z.r * 0.08, z.r * (liq ? 0.55 : 0.62), z.r * 0.28, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+        if (liq) {
+          ctx.strokeStyle = "rgba(255, 230, 140, 0.45)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, z.r * 0.92, z.r * 0.55, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = liq ? "rgba(255, 180, 40, 0.4)" : "rgba(255, 220, 90, 0.32)";
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([7, 5]);
+        ctx.beginPath();
+        ctx.arc(0, 0, z.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
       } else if (z.kind === "crack") {
         /* chão: G.tactics.drawGround, abaixo das entidades */
       } else if (z.kind === "moon_spot" || z.kind === "moon_burn") {

@@ -14,7 +14,10 @@
   }
 
   function unitHittable(u) {
-    return u && u.hp > 0 && !u.stowed && !u.stolen;
+    if (!u || u.hp <= 0 || u.stowed || u.stolen) return false;
+    if (u.fallen || u.phased) return false;
+    if (u.scenery && u.immortal) return false;
+    return true;
   }
 
   function nearest(list, x, y, ignoreId) {
@@ -138,6 +141,13 @@
         var b = list[j];
         if (b.hp <= 0 || b.held || b.stowed) continue;
         if (a.type === "arklan_spike" || b.type === "arklan_spike") continue;
+        if (a.type === "hive_pillar" || b.type === "hive_pillar") continue;
+        if (a.type === "hive_cell" || b.type === "hive_cell") continue;
+        if (a.type === "hive_cocoon" || b.type === "hive_cocoon") continue;
+        if (a.type === "hive_flower" || b.type === "hive_flower") continue;
+        if (a.fallen || b.fallen) continue;
+        if (a.phased || b.phased) continue;
+        if (a.kingAct === "charge" || b.kingAct === "charge") continue;
         if (a.wormAct === "dive" || b.wormAct === "dive") continue;
         var dx = b.x - a.x;
         var dy = b.y - a.y;
@@ -161,7 +171,7 @@
           b.y += ny * push;
         }
       }
-      if (clampEach && a.wormAct !== "dive" && a.vultoAct !== "strafe" && !kaskaAirborne(a)) G.clampPlay(a, state);
+      if (clampEach && a.wormAct !== "dive" && a.vultoAct !== "strafe" && a.princessAct !== "thrust" && a.princessAct !== "hellish" && !kaskaAirborne(a)) G.clampPlay(a, state);
     }
   }
 
@@ -225,10 +235,19 @@
         }
         if (unit.commander) amount *= 0.9;
         if (unit.parasite > 0) amount *= 1.15;
+        if ((state.royalMarkT || 0) > 0) amount *= 1.28;
         if ((unit.exposedT || 0) > 0) amount *= 1.35;
       }
     } else {
       unit.lastHitT = 0;
+      if (fromPlayer && !trueDmg && unit.type === "beeprincess" && unit.princessAct === "honeymoon") {
+        if (G.invasion) G.invasion.heal(unit, amount);
+        else unit.hp = Math.min(unit.maxHp, unit.hp + amount);
+        unit.healGlow = 0.28;
+        unit.flash = 0.08;
+        G.burst(state, unit.x, unit.y, "#ffe08a", 8, 50);
+        return;
+      }
       if ((unit.reconMarkT || 0) > 0 && (unit.reconMark || 0) > 0) {
         amount *= 1 + Math.min(15, unit.reconMark) * 0.01;
       }
@@ -241,19 +260,13 @@
         }
         return;
       }
-      if (fromPlayer && unit.type === "chefe_megatanque" && unit.kingId) {
-        var kingShare = findEnemy(state, unit.kingId);
-        if (kingShare && kingShare.hp > 0) {
-          var split = amount * 0.2;
-          amount *= 0.8;
-          kingShare.hp -= split;
-          kingShare.flash = 0.1;
-          if (kingShare.hp <= 0) {
-            kingShare.hp = 0;
-            killEnemy(state, kingShare);
-          }
-        }
+      if (fromPlayer && unit.type === "chefe_megatanque" && hiveLinked(state)) {
+        amount *= 0.5;
       }
+      if (fromPlayer && unit.type === "chefe_beeking" && (unit.kingWardT || 0) > 0) {
+        amount *= 0.58;
+      }
+      if (unit.kingStun || unit.hiveVuln) amount *= 1.35;
     }
     unit.hp -= amount;
     if (unit.team === "enemy" && unit.hp <= 0 && G.invasion && !unit.p2 && G.invasion.barCount(unit) >= 2) {
@@ -269,7 +282,7 @@
     if (fromPlayer && unit.team === "enemy") {
       if (state.run.freeze) unit.slowT = Math.max(unit.slowT, 0.9);
       var doKnock = state.run.knockback;
-      if (doKnock && srcX != null && unit.type !== "arklan_spike") {
+      if (doKnock && srcX != null && unit.type !== "arklan_spike" && !unit.scenery) {
         var dx = unit.x - srcX;
         var dy = unit.y - srcY;
         var len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -403,7 +416,21 @@
         if (state.units[i].id === e.attached) state.units[i].parasite = Math.max(0, state.units[i].parasite - 1);
       }
     }
+    if (e.type === "hive_cell") {
+      hiveTriggerCell(state, e, true);
+    }
     if (e.type === "chefe_megatanque" || e.type === "chefe_beeking") {
+      if (G.invasion && G.invasion.enraged(state, 3)) {
+        e.hp = 1;
+        e.fallen = true;
+        e.immortal = true;
+        e.scenery = true;
+        e.noDrop = true;
+        e.queenAct = "";
+        e.kingAct = "";
+        e.vx = e.vy = 0;
+        hiveKingClearGhosts(e);
+      }
       if (G.invasion) G.invasion.maybePrincess(state);
     }
     if (e.type === "orb_escudo" && e.orbitHost) {
@@ -437,10 +464,14 @@
     }
     if (e.type === "chefe_megatanque") {
       var kingLeft = findEnemy(state, e.kingId);
-      if (kingLeft && kingLeft.hp > 0) {
+      if (kingLeft && kingLeft.hp > 0 && !kingLeft.fallen) {
         kingLeft.enrage = true;
         kingLeft.kingMode = "knight";
         kingLeft.kingAct = "";
+        kingLeft.chargeWindup = 0;
+        kingLeft.chargeChain = 0;
+        hiveKingClearGhosts(kingLeft);
+        kingLeft.chargeCd = Math.max(kingLeft.chargeCd || 0, 1.15);
         kingLeft.kingT = 0.4;
         state.banner = { text: "O rei não recua", t: 2.1 };
         state.floaters.push(G.createFloater(kingLeft.x, kingLeft.y - 28, "cavaleiro", "#ffe08a"));
@@ -449,10 +480,15 @@
     }
     if (e.type === "chefe_beeking") {
       var queen = findEnemy(state, e.queenId);
-      if (queen && queen.hp > 0) {
+      if (queen && queen.hp > 0 && !queen.fallen) {
         queen.enrage = true;
         queen.miniT = Math.min(queen.miniT || 30, 8);
         queen.colorShift = 1;
+        queen.skillT = 0.35;
+        queen.queenAct = "";
+        queen.laserOn = 0;
+        queen.laserSweeping = false;
+        queen.lastQueen = "";
         state.banner = { text: "A rainha enlouquece", t: 2.1 };
         state.floaters.push(G.createFloater(queen.x, queen.y - 28, "enrage", "#ff4a3a"));
       }
@@ -2498,131 +2534,838 @@
     }
   }
 
+  function princessMark(state) {
+    state.royalMarkT = Math.max(state.royalMarkT || 0, 4.2);
+  }
+
+  function princessCountRobo(state) {
+    var n = 0;
+    var i;
+    for (i = 0; i < state.enemies.length; i++) {
+      if (state.enemies[i].hp > 0 && state.enemies[i].robo) n++;
+    }
+    return n;
+  }
+
+  function princessSpawnRobo(state, n, x, y, hostId) {
+    var i, bee;
+    for (i = 0; i < n; i++) {
+      var a = (Math.PI * 2 * i) / Math.max(1, n);
+      bee = G.game.spawnAt(state, "hive_bee", x + Math.cos(a) * 26, y + Math.sin(a) * 26, { noDrop: true, noLink: true });
+      if (!bee) continue;
+      bee.robo = true;
+      bee.noDrop = true;
+      bee.maxHp = Math.round(bee.maxHp * 1.85);
+      bee.hp = bee.maxHp;
+      bee.hiveCmd = "orbit";
+      bee.hiveHost = hostId;
+      bee.orbitAng = a;
+      bee.mergeT = 0;
+    }
+  }
+
+  function princessThrustLen() {
+    return 286;
+  }
+
+  function princessStabLen() {
+    return 208;
+  }
+
+  function princessStabOff(i) {
+    return (i - 1) * 0.4;
+  }
+
+  function princessAimAt(state, e, target) {
+    if (!target) return e.rot || 0;
+    return Math.atan2(
+      (target.y + (state.squad.vy || 0) * 0.1) - e.y,
+      (target.x + (state.squad.vx || 0) * 0.1) - e.x
+    );
+  }
+
+  function princessHellRay(state, e) {
+    var ang = e.hellAim || 0;
+    return rayExitPlay(G.playfield(state), e.x, e.y, Math.cos(ang), Math.sin(ang), 20);
+  }
+
+  function princessWarnHell(state, e, t) {
+    var hit = princessHellRay(state, e);
+    e.hellLen = hit.dist || 420;
+    e.hellTo = { x: hit.x, y: hit.y };
+    warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: e.hellAim || 0, len: e.hellLen, w: 18, t: t, max: t, r: 18, dmg: 0, color: "#ff6a3a" });
+  }
+
+  function princessStartHellDash(state, e) {
+    var hit = princessHellRay(state, e);
+    var len = Math.max(48, hit.dist || e.hellLen || 420);
+    var sp = 1760;
+    e.hellLen = len;
+    e.hellTo = { x: hit.x, y: hit.y };
+    e.vx = Math.cos(e.hellAim || 0) * sp;
+    e.vy = Math.sin(e.hellAim || 0) * sp;
+    e.hellDash = len / sp;
+    e.hellGhosts = [];
+    e.hellReacted = false;
+  }
+
+  function playerDashFresh(state) {
+    var max = state.dashTMax || 0.34;
+    var t = state.dashT || 0;
+    return t > 0 && (max - t) < 0.055;
+  }
+
+  function princessHellFeintPos(state, e, target) {
+    var from = target || state.squad;
+    var ang = Math.atan2(from.y - e.y, from.x - e.x);
+    var b = G.playfield(state);
+    var far = rayExitPlay(b, from.x, from.y, Math.cos(ang), Math.sin(ang), 52);
+    var dist = Math.max(170, Math.min((far.dist || 220) * 0.78, 250));
+    var x = from.x + Math.cos(ang) * dist;
+    var y = from.y + Math.sin(ang) * dist;
+    if (Math.hypot(x - from.x, y - from.y) < 150) {
+      x = far.x;
+      y = far.y;
+    }
+    return {
+      x: Math.max(b.x0 + 48, Math.min(b.x1 - 48, x)),
+      y: Math.max(b.y0 + 48, Math.min(b.y1 - 48, y))
+    };
+  }
+
+  function princessDoHellFeint(state, e, target) {
+    var pos = princessHellFeintPos(state, e, target);
+    princessClearWarn(state, "lane");
+    princessBlinkTo(state, e, pos.x, pos.y);
+    e.hellAim = target ? Math.atan2(target.y - e.y, target.x - e.x) : (e.rot || 0);
+    e.rot = e.hellAim;
+    e.hellDash = 0;
+    e.vx = e.vy = 0;
+    e.hellTo = null;
+    e.hellGhosts = [];
+    e.hellWind = 0.28;
+    princessWarnHell(state, e, 0.28);
+    if (G.audio && G.audio.thud) G.audio.thud();
+  }
+
+  function princessQueueChaseThrust(state, e, target) {
+    if (!target) return;
+    var ang = Math.atan2(target.y - e.y, target.x - e.x);
+    var closeX = target.x - Math.cos(ang) * 68;
+    var closeY = target.y - Math.sin(ang) * 68;
+    e.chaseTpCd = 10;
+    e.thrustAfterBlink = true;
+    e.princessAct = "blink";
+    e.blinkT = 0.26;
+    e.blinkDid = false;
+    e.blinkTo = { x: closeX, y: closeY };
+    warnAt(state, { kind: "tp", x: closeX, y: closeY, t: 0.26, max: 0.26, r: 28, dmg: 0, color: "#ffe08a" });
+  }
+
+  function princessWarnCharge(state, e, t) {
+    var hit = rayExitPlay(G.playfield(state), e.x, e.y, Math.cos(e.thrustAim || 0), Math.sin(e.thrustAim || 0), 22);
+    e.thrustLen = Math.min(princessThrustLen(), hit.dist || princessThrustLen());
+    warnAt(state, {
+      kind: "lane",
+      x: e.x,
+      y: e.y,
+      ang: e.thrustAim || 0,
+      len: e.thrustLen,
+      w: 22,
+      t: t,
+      max: t,
+      r: 22,
+      dmg: 0,
+      color: "#ffd24a",
+      followId: e.id,
+      followRot: true
+    });
+  }
+
+  function princessWarnStabs(state, e, t) {
+    var i, off;
+    var len = princessStabLen();
+    for (i = 0; i < 3; i++) {
+      off = princessStabOff(i);
+      warnAt(state, {
+        kind: "lane",
+        x: e.x,
+        y: e.y,
+        ang: (e.thrustAim || 0) + off,
+        angOff: off,
+        len: len,
+        w: 15,
+        t: t,
+        max: t,
+        r: 15,
+        dmg: 0,
+        color: "#7af7ff",
+        followId: e.id,
+        followRot: true
+      });
+    }
+  }
+
+  function princessStartThrust(state, e, target) {
+    e.princessAct = "thrust";
+    e.thrustLeft = 3;
+    e.thrustPhase = "wind";
+    e.thrustWind = 0.34;
+    e.thrustWindMax = 0.34;
+    e.thrustDash = 0;
+    e.thrustHit = false;
+    e.thrustGhosts = [];
+    e.stabFx = [];
+    e.thrustAim = princessAimAt(state, e, target);
+    e.rot = e.thrustAim;
+    princessWarnCharge(state, e, e.thrustWind);
+  }
+
+  function princessBlinkTo(state, e, x, y) {
+    var b = G.playfield(state);
+    e.blinkFrom = { x: e.x, y: e.y };
+    e.blinkFxT = 0.28;
+    e.x = Math.max(b.x0 + 36, Math.min(b.x1 - 36, x));
+    e.y = Math.max(b.y0 + 36, Math.min(b.y1 - 36, y));
+    G.burst(state, e.blinkFrom.x, e.blinkFrom.y, "#ffe08a", 10, 70);
+    G.burst(state, e.x, e.y, "#7af7ff", 10, 70);
+  }
+
+  function princessHalfBox(state, axis, side) {
+    var b = G.playfield(state);
+    var midX = (b.x0 + b.x1) / 2;
+    var midY = (b.y0 + b.y1) / 2;
+    if (axis === "x") {
+      return side < 0
+        ? { x0: b.x0, y0: b.y0, x1: midX, y1: b.y1, edge: midX, axis: "x", side: side }
+        : { x0: midX, y0: b.y0, x1: b.x1, y1: b.y1, edge: midX, axis: "x", side: side };
+    }
+    return side < 0
+      ? { x0: b.x0, y0: b.y0, x1: b.x1, y1: midY, edge: midY, axis: "y", side: side }
+      : { x0: b.x0, y0: midY, x1: b.x1, y1: b.y1, edge: midY, axis: "y", side: side };
+  }
+
+  function princessInBox(px, py, box) {
+    return px >= box.x0 && px <= box.x1 && py >= box.y0 && py <= box.y1;
+  }
+
+  function princessClearWarn(state, kind) {
+    var i;
+    for (i = (state.warnings || []).length - 1; i >= 0; i--) {
+      if (state.warnings[i].kind === kind) state.warnings.splice(i, 1);
+    }
+  }
+
+  function princessMoonDir(last) {
+    var dirs = [
+      { axis: "y", side: -1 },
+      { axis: "y", side: 1 },
+      { axis: "x", side: -1 },
+      { axis: "x", side: 1 }
+    ];
+    var i, pool = [];
+    for (i = 0; i < dirs.length; i++) {
+      if (last && dirs[i].axis === last.axis && dirs[i].side === last.side) continue;
+      pool.push(dirs[i]);
+    }
+    return pool[(Math.random() * pool.length) | 0];
+  }
+
+  function princessMoonWarn(state, e, dur) {
+    princessClearWarn(state, "half");
+    var dir = princessMoonDir(e.moonLast);
+    e.moonLast = dir;
+    e.moonBox = princessHalfBox(state, dir.axis, dir.side);
+    var box = e.moonBox;
+    warnAt(state, {
+      kind: "half",
+      x: (box.x0 + box.x1) / 2,
+      y: (box.y0 + box.y1) / 2,
+      x0: box.x0,
+      y0: box.y0,
+      x1: box.x1,
+      y1: box.y1,
+      edge: box.edge,
+      axis: box.axis,
+      side: dir.side,
+      t: dur,
+      max: dur,
+      r: 40,
+      dmg: 0,
+      color: "#ffe08a"
+    });
+  }
+
+  function princessMoonSlash(state, e) {
+    var box = e.moonBox;
+    if (!box) return;
+    var cx = (box.x0 + box.x1) / 2;
+    var cy = (box.y0 + box.y1) / 2;
+    e.moonFx = {
+      t: 0.62,
+      max: 0.62,
+      x0: box.x0,
+      y0: box.y0,
+      x1: box.x1,
+      y1: box.y1,
+      axis: box.axis,
+      side: box.side
+    };
+    var si, sa, sl;
+    for (si = 0; si < 18; si++) {
+      sa = Math.random() * Math.PI * 2;
+      sl = 40 + Math.random() * 160;
+      G.burst(state, cx + Math.cos(sa) * sl * 0.35, cy + Math.sin(sa) * sl * 0.35, si % 2 ? "#7af7ff" : "#ffe08a", 3, 90);
+    }
+    if (princessInBox(state.squad.x, state.squad.y, box)) {
+      hurtSquadArea(state, cx, cy, Math.max(box.x1 - box.x0, box.y1 - box.y0), Math.round(e.def.dmg * 1.85), e.x, e.y);
+    }
+    state.shake = Math.max(state.shake || 0, 16);
+    if (G.boomFx) G.boomFx(state, cx, cy, 170, "#ffe08a");
+    G.burst(state, cx, cy, "#fff6c0", 28, 220);
+    G.burst(state, cx, cy, "#ffe08a", 22, 180);
+    G.burst(state, cx, cy, "#7af7ff", 14, 140);
+    if (G.audio && G.audio.explosion) G.audio.explosion();
+    if (G.audio && G.audio.thud) G.audio.thud();
+  }
+
   function tickPrincess(state, e, target, dt, spd) {
-    e.skillT = (e.skillT == null ? 1.6 : e.skillT) - dt;
-    if ((e.kneelT || 0) > 0) {
-      e.kneelT -= dt;
+    if (e.introLock) {
       e.vx = e.vy = 0;
-      e.weak = true;
       return;
     }
-    e.weak = false;
+    if ((e.blinkFxT || 0) > 0) e.blinkFxT -= dt;
+    e.chaseTpCd = Math.max(0, (e.chaseTpCd || 0) - dt);
+    e.phased = false;
+    e.hideDraw = false;
+    e.skillT = (e.skillT == null ? 1.4 : e.skillT) - dt;
+    var hive = !!e.princessHive;
+    if (hive) {
+      e.roboSpawnT = (e.roboSpawnT == null ? 2.4 : e.roboSpawnT) - dt;
+      if (e.roboSpawnT <= 0) {
+        e.roboSpawnT = 3.4;
+        if (princessCountRobo(state) < 8) princessSpawnRobo(state, 2, e.x, e.y, e.id);
+      }
+    }
+    if (!hive && !e.hiveQueued && e.hp / e.maxHp <= 0.5) {
+      e.hiveQueued = true;
+      if (G.invasion && G.invasion.startHiveRealm) G.invasion.startHiveRealm(state, e);
+      return;
+    }
     var act = e.princessAct || "";
-    if (act === "pierce") {
-      if ((e.chargeWindup || 0) > 0) {
-        e.chargeWindup -= dt;
-        if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
-        if (e.chargeWindup <= 0) {
-          var ang = e.rot || 0;
-          var b = G.playfield(state);
-          var hit = rayExitPlay(b, e.x, e.y, Math.cos(ang), Math.sin(ang), 28);
-          e.pierceTx = hit.x;
-          e.pierceTy = hit.y;
-          e.vx = Math.cos(ang) * 780;
-          e.vy = Math.sin(ang) * 780;
-          e.pierceT = Math.max(0.18, hit.dist / 780);
+    if (act !== "hellish") e.hellAura = 0;
+    if (act !== "harvest") {
+      e.harvestFlash = Math.max(0, (e.harvestFlash || 0) - dt);
+      if (e.harvestFx) {
+        for (var hfi = e.harvestFx.length - 1; hfi >= 0; hfi--) {
+          e.harvestFx[hfi].t -= dt;
+          if (e.harvestFx[hfi].t <= 0) e.harvestFx.splice(hfi, 1);
+        }
+      }
+      if (e.harvestGhosts) {
+        for (var hgi = e.harvestGhosts.length - 1; hgi >= 0; hgi--) {
+          e.harvestGhosts[hgi].t -= dt;
+          if (e.harvestGhosts[hgi].t <= 0) e.harvestGhosts.splice(hgi, 1);
+        }
+      }
+    }
+    if (act === "thrust") {
+      var aim = e.thrustAim || e.rot || 0;
+      var tlen = e.thrustLen || princessThrustLen();
+      var fx, fxi;
+      if (e.stabFx) {
+        for (fxi = e.stabFx.length - 1; fxi >= 0; fxi--) {
+          fx = e.stabFx[fxi];
+          fx.t -= dt;
+          if (fx.t <= 0) e.stabFx.splice(fxi, 1);
+        }
+      }
+      if (e.thrustPhase === "wind") {
+        e.thrustWind = (e.thrustWind || 0) - dt;
+        e.vx = e.vy = 0;
+        if (target) e.thrustAim = princessAimAt(state, e, target);
+        e.rot = e.thrustAim || 0;
+        aim = e.thrustAim || 0;
+        e.x -= Math.cos(aim) * 52 * dt;
+        e.y -= Math.sin(aim) * 52 * dt;
+        var hitW = rayExitPlay(G.playfield(state), e.x, e.y, Math.cos(aim), Math.sin(aim), 22);
+        e.thrustLen = Math.min(princessThrustLen(), hitW.dist || princessThrustLen());
+        if (e.thrustWind <= 0) {
+          var sp = hive ? 1080 : 980;
+          tlen = e.thrustLen || princessThrustLen();
+          e.vx = Math.cos(aim) * sp;
+          e.vy = Math.sin(aim) * sp;
+          e.thrustPhase = "dash";
+          e.thrustDash = Math.min(0.26, tlen / sp);
+          e.thrustDashMax = e.thrustDash;
+          e.thrustFrom = { x: e.x, y: e.y };
+          e.thrustHit = false;
+          e.thrustGhosts = [];
+          G.burst(state, e.x, e.y, "#ffe08a", 12, 70);
+          G.burst(state, e.x, e.y, "#ff8a3a", 8, 50);
+          if (G.audio && G.audio.thud) G.audio.thud();
+          else if (G.audio && G.audio.hit) G.audio.hit();
         }
         return;
       }
-      e.pierceT = (e.pierceT || 0) - dt;
-      e.x += (e.vx || 0) * dt;
-      e.y += (e.vy || 0) * dt;
-      pushZone(state, { kind: "honey", x: e.x, y: e.y, r: 22, t: 2.4, max: 2.4, dmg: 8, hurtPlayer: true, pin: true });
-      if (e.pierceT <= 0) {
-        explode(state, e.x, e.y, 78, Math.round(e.def.dmg * 1.4), "enemy", "#ffe08a");
-        pushZone(state, { kind: "honey", x: e.x, y: e.y, r: 86, t: 2.8, max: 2.8, dmg: 12, hurtPlayer: true, pin: true });
-        state.honeyT = Math.max(state.honeyT || 0, 1.6);
-        e.princessAct = "";
-        e.skillT = 2.4;
+      if (e.thrustPhase === "dash") {
+        e.thrustDash = (e.thrustDash || 0) - dt;
+        e.x += (e.vx || 0) * dt;
+        e.y += (e.vy || 0) * dt;
+        e.rot = Math.atan2(e.vy || 0, e.vx || 1);
+        var ghosts = e.thrustGhosts || [];
+        ghosts.push({ x: e.x, y: e.y, rot: e.rot, a: 0.55 });
+        if (ghosts.length > 6) ghosts.shift();
+        e.thrustGhosts = ghosts;
+        var bT = G.playfield(state);
+        var ms = e.def.size || 32;
+        if (e.x < bT.x0 + ms) { e.x = bT.x0 + ms; e.thrustDash = 0; }
+        if (e.x > bT.x1 - ms) { e.x = bT.x1 - ms; e.thrustDash = 0; }
+        if (e.y < bT.y0 + ms) { e.y = bT.y0 + ms; e.thrustDash = 0; }
+        if (e.y > bT.y1 - ms) { e.y = bT.y1 - ms; e.thrustDash = 0; }
+        if (!e.thrustHit && e.thrustFrom) {
+          var gone = Math.hypot(e.x - e.thrustFrom.x, e.y - e.thrustFrom.y) + 78;
+          if (inBeam(state.squad.x, state.squad.y, e.thrustFrom.x, e.thrustFrom.y, aim, gone, 24)) {
+            e.thrustHit = true;
+            hurtBeam(state, e.thrustFrom.x, e.thrustFrom.y, aim, gone, 22, Math.round(e.def.dmg * 1.7));
+            princessMark(state);
+            state.shake = Math.max(state.shake || 0, 10);
+            G.burst(state, state.squad.x, state.squad.y, "#fff4c4", 14, 80);
+          }
+        }
+        if (e.thrustDash <= 0) {
+          e.vx = e.vy = 0;
+          e.thrustPhase = "stabTell";
+          e.stabTell = 0.32;
+          e.stabTellMax = 0.32;
+          e.thrustAim = target ? princessAimAt(state, e, target) : (e.rot || 0);
+          e.rot = e.thrustAim;
+          princessWarnStabs(state, e, 0.32);
+          G.burst(state, e.x, e.y, "#7af7ff", 8, 40);
+        }
+        return;
+      }
+      if (e.thrustPhase === "stabTell") {
+        e.stabTell = (e.stabTell || 0) - dt;
         e.vx = e.vy = 0;
+        if (target) e.thrustAim = princessAimAt(state, e, target);
+        e.rot = e.thrustAim || 0;
+        if (e.stabTell <= 0) {
+          e.thrustPhase = "stab";
+          e.stabLeft = 3;
+          e.stabCd = 0.02;
+          e.stabN = 0;
+        }
+        return;
+      }
+      if (e.thrustPhase === "stab") {
+        e.vx = e.vy = 0;
+        e.stabCd = (e.stabCd || 0) - dt;
+        e.stabFlash = Math.max(0, (e.stabFlash || 0) - dt);
+        if (e.stabCd <= 0 && (e.stabLeft || 0) > 0) {
+          var si = e.stabN || 0;
+          var sang = (e.thrustAim || 0) + princessStabOff(si);
+          e.stabN = si + 1;
+          e.stabLeft--;
+          e.stabCd = 0.13;
+          e.stabAng = sang;
+          e.stabFlash = 0.16;
+          e.rot = sang;
+          var slen = princessStabLen();
+          hurtBeam(state, e.x, e.y, sang, slen, 18, Math.round(e.def.dmg * 1.55));
+          if (inBeam(state.squad.x, state.squad.y, e.x, e.y, sang, slen, 22)) {
+            princessMark(state);
+            state.shake = Math.max(state.shake || 0, 8);
+          }
+          e.stabFx = e.stabFx || [];
+          e.stabFx.push({ ang: sang, t: 0.18, max: 0.18, len: slen });
+          G.burst(state, e.x + Math.cos(sang) * 70, e.y + Math.sin(sang) * 70, "#fff4c4", 10, 55);
+          G.burst(state, e.x + Math.cos(sang) * 70, e.y + Math.sin(sang) * 70, "#7af7ff", 6, 40);
+          if (G.audio && G.audio.hit) G.audio.hit();
+        }
+        if ((e.stabLeft || 0) <= 0 && e.stabCd <= 0 && (e.stabFlash || 0) <= 0) {
+          e.thrustLeft = (e.thrustLeft || 1) - 1;
+          e.thrustGhosts = [];
+          if ((e.thrustLeft || 0) > 0) {
+            e.thrustPhase = "wind";
+            e.thrustWind = 0.24;
+            e.thrustWindMax = 0.24;
+            e.thrustAim = target ? princessAimAt(state, e, target) : aim;
+            e.rot = e.thrustAim;
+            princessWarnCharge(state, e, 0.24);
+          } else {
+            e.princessAct = "";
+            e.thrustPhase = "";
+            e.stabFx = [];
+            e.skillT = hive ? 1.25 : 0.85;
+          }
+        }
+        return;
+      }
+      e.princessAct = "";
+      e.skillT = hive ? 1.25 : 0.85;
+      return;
+    }
+    if (act === "spawn") {
+      e.spawnT = (e.spawnT || 0) - dt;
+      e.vx = e.vy = 0;
+      if (!e.spawnDid && e.spawnT <= 0.2) {
+        e.spawnDid = true;
+        princessSpawnRobo(state, hive ? 5 : 4, e.x, e.y, e.id);
+      }
+      if (e.spawnT <= 0) {
+        e.princessAct = "";
+        e.skillT = hive ? 1.7 : 2.1;
       }
       return;
     }
-    if (act === "thrust") {
-      e.thrustT = (e.thrustT || 0) - dt;
-      if (target) moveTowards(e, target.x, target.y, spd * 1.4, dt);
-      if (!e.thrustDid && e.thrustT <= 0.15) {
-        e.thrustDid = true;
-        var base = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
-        for (var i = 0; i < 5; i++) {
-          var a = base + (i - 2) * 0.55;
-          hurtBeam(state, e.x, e.y, a, 160, 14, Math.round(e.def.dmg * 1.15));
+    if (act === "laser") {
+      e.laserT = (e.laserT || 0) - dt;
+      e.vx = e.vy = 0;
+      if (target && (e.laserOn || 0) <= 0) e.laserAng = Math.atan2(target.y - e.y, target.x - e.x);
+      e.rot = e.laserAng || 0;
+      if (!e.laserOn && e.laserT <= e.laserBeam) {
+        e.laserOn = e.laserBeam;
+        var bL = G.playfield(state);
+        var hitL = rayExitPlay(bL, e.x, e.y, Math.cos(e.laserAng), Math.sin(e.laserAng), 20);
+        e.laserLen = hitL.dist || 520;
+      }
+      if ((e.laserOn || 0) > 0) {
+        e.laserOn -= dt;
+        e.laserHitCd = (e.laserHitCd || 0) - dt;
+        if (e.laserHitCd <= 0) {
+          e.laserHitCd = 0.1;
+          hurtBeam(state, e.x, e.y, e.laserAng, e.laserLen || 520, 20, Math.round(e.def.dmg * 0.62));
         }
       }
-      if (e.thrustT <= 0) {
+      if (e.laserT <= 0) {
         e.princessAct = "";
-        e.skillT = 2.2;
+        e.laserOn = 0;
+        e.skillT = hive ? 1.45 : 1.85;
       }
       return;
     }
-    if (act === "cavalry") {
-      e.princessAct = "";
-      e.skillT = 4.5;
-      var dest = G.invasion.pickOpposite(state, target || state.squad);
-      G.game.spawnAt(state, "abelha_enfermeira", e.x + 24, e.y, { noDrop: true, hostId: e.id, destX: dest.x, destY: dest.y });
-      G.game.spawnAt(state, "abelha_arquiteta", dest.x, dest.y, { noDrop: true, hostId: e.id });
-      state.banner = { text: "Cavalaria real", t: 1.8 };
+    if (act === "blink") {
+      e.blinkT = (e.blinkT || 0) - dt;
+      e.vx = e.vy = 0;
+      if (!e.blinkDid && e.blinkT <= 0.05) {
+        e.blinkDid = true;
+        var tx, ty;
+        if (e.blinkTo) {
+          tx = e.blinkTo.x;
+          ty = e.blinkTo.y;
+          e.blinkTo = null;
+        } else if (Math.random() < 0.7 && target) {
+          var ba = Math.atan2(target.y - e.y, target.x - e.x);
+          tx = target.x - Math.cos(ba) * 58;
+          ty = target.y - Math.sin(ba) * 58;
+        } else {
+          var far = pickPlay(state, 50);
+          tx = far.x;
+          ty = far.y;
+        }
+        princessBlinkTo(state, e, tx, ty);
+        if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      }
+      if (e.blinkT <= 0) {
+        if (e.thrustAfterBlink) {
+          e.thrustAfterBlink = false;
+          princessStartThrust(state, e, target);
+          return;
+        }
+        if (!hive && target && Math.random() < 0.62) {
+          princessStartThrust(state, e, target);
+          return;
+        }
+        e.princessAct = "";
+        e.skillT = hive ? 0.65 : 0.5;
+      }
       return;
     }
-    if (act === "flash") {
-      e.flashCuts = e.flashCuts || 0;
-      e.flashCd = (e.flashCd || 0) - dt;
-      e.stealth = 0.85;
-      if (e.flashCd <= 0 && e.flashCuts < 20) {
-        e.flashCd = 0.16;
-        var b2 = G.playfield(state);
-        var a2 = Math.random() * Math.PI * 2;
-        var x0 = b2.x0 + 20 + Math.random() * (b2.x1 - b2.x0 - 40);
-        var y0 = b2.y0 + 20 + Math.random() * (b2.y1 - b2.y0 - 40);
-        var len = 220 + Math.random() * 180;
-        warnAt(state, { kind: "lane", x: x0, y: y0, ang: a2, len: len, w: 12, t: 0.28, max: 0.28, r: 12, dmg: Math.round(e.def.dmg * 1.6), color: "#fff36a" });
-        e.flashCuts++;
+    if (act === "honeymoon") {
+      e.vx = e.vy = 0;
+      var mid = G.playfield(state);
+      e.x += (((mid.x0 + mid.x1) / 2) - e.x) * Math.min(1, dt * 3.2);
+      e.y += (((mid.y0 + mid.y1) / 2) - e.y) * Math.min(1, dt * 3.2);
+      if (Math.random() < 0.55) {
+        var ma = Math.random() * Math.PI * 2;
+        var mr = 28 + Math.random() * 46;
+        state.particles.push({
+          x: e.x + Math.cos(ma) * mr,
+          y: e.y + Math.sin(ma) * mr,
+          vx: Math.cos(ma) * (12 + Math.random() * 28),
+          vy: Math.sin(ma) * (12 + Math.random() * 28) - 18,
+          life: 0.38 + Math.random() * 0.28,
+          max: 0.7,
+          size: 1.8 + Math.random() * 2.4,
+          color: Math.random() < 0.55 ? "#ffe08a" : "#7af7ff"
+        });
       }
-      if (e.flashCuts >= 20 && e.flashCd <= 0) {
+      if (e.moonFx) {
+        e.moonFx.t -= dt;
+        if (e.moonFx.t <= 0) e.moonFx = null;
+      }
+      e.moonT = (e.moonT || 0) - dt;
+      if (e.moonT <= 0) {
+        if (e.moonPhase === "tell") {
+          princessMoonSlash(state, e);
+          e.moonLeft = (e.moonLeft || 1) - 1;
+          if (e.moonLeft > 0) {
+            var nextDur = 0.88;
+            e.moonPhase = "tell";
+            e.moonT = nextDur;
+            e.moonMax = nextDur;
+            princessMoonWarn(state, e, nextDur);
+          } else {
+            e.moonPhase = "end";
+            e.moonT = 0.38;
+          }
+        } else {
+          e.princessAct = "";
+          e.moonFx = null;
+          e.skillT = 1.45;
+        }
+      }
+      return;
+    }
+    if (act === "hellish") {
+      e.phased = true;
+      e.hellAura = 1;
+      var emberN = (e.hellDash || 0) > 0 ? 3 : 1;
+      var emi;
+      for (emi = 0; emi < emberN; emi++) {
+        if (Math.random() > 0.72 && emberN === 1) continue;
+        state.particles.push({
+          x: e.x + (Math.random() - 0.5) * ((e.hellDash || 0) > 0 ? 28 : 52),
+          y: e.y + (Math.random() - 0.5) * ((e.hellDash || 0) > 0 ? 22 : 40),
+          vx: (Math.random() - 0.5) * 70 - (e.vx || 0) * 0.12,
+          vy: -50 - Math.random() * 90 - (e.vy || 0) * 0.12,
+          life: 0.28 + Math.random() * 0.22,
+          max: 0.55,
+          size: 2.2 + Math.random() * 3.2,
+          color: Math.random() < 0.35 ? "#fff4c4" : (Math.random() < 0.5 ? "#ff3a18" : "#ffb45a")
+        });
+      }
+      if ((e.hellWind || 0) > 0) {
+        e.hellWind = (e.hellWind || 0) - dt;
+        e.vx = e.vy = 0;
+        if (target) e.rot = e.hellAim || Math.atan2(target.y - e.y, target.x - e.x);
+        if (e.hellWind <= 0) princessStartHellDash(state, e);
+        return;
+      }
+      if ((e.hellDash || 0) > 0) {
+        if (!e.hellReacted && playerDashFresh(state)) {
+          e.hellReacted = true;
+          if (Math.random() < 0.5) {
+            princessDoHellFeint(state, e, target);
+            return;
+          }
+        }
+        e.hellDash -= dt;
+        e.x += (e.vx || 0) * dt;
+        e.y += (e.vy || 0) * dt;
+        e.rot = Math.atan2(e.vy || 0, e.vx || 1);
+        var hg = e.hellGhosts || [];
+        hg.push({ x: e.x, y: e.y, rot: e.rot, a: 0.7 });
+        if (hg.length > 14) hg.shift();
+        e.hellGhosts = hg;
+        if (target && Math.hypot(target.x - e.x, target.y - e.y) < e.def.size + 16 && e.contactCd <= 0) {
+          e.contactCd = 0.16;
+          hurt(state, target, Math.round(e.def.dmg * 1.15), e.x, e.y);
+          princessMark(state);
+        }
+        if (e.hellDash <= 0) {
+          if (e.hellTo) {
+            e.x = e.hellTo.x;
+            e.y = e.hellTo.y;
+          }
+          G.clampPlay(e, state);
+          e.vx = e.vy = 0;
+          e.hellLeft = (e.hellLeft || 1) - 1;
+          if (e.hellLeft > 0) {
+            e.hellAim = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
+            e.hellWind = 0.24;
+            princessWarnHell(state, e, 0.24);
+          } else {
+            e.princessAct = "";
+            e.phased = false;
+            e.hellAura = 0;
+            e.hellGhosts = [];
+            e.skillT = 1.3;
+          }
+        }
+        return;
+      }
+      return;
+    }
+    if (act === "harvest") {
+      e.harvestT = (e.harvestT || 0) - dt;
+      e.phased = true;
+      e.harvestFlash = Math.max(0, (e.harvestFlash || 0) - dt);
+      if (e.harvestFx) {
+        var fi;
+        for (fi = e.harvestFx.length - 1; fi >= 0; fi--) {
+          e.harvestFx[fi].t -= dt;
+          if (e.harvestFx[fi].t <= 0) e.harvestFx.splice(fi, 1);
+        }
+      }
+      if (e.harvestGhosts) {
+        var gi;
+        for (gi = e.harvestGhosts.length - 1; gi >= 0; gi--) {
+          e.harvestGhosts[gi].t -= dt;
+          if (e.harvestGhosts[gi].t <= 0) e.harvestGhosts.splice(gi, 1);
+        }
+      }
+      if (e.harvestPhase === "tell") {
+        e.hideDraw = true;
+        e.stealth = 1;
+        e.vx = e.vy = 0;
+        e.harvestDim = Math.min(1, (e.harvestDim || 0) + dt * 2.2);
+        if (e.harvestT <= 0) {
+          e.harvestPhase = "cut";
+          e.harvestI = 0;
+          e.harvestCd = 0;
+          e.harvestFlash = 0.18;
+          state.shake = Math.max(state.shake || 0, 10);
+          if (G.audio && G.audio.horn) G.audio.horn();
+        }
+        return;
+      }
+      e.hideDraw = true;
+      e.stealth = 1;
+      e.harvestCd = (e.harvestCd || 0) - dt;
+      if (e.harvestCd <= 0 && e.harvestCuts && e.harvestI < e.harvestCuts.length) {
+        var cut = e.harvestCuts[e.harvestI];
+        e.harvestI++;
+        e.harvestCd = 0.012;
+        princessBlinkTo(state, e, cut.x, cut.y);
+        e.rot = cut.ang;
+        hurtBeam(state, cut.x, cut.y, cut.ang, cut.len, 12, Math.round(e.def.dmg * 1.55));
+        cut.done = true;
+        e.harvestFx = e.harvestFx || [];
+        e.harvestFx.push({ x: cut.x, y: cut.y, ang: cut.ang, len: cut.len, t: 0.32, max: 0.32 });
+        e.harvestGhosts = e.harvestGhosts || [];
+        e.harvestGhosts.push({ x: cut.x, y: cut.y, rot: cut.ang, t: 0.2, max: 0.2 });
+        e.harvestFlash = 0.08;
+        G.burst(state, cut.x + Math.cos(cut.ang) * cut.len * 0.45, cut.y + Math.sin(cut.ang) * cut.len * 0.45, "#ffe08a", 8, 70);
+        G.burst(state, cut.x + Math.cos(cut.ang) * cut.len * 0.45, cut.y + Math.sin(cut.ang) * cut.len * 0.45, "#7af7ff", 6, 55);
+        if ((e.harvestI % 4) === 0 && G.audio && G.audio.hit) G.audio.hit();
+        if ((e.harvestI % 6) === 0) state.shake = Math.max(state.shake || 0, 8);
+      }
+      if (e.harvestCuts && e.harvestI >= e.harvestCuts.length) {
         e.princessAct = "";
+        e.phased = false;
+        e.hideDraw = false;
         e.stealth = 0;
-        e.kneelT = 5;
-        e.skillT = 6;
-        var mid = G.playfield(state);
-        e.x = (mid.x0 + mid.x1) / 2;
-        e.y = (mid.y0 + mid.y1) / 2;
-        state.banner = { text: "A princesa descansa", t: 2.2 };
+        e.harvestCuts = null;
+        e.harvestPhase = "";
+        e.harvestDim = 0;
+        e.harvestFlash = 0.28;
+        princessClearWarn(state, "slash");
+        state.shake = Math.max(state.shake || 0, 18);
+        if (G.boomFx) G.boomFx(state, e.x, e.y, 200, "#7af7ff");
+        G.burst(state, e.x, e.y, "#fff6c0", 28, 200);
+        G.burst(state, e.x, e.y, "#7af7ff", 22, 170);
+        if (G.audio && G.audio.explosion) G.audio.explosion();
+        e.skillT = 1.9;
       }
       return;
     }
-    if (target) moveTowards(e, target.x, target.y, spd * 0.7, dt);
-    if (e.cooldown <= 0 && target) {
-      e.cooldown = 1 / Math.max(0.35, e.def.fire);
-      enemyFire(state, e, target, "sting", { speed: 280, r: 4, color: "#ffd24a" });
+    e.phased = false;
+    if (target) {
+      moveTowards(e, target.x, target.y, spd * 1.42, dt);
+      e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      if (Math.hypot(target.x - e.x, target.y - e.y) < e.def.size + target.def.size + 8 && e.contactCd <= 0) {
+        e.contactCd = 0.22;
+        hurt(state, target, Math.round(e.def.dmg * 0.95), e.x, e.y);
+      }
     }
     if (e.skillT > 0) return;
-    var pool = ["pierce", "thrust", "cavalry", "flash"];
+    var distT = target ? Math.hypot(target.x - e.x, target.y - e.y) : 999;
+    if (target && (e.chaseTpCd || 0) <= 0 && distT > 300) {
+      princessQueueChaseThrust(state, e, target);
+      return;
+    }
+    var pool = hive
+      ? ["laser", "spawn", "blink", "honeymoon", "honeymoon", "hellish", "hellish", "harvest", "thrust"]
+      : ["thrust", "laser", "blink", "spawn", "thrust"];
     if (e.lastPrincess) {
       var np = [];
-      for (var p = 0; p < pool.length; p++) if (pool[p] !== e.lastPrincess) np.push(pool[p]);
+      var p;
+      for (p = 0; p < pool.length; p++) if (pool[p] !== e.lastPrincess) np.push(pool[p]);
       pool = np.length ? np : pool;
     }
     var pick = pool[(Math.random() * pool.length) | 0];
     e.lastPrincess = pick;
+    if (pick === "thrust") {
+      princessStartThrust(state, e, target);
+      return;
+    }
     e.princessAct = pick;
-    if (pick === "pierce") {
-      e.chargeWindup = 0.55;
-      e.rot = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
-      warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: e.rot, len: 340, w: 22, t: 0.55, max: 0.55, r: 20, dmg: 0, color: "#ffe08a" });
-      state.floaters.push(G.createFloater(e.x, e.y - 24, "perfuração", "#ffe08a"));
-    } else if (pick === "thrust") {
-      e.thrustT = 0.85;
-      e.thrustDid = false;
-      var tb = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
-      for (var s = 0; s < 5; s++) {
-        warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: tb + (s - 2) * 0.55, len: 160, w: 12, t: 0.7, max: 0.7, r: 12, dmg: 0, color: "#fff4c4" });
+    if (pick === "spawn") {
+      e.spawnT = 0.85;
+      e.spawnDid = false;
+      warnAt(state, { kind: "mark", x: e.x, y: e.y, t: 0.85, max: 0.85, r: e.def.size + 40, dmg: 0, color: "#7ad8ff", followId: e.id });
+    } else if (pick === "laser") {
+      e.laserT = 1.45;
+      e.laserBeam = 0.7;
+      e.laserOn = 0;
+      e.laserAng = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
+      var b0 = G.playfield(state);
+      var hit0 = rayExitPlay(b0, e.x, e.y, Math.cos(e.laserAng), Math.sin(e.laserAng), 20);
+      e.laserLen = hit0.dist || 520;
+      warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: e.laserAng, len: e.laserLen, w: 22, t: 0.75, max: 0.75, r: 22, dmg: 0, color: "#ffd24a", followId: e.id, followRot: true });
+    } else if (pick === "blink") {
+      e.blinkT = 0.45;
+      e.blinkDid = false;
+      var markX = target ? target.x : e.x;
+      var markY = target ? target.y : e.y;
+      warnAt(state, { kind: "tp", x: markX, y: markY, t: 0.45, max: 0.45, r: 28, dmg: 0, color: "#ffe08a" });
+    } else if (pick === "honeymoon") {
+      e.moonLeft = 10;
+      e.moonPhase = "tell";
+      e.moonLast = null;
+      e.moonFx = null;
+      e.moonT = 1.55;
+      e.moonMax = 1.55;
+      princessMoonWarn(state, e, 1.55);
+    } else if (pick === "hellish") {
+      e.hellLeft = 5;
+      e.hellReacted = false;
+      e.hellAim = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
+      e.hellWind = 0.55;
+      e.hellDash = 0;
+      e.hellAura = 1;
+      e.hellGhosts = [];
+      princessWarnHell(state, e, 0.55);
+    } else if (pick === "harvest") {
+      var b2 = G.playfield(state);
+      var cuts = [];
+      var attempts = 0;
+      var angC, xC, yC, lenC;
+      var safeA = Math.random() * Math.PI * 2;
+      var safeX = (b2.x0 + b2.x1) / 2 + Math.cos(safeA) * 70;
+      var safeY = (b2.y0 + b2.y1) / 2 + Math.sin(safeA) * 50;
+      while (cuts.length < 128 && attempts < 480) {
+        attempts++;
+        angC = Math.random() * Math.PI * 2;
+        xC = b2.x0 + 24 + Math.random() * (b2.x1 - b2.x0 - 48);
+        yC = b2.y0 + 24 + Math.random() * (b2.y1 - b2.y0 - 48);
+        if (Math.hypot(xC - safeX, yC - safeY) < 52) continue;
+        lenC = 130 + Math.random() * 150;
+        cuts.push({ x: xC, y: yC, ang: angC, len: lenC, done: false });
+        warnAt(state, { kind: "slash", x: xC, y: yC, ang: angC, len: lenC, w: 5, t: 2.15, max: 2.15, r: 5, dmg: 0, color: "#ffe08a", jce: true });
       }
-      state.floaters.push(G.createFloater(e.x, e.y - 24, "estocadas", "#fff4c4"));
-    } else if (pick === "flash") {
-      e.flashCuts = 0;
-      e.flashCd = 0.2;
-      e.stealth = 0.7;
-      state.banner = { text: "Final Flash", t: 1.6 };
+      e.harvestCuts = cuts;
+      e.harvestPhase = "tell";
+      e.harvestT = 2.15;
+      e.harvestI = 0;
+      e.harvestFx = [];
+      e.harvestGhosts = [];
+      e.harvestFlash = 0;
+      e.harvestDim = 0;
+      e.hideDraw = true;
+      e.stealth = 1;
     }
   }
 
@@ -3312,7 +4055,7 @@
     }
     for (i = 0; i < (state.enemies || []).length; i++) {
       var en = state.enemies[i];
-      if (en.hp <= 0 || en.type === "chefe_vulto" || en.glinderCoal || en.type === "fogueira") continue;
+      if (en.hp <= 0 || en.scenery || en.type === "chefe_vulto" || en.glinderCoal || en.type === "fogueira") continue;
       var ex = sx - en.x;
       var ey = sy - en.y;
       var ed = Math.hypot(ex, ey) || 1;
@@ -4413,133 +5156,1629 @@
     }
   }
 
-  function tickKing(state, e, target, dt, spd) {
-    var queen = findEnemy(state, e.queenId);
-    var knight = e.enrage || e.kingMode === "knight" || !queen;
-    e.kingT -= dt;
-    if ((e.throwLance || 0) > 0) {
-      e.throwLance -= dt;
-      if (e.throwLance <= 0 && target) {
-        var la = Math.atan2(target.y - e.y, target.x - e.x);
-        enemyFireAng(state, e, la, "lance", { speed: 380, r: 6, dmg: Math.round(e.def.dmg * 1.35), life: 1.1, color: "#f0d24a" });
+  function hiveQueenOf(state) {
+    for (var i = 0; i < state.enemies.length; i++) {
+      if (state.enemies[i].hp > 0 && !state.enemies[i].fallen && state.enemies[i].type === "chefe_megatanque") return state.enemies[i];
+    }
+    return null;
+  }
+
+  function hiveKingOf(state) {
+    for (var i = 0; i < state.enemies.length; i++) {
+      if (state.enemies[i].hp > 0 && !state.enemies[i].fallen && state.enemies[i].type === "chefe_beeking") return state.enemies[i];
+    }
+    return null;
+  }
+
+  function hiveLinked(state) {
+    return !!(hiveQueenOf(state) && hiveKingOf(state) && state.hive && !state.hive.separated);
+  }
+
+  function hiveAtk(state, e) {
+    if (e && e.type === "chefe_beeking" && hiveLinked(state)) return 1.5;
+    return 1;
+  }
+
+  function hivePointOnSeg(ax, ay, bx, by, px, py) {
+    var abx = bx - ax;
+    var aby = by - ay;
+    var t = ((px - ax) * abx + (py - ay) * aby) / ((abx * abx + aby * aby) || 1);
+    if (t < 0) t = 0;
+    if (t > 1) t = 1;
+    var x = ax + abx * t;
+    var y = ay + aby * t;
+    return { x: x, y: y, t: t, d: Math.hypot(px - x, py - y) };
+  }
+
+  function hiveSpawnProp(state, type, x, y, extra) {
+    extra = extra || {};
+    extra.noDrop = true;
+    extra.noLink = true;
+    var p = G.game.spawnAt(state, type, x, y, extra);
+    if (!p) return null;
+    p.immortal = type !== "hive_cell";
+    p.noDrop = true;
+    p.scenery = true;
+    return p;
+  }
+
+  function hivePinCocoon(state, e) {
+    if (!e || e.type !== "hive_cocoon") return;
+    var b = G.playfield(state);
+    e.x = (b.x0 + b.x1) / 2;
+    e.y = b.y0 + 36;
+    e.rot = 0;
+    e.vx = e.vy = 0;
+  }
+
+  function hiveEnsure(state) {
+    var q = hiveQueenOf(state);
+    if (!q) return null;
+    if (state.hive && state.hive.ready) return state.hive;
+    var b = G.playfield(state);
+    var hx = (b.x0 + b.x1) / 2;
+    var hy = (b.y0 + b.y1) / 2;
+    var hive = {
+      ready: true,
+      link: 1,
+      betweenT: 0,
+      separated: false,
+      sepT: 0,
+      combDid: false,
+      rain: 0,
+      cmd: 0
+    };
+    state.hive = hive;
+    state.hivePrisms = [];
+    state.hiveHexT = 0;
+    var cocoon = hiveSpawnProp(state, "hive_cocoon", hx, b.y0 + 36);
+    if (cocoon) hivePinCocoon(state, cocoon);
+    var flowers = [
+      { x: b.x0 + 70, y: hy - 40 },
+      { x: b.x1 - 70, y: hy - 40 },
+      { x: b.x0 + 90, y: b.y1 - 70 },
+      { x: b.x1 - 90, y: b.y1 - 70 }
+    ];
+    var fi;
+    for (fi = 0; fi < flowers.length; fi++) hiveSpawnProp(state, "hive_flower", flowers[fi].x, flowers[fi].y);
+    var pillars = [
+      { x: b.x0 + 120, y: b.y0 + 130 },
+      { x: b.x1 - 120, y: b.y0 + 130 },
+      { x: hx, y: b.y1 - 95 }
+    ];
+    hive.pillarSlots = [];
+    var pi, col;
+    for (pi = 0; pi < pillars.length; pi++) {
+      col = hiveSpawnProp(state, "hive_pillar", pillars[pi].x, pillars[pi].y);
+      if (col) {
+        col.rot = 0;
+        col.pillarSlot = pi;
+      }
+      hive.pillarSlots.push({ x: pillars[pi].x, y: pillars[pi].y, cd: 0 });
+    }
+    return hive;
+  }
+
+  function hiveLandHoney(state, x, y, r) {
+    pushZone(state, {
+      kind: "honey",
+      hive: true,
+      x: x,
+      y: y,
+      r: r || 40,
+      t: 1,
+      max: 1,
+      ripe: 0.22,
+      liquid: false,
+      hurtPlayer: false
+    });
+  }
+
+  function hiveSpawnBees(state, n, x, y, cmd, hostId) {
+    var i, bee;
+    for (i = 0; i < n; i++) {
+      var a = (Math.PI * 2 * i) / n;
+      bee = G.game.spawnAt(state, "hive_bee", x + Math.cos(a) * 28, y + Math.sin(a) * 28, { noDrop: true, noLink: true });
+      if (!bee) continue;
+      bee.noDrop = true;
+      bee.hiveCmd = cmd;
+      bee.hiveHost = hostId;
+      bee.mergeT = 0;
+      bee.orbitAng = a;
+    }
+  }
+
+  function hiveTriggerCell(state, e, destroyed) {
+    var q = hiveQueenOf(state);
+    var kind = e.cellKind || "honey";
+    if (kind === "honey") {
+      if (q) {
+        if (G.invasion) G.invasion.heal(q, q.maxHp * 0.06);
+        else q.hp = Math.min(q.maxHp, q.hp + q.maxHp * 0.06);
+        G.burst(state, e.x, e.y, "#ffe08a", 12, 70);
+      }
+    } else if (kind === "royal") {
+      explode(state, e.x, e.y, 70, 18, "enemy", "#ff6a3a");
+      var s = 0;
+      for (s = 0; s < 6; s++) {
+        warnAt(state, {
+          kind: "airstrike",
+          x: state.squad.x + Math.cos((Math.PI * 2 * s) / 6) * 40,
+          y: state.squad.y + Math.sin((Math.PI * 2 * s) / 6) * 40,
+          t: 0.5 + s * 0.08,
+          max: 0.58,
+          r: 24,
+          dmg: 12,
+          color: "#ff6a3a",
+          followLag: 3.4
+        });
+      }
+    } else {
+      hiveSpawnBees(state, 4, e.x, e.y, "attack", 0);
+    }
+    if (destroyed) G.burst(state, e.x, e.y, e.def.color, 10, 50);
+  }
+
+  function hiveSpawnComb(state) {
+    if (!state.hive || state.hive.combDid) return;
+    state.hive.combDid = true;
+    var b = G.playfield(state);
+    var cx = (b.x0 + b.x1) / 2;
+    var cy = (b.y0 + b.y1) / 2;
+    var kinds = ["honey", "royal", "drone", "honey", "royal", "drone", "honey"];
+    var i, cell, ang, rad;
+    for (i = 0; i < 7; i++) {
+      if (i === 0) {
+        ang = 0;
+        rad = 0;
+      } else {
+        ang = ((i - 1) * Math.PI) / 3;
+        rad = 44;
+      }
+      cell = hiveSpawnProp(state, "hive_cell", cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad);
+      if (!cell) continue;
+      cell.immortal = false;
+      cell.cellKind = kinds[i];
+      cell.pulseT = 7 + i * 0.4;
+      cell.pulseMax = 8;
+      cell.hp = cell.def.hp;
+    }
+    warnAt(state, { kind: "mark", x: cx, y: cy, t: 0.8, max: 0.8, r: 90, dmg: 0, color: "#ffe08a" });
+  }
+
+  function hiveMergePair(state, a, b) {
+    var next = a.type === "hive_bee" ? "elite_bee" : a.type === "elite_bee" ? "royal_bee" : "";
+    if (!next) return;
+    var x = (a.x + b.x) / 2;
+    var y = (a.y + b.y) / 2;
+    a.hp = 0;
+    b.hp = 0;
+    a.noDrop = true;
+    b.noDrop = true;
+    var n = G.game.spawnAt(state, next, x, y, { noDrop: true, noLink: true });
+    if (!n) return;
+    n.noDrop = true;
+    n.hiveCmd = a.hiveCmd || "orbit";
+    n.hiveHost = a.hiveHost;
+    n.orbitAng = a.orbitAng || 0;
+    n.mergeT = 0;
+    G.burst(state, x, y, "#ffe08a", 16, 80);
+  }
+
+  function tickHiveWorld(state, dt) {
+    var q = hiveQueenOf(state);
+    if (!q) {
+      hiveBlockSquad(state);
+      return;
+    }
+    var hive = hiveEnsure(state);
+    if (!hive) return;
+    var k = hiveKingOf(state);
+    var i, e;
+    if (q.hp / q.maxHp <= 0.7 || (k && k.hp / k.maxHp <= 0.7)) hiveSpawnComb(state);
+    if (k && !hive.separated) {
+      var hit = hivePointOnSeg(q.x, q.y, k.x, k.y, state.squad.x, state.squad.y);
+      var thick = 50;
+      if (hit.d < thick && hit.t > 0.06 && hit.t < 0.94) {
+        hive.betweenT += dt;
+        hive.link = Math.max(0, hive.link - dt * 0.34);
+      } else {
+        hive.betweenT = Math.max(0, hive.betweenT - dt * 0.6);
+      }
+      if (hive.link <= 0) {
+        hive.separated = true;
+        hive.sepT = 8;
+        q.hiveVuln = 2.2;
+        k.hiveVuln = 2.2;
+        q.queenAct = "";
+        G.burst(state, (q.x + k.x) / 2, (q.y + k.y) / 2, "#ffe08a", 22, 120);
+        state.shake = Math.max(state.shake || 0, 10);
+      }
+    } else if (hive.separated) {
+      hive.sepT -= dt;
+      if (hive.sepT <= 0 && q && k) {
+        hive.separated = false;
+        hive.link = 1;
+        hive.betweenT = 0;
       }
     }
-    if ((e.chargeWindup || 0) > 0) {
-      e.chargeWindup = Math.max(0, e.chargeWindup - dt);
-      var wAng = e.chargeAim || 0;
-      e.rot = wAng;
-      if (e.chargeWindup <= 0) {
-        var dashSp = e.kingAct === "dive" ? 0 : (knight ? 640 : 560);
-        e.vx = Math.cos(wAng) * dashSp;
-        e.vy = Math.sin(wAng) * dashSp;
-        e.cascaDashT = e.kingAct === "thrust" ? 0.28 : 0.42;
-        if (e.kingAct === "dive") {
-          e.diveT = 0.55;
-          e.diveZ = 0;
+    if (!k) {
+      hive.separated = true;
+      hive.link = 0;
+    }
+    if ((state.hiveHexT || 0) > 0) state.hiveHexT = Math.max(0, state.hiveHexT - dt);
+    hiveTickPrisms(state, dt);
+    hiveTickPillars(state, dt);
+    for (i = 0; i < state.enemies.length; i++) {
+      e = state.enemies[i];
+      if (e.hp <= 0 || e.type !== "hive_cell") continue;
+      e.pulseT = (e.pulseT == null ? 8 : e.pulseT) - dt;
+      if (e.pulseT <= 0.9 && !e.pulseTold) {
+        e.pulseTold = true;
+        var pc = e.cellKind === "royal" ? "#ff6a3a" : e.cellKind === "drone" ? "#7ad8ff" : "#ffe08a";
+        warnAt(state, { kind: "mark", x: e.x, y: e.y, t: 0.85, max: 0.85, r: 22, dmg: 0, color: pc });
+      }
+      if (e.pulseT <= 0) {
+        hiveTriggerCell(state, e, false);
+        e.pulseT = e.pulseMax || 8;
+        e.pulseTold = false;
+      }
+    }
+    var a, b, ai, bi;
+    for (ai = 0; ai < state.enemies.length; ai++) {
+      a = state.enemies[ai];
+      if (a.hp <= 0 || (a.type !== "hive_bee" && a.type !== "elite_bee")) continue;
+      if (a.hiveCmd !== "orbit") continue;
+      a.mergeGlow = false;
+      for (bi = ai + 1; bi < state.enemies.length; bi++) {
+        b = state.enemies[bi];
+        if (b.hp <= 0 || b.type !== a.type || b.hiveCmd !== "orbit") continue;
+        if (Math.hypot(a.x - b.x, a.y - b.y) < 28) {
+          a.mergeT = (a.mergeT || 0) + dt;
+          b.mergeT = (b.mergeT || 0) + dt;
+          a.mergeGlow = true;
+          b.mergeGlow = true;
+          if (a.mergeT > 2.2) {
+            hiveMergePair(state, a, b);
+            break;
+          }
+        }
+      }
+      if (!a.mergeGlow) a.mergeT = Math.max(0, (a.mergeT || 0) - dt);
+    }
+    for (i = 0; i < state.enemies.length; i++) {
+      e = state.enemies[i];
+      if (e.hp <= 0 || e.type !== "hive_cocoon") continue;
+      hivePinCocoon(state, e);
+      e.phase = (e.phase || 0) + dt;
+      e.zDraw = 10 + Math.sin(e.phase * 2.1) * 6;
+    }
+    hiveBlockSquad(state);
+  }
+
+  function hiveBlockSquad(state) {
+    var sx = state.squad.x;
+    var sy = state.squad.y;
+    var i, e, dx, dy, d, min, nx, ny;
+    for (i = 0; i < state.enemies.length; i++) {
+      e = state.enemies[i];
+      if (e.hp <= 0) continue;
+      if (e.type !== "hive_pillar" && e.type !== "hive_cocoon" && e.hiveCmd !== "beewall") continue;
+      dx = sx - e.x;
+      dy = sy - e.y;
+      d = Math.hypot(dx, dy) || 0.001;
+      min = (e.def.size || 18) + 14;
+      if (d >= min) continue;
+      nx = dx / d;
+      ny = dy / d;
+      state.squad.x = e.x + nx * min;
+      state.squad.y = e.y + ny * min;
+      sx = state.squad.x;
+      sy = state.squad.y;
+    }
+    G.clampPlay(state.squad, state);
+  }
+
+  function hiveNearestPuddle(state, x, y) {
+    var zones = state.zones || [];
+    var best = null;
+    var bestD = 1e9;
+    var i, z, d;
+    for (i = 0; i < zones.length; i++) {
+      z = zones[i];
+      if (z.kind !== "honey" || !z.hive) continue;
+      d = Math.hypot(z.x - x, z.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = z;
+      }
+    }
+    return best;
+  }
+
+  function hiveCountPrisms(state) {
+    var n = 0;
+    var i;
+    if (!state.hivePrisms) return 0;
+    for (i = 0; i < state.hivePrisms.length; i++) {
+      if (state.hivePrisms[i].t > 0) n++;
+    }
+    return n;
+  }
+
+  function hivePlantPrism(state, x, y) {
+    var b = G.playfield(state);
+    if (!state.hivePrisms) state.hivePrisms = [];
+    state.hivePrisms.push({
+      x: Math.max(b.x0 + 36, Math.min(b.x1 - 36, x)),
+      y: Math.max(b.y0 + 36, Math.min(b.y1 - 36, y)),
+      t: 7.4,
+      cd: 0.35,
+      phase: 0
+    });
+  }
+
+  function hiveTickPrisms(state, dt) {
+    if (!state.hivePrisms) return;
+    var q = hiveQueenOf(state);
+    var i;
+    var p;
+    var ang;
+    for (i = state.hivePrisms.length - 1; i >= 0; i--) {
+      p = state.hivePrisms[i];
+      p.t -= dt;
+      p.phase = (p.phase || 0) + dt;
+      p.cd = (p.cd || 0) - dt;
+      if (p.t <= 0) {
+        G.burst(state, p.x, p.y, "#7af7ff", 10, 50);
+        state.hivePrisms.splice(i, 1);
+        continue;
+      }
+      if (!q || p.cd > 0) continue;
+      p.cd = 0.92;
+      ang = Math.atan2(state.squad.y - p.y, state.squad.x - p.x);
+      enemyFireAng(state, q, ang, "honeyball", {
+        ox: p.x - q.x,
+        oy: p.y - q.y,
+        speed: 220,
+        r: 8,
+        dmg: Math.round(q.def.dmg * 0.58),
+        life: 1.55,
+        muzzle: 0
+      });
+    }
+  }
+
+  function hiveBlinkKing(state, king, x, y) {
+    var b = G.playfield(state);
+    var fx = king.x;
+    var fy = king.y;
+    king.x = Math.max(b.x0 + 40, Math.min(b.x1 - 40, x));
+    king.y = Math.max(b.y0 + 40, Math.min(b.y1 - 40, y));
+    king.blinkFrom = { x: fx, y: fy };
+    king.blinkFxT = 0.32;
+    G.burst(state, fx, fy, "#ffe08a", 14, 80);
+    G.burst(state, king.x, king.y, "#7af7ff", 16, 90);
+    state.shake = Math.max(state.shake || 0, 7);
+  }
+
+  function hiveTickPillars(state, dt) {
+    var hive = state.hive;
+    if (!hive) return;
+    var b, hx, i, slot, col, alive, en, living, best, bestD, d, used;
+    if (!hive.pillarSlots || !hive.pillarSlots.length) {
+      b = G.playfield(state);
+      hx = (b.x0 + b.x1) / 2;
+      hive.pillarSlots = [
+        { x: b.x0 + 120, y: b.y0 + 130, cd: 0 },
+        { x: b.x1 - 120, y: b.y0 + 130, cd: 0 },
+        { x: hx, y: b.y1 - 95, cd: 0 }
+      ];
+    }
+    living = [];
+    used = {};
+    for (en = 0; en < state.enemies.length; en++) {
+      col = state.enemies[en];
+      if (col.hp > 0 && col.type === "hive_pillar") living.push(col);
+    }
+    for (i = 0; i < living.length; i++) {
+      col = living[i];
+      if (col.pillarSlot != null && hive.pillarSlots[col.pillarSlot] && !used[col.pillarSlot]) {
+        used[col.pillarSlot] = true;
+        continue;
+      }
+      best = -1;
+      bestD = 1e9;
+      for (en = 0; en < hive.pillarSlots.length; en++) {
+        if (used[en]) continue;
+        d = Math.hypot(hive.pillarSlots[en].x - col.x, hive.pillarSlots[en].y - col.y);
+        if (d < bestD) {
+          bestD = d;
+          best = en;
+        }
+      }
+      if (best >= 0) {
+        col.pillarSlot = best;
+        used[best] = true;
+      } else {
+        col.hp = 0;
+        col.noDrop = true;
+      }
+    }
+    living = 0;
+    for (i = 0; i < hive.pillarSlots.length; i++) {
+      slot = hive.pillarSlots[i];
+      alive = false;
+      for (en = 0; en < state.enemies.length; en++) {
+        col = state.enemies[en];
+        if (col.hp > 0 && col.type === "hive_pillar" && col.pillarSlot === i) {
+          alive = true;
+          col.x = slot.x;
+          col.y = slot.y;
+          col.rot = 0;
+          col.vx = col.vy = 0;
+          living++;
+          break;
+        }
+      }
+      if (alive) continue;
+      if (slot.cd <= 0) slot.cd = 30;
+      slot.cd -= dt;
+      if (slot.cd > 0 || living >= 3) continue;
+      col = hiveSpawnProp(state, "hive_pillar", slot.x, slot.y);
+      if (col) {
+        col.rot = 0;
+        col.pillarSlot = i;
+        living++;
+        G.burst(state, slot.x, slot.y, "#d4a024", 8, 40);
+      }
+      slot.cd = 0;
+    }
+  }
+
+  function hiveDownPillar(state, p) {
+    var hive = state.hive;
+    var i;
+    if (!hive || !hive.pillarSlots) return;
+    i = p.pillarSlot;
+    if (i == null || !hive.pillarSlots[i]) {
+      for (i = 0; i < hive.pillarSlots.length; i++) {
+        if (Math.hypot(hive.pillarSlots[i].x - p.x, hive.pillarSlots[i].y - p.y) < 28) break;
+      }
+    }
+    if (hive.pillarSlots[i]) hive.pillarSlots[i].cd = 30;
+  }
+
+  function hiveQueenFleeDest(state, e, from) {
+    var b = G.playfield(state);
+    var pad = 52;
+    var fx = from.x;
+    var fy = from.y;
+    var dx = e.x - fx;
+    var dy = e.y - fy;
+    var d = Math.hypot(dx, dy) || 1;
+    var nx = dx / d;
+    var ny = dy / d;
+    var hx = e.x + nx * 260;
+    var hy = e.y + ny * 260;
+    hx = Math.max(b.x0 + pad, Math.min(b.x1 - pad, hx));
+    hy = Math.max(b.y0 + pad, Math.min(b.y1 - pad, hy));
+    if (Math.hypot(hx - fx, hy - fy) < d + 10) {
+      var px = -ny;
+      var py = nx;
+      var a1x = Math.max(b.x0 + pad, Math.min(b.x1 - pad, e.x + px * 240));
+      var a1y = Math.max(b.y0 + pad, Math.min(b.y1 - pad, e.y + py * 240));
+      var a2x = Math.max(b.x0 + pad, Math.min(b.x1 - pad, e.x - px * 240));
+      var a2y = Math.max(b.y0 + pad, Math.min(b.y1 - pad, e.y - py * 240));
+      if (Math.hypot(a1x - fx, a1y - fy) >= Math.hypot(a2x - fx, a2y - fy)) {
+        hx = a1x;
+        hy = a1y;
+      } else {
+        hx = a2x;
+        hy = a2y;
+      }
+    }
+    return { x: hx, y: hy, d: d };
+  }
+
+  function hiveQueenCornered(state, e) {
+    var b = G.playfield(state);
+    var from = state.squad;
+    var pad = 86;
+    var nearL = e.x <= b.x0 + pad;
+    var nearR = e.x >= b.x1 - pad;
+    var nearT = e.y <= b.y0 + pad;
+    var nearB = e.y >= b.y1 - pad;
+    var dest;
+    if ((nearL || nearR) && (nearT || nearB)) return true;
+    if (!(nearL || nearR || nearT || nearB)) return false;
+    if (!from) return true;
+    dest = hiveQueenFleeDest(state, e, from);
+    return Math.hypot(dest.x - e.x, dest.y - e.y) < 48;
+  }
+
+  function hiveQueenFarCorner(state, e) {
+    var b = G.playfield(state);
+    var pad = 50;
+    var corners = [
+      { x: b.x0 + pad, y: b.y0 + pad },
+      { x: b.x1 - pad, y: b.y0 + pad },
+      { x: b.x0 + pad, y: b.y1 - pad },
+      { x: b.x1 - pad, y: b.y1 - pad }
+    ];
+    var best = corners[0];
+    var bestD = -1;
+    var i, d;
+    for (i = 0; i < corners.length; i++) {
+      d = Math.hypot(corners[i].x - e.x, corners[i].y - e.y);
+      if (d > bestD) {
+        bestD = d;
+        best = corners[i];
+      }
+    }
+    return best;
+  }
+
+  function hiveClearBeeForm(state, hostId, cmd) {
+    var i, bee;
+    for (i = 0; i < state.enemies.length; i++) {
+      bee = state.enemies[i];
+      if (bee.hp <= 0) continue;
+      if (bee.hiveCmd !== "beewall" && bee.hiveCmd !== "beespear") continue;
+      if (cmd && bee.hiveCmd !== cmd) continue;
+      if (hostId && bee.hiveHost !== hostId) continue;
+      bee.hp = 0;
+      bee.noDrop = true;
+    }
+  }
+
+  function hiveClearBeeWall(state, hostId) {
+    hiveClearBeeForm(state, hostId, "beewall");
+  }
+
+  function hiveSpearSlot(slot) {
+    if (slot <= 0) return { along: 0, across: 0 };
+    if (slot <= 2) return { along: -20, across: slot === 1 ? -15 : 15 };
+    return { along: -44, across: (slot - 4) * 18 };
+  }
+
+  function hivePlaceBeeSpear(e, bee) {
+    var o = hiveSpearSlot(bee.wallSlot | 0);
+    bee.x = (e.spearX || e.x) + (e.spearNx || 0) * o.along + (e.spearPx || 0) * o.across;
+    bee.y = (e.spearY || e.y) + (e.spearNy || 0) * o.along + (e.spearPy || 0) * o.across;
+    bee.rot = Math.atan2(e.spearNy || 0, e.spearNx || 1);
+    bee.vx = bee.vy = 0;
+  }
+
+  function hiveQueenAimSpear(e, from) {
+    var dx = from.x - e.x;
+    var dy = from.y - e.y;
+    var d = Math.hypot(dx, dy) || 1;
+    e.spearNx = dx / d;
+    e.spearNy = dy / d;
+    e.spearPx = -e.spearNy;
+    e.spearPy = e.spearNx;
+  }
+
+  function hiveQueenStartBeeSpear(state, e) {
+    var from = state.squad;
+    var n = 6;
+    var i, bee;
+    if (!from) return;
+    hiveQueenAimSpear(e, from);
+    e.queenAct = "beespear";
+    e.spearWind = e.enrage ? 0.14 : 0.26;
+    e.spearT = 8;
+    e.spearHit = false;
+    e.laserOn = 0;
+    e.immortal = false;
+    e.zDraw = 8;
+    e.spearX = e.x + e.spearNx * 46;
+    e.spearY = e.y + e.spearNy * 46;
+    hiveClearBeeForm(state, e.id, "beespear");
+    for (i = 0; i < n; i++) {
+      bee = G.game.spawnAt(state, "hive_bee", e.spearX, e.spearY, { noDrop: true, noLink: true });
+      if (!bee) continue;
+      bee.noDrop = true;
+      bee.hiveCmd = "beespear";
+      bee.hiveHost = e.id;
+      bee.wallSlot = i;
+      bee.immortal = true;
+      bee.scenery = true;
+      hivePlaceBeeSpear(e, bee);
+    }
+    var sang = Math.atan2(e.spearNy, e.spearNx);
+    var shit = rayExitPlay(G.playfield(state), e.spearX, e.spearY, e.spearNx, e.spearNy, 8);
+    warnAt(state, {
+      kind: "lane",
+      x: e.spearX,
+      y: e.spearY,
+      ang: sang,
+      len: shit.dist || 720,
+      w: 22,
+      t: e.spearWind,
+      max: e.spearWind,
+      r: 22,
+      dmg: 0,
+      color: "#ffb030",
+      hiveSpear: true
+    });
+    state.banner = { text: "Ponta de lança", t: 1.15 };
+    state.floaters.push(G.createFloater(e.x, e.y - 28, "lança", "#ffb030"));
+    G.burst(state, e.spearX, e.spearY, "#ffc44a", 12, 70);
+  }
+
+  function hiveKingCanWarp(king) {
+    if (!king || king.hp <= 0 || king.fallen) return false;
+    if ((king.kingStun || 0) > 0) return false;
+    if ((king.chargeCd || 0) > 0.25) return false;
+    if (king.kingAct === "charge" || (king.chargeWindup || 0) > 0) return false;
+    return true;
+  }
+
+  function hiveKingGhostOff() {
+    return 58;
+  }
+
+  function hiveKingGhostSpread() {
+    return 0.2;
+  }
+
+  function hiveKingClearGhosts(e) {
+    if (e) e.chargeGhosts = [];
+  }
+
+  function hiveKingPlaceGhosts(state, e) {
+    if (!e || !e.enrage) {
+      hiveKingClearGhosts(e);
+      return;
+    }
+    var aim = e.chargeAim || e.rot || 0;
+    var off = hiveKingGhostOff();
+    var spread = hiveKingGhostSpread();
+    var px = -Math.sin(aim);
+    var py = Math.cos(aim);
+    var b = G.playfield(state);
+    if (!e.chargeGhosts || e.chargeGhosts.length !== 2) {
+      e.chargeGhosts = [
+        { side: -1, hit: false, alive: true },
+        { side: 1, hit: false, alive: true }
+      ];
+    }
+    var i, g, side;
+    for (i = 0; i < e.chargeGhosts.length; i++) {
+      g = e.chargeGhosts[i];
+      side = g.side;
+      g.x = e.x + px * off * side;
+      g.y = e.y + py * off * side;
+      g.x = Math.max(b.x0 + 18, Math.min(b.x1 - 18, g.x));
+      g.y = Math.max(b.y0 + 18, Math.min(b.y1 - 18, g.y));
+      g.rot = aim - side * spread;
+      g.vx = 0;
+      g.vy = 0;
+      g.alive = true;
+      g.hit = false;
+    }
+  }
+
+  function hiveKingLaunchGhosts(e, sp) {
+    var i, g;
+    if (!e || !e.chargeGhosts) return;
+    for (i = 0; i < e.chargeGhosts.length; i++) {
+      g = e.chargeGhosts[i];
+      g.vx = Math.cos(g.rot || 0) * sp;
+      g.vy = Math.sin(g.rot || 0) * sp;
+      g.hit = false;
+      g.alive = true;
+    }
+  }
+
+  function hiveKingTickGhosts(state, e, target, dt, mul) {
+    var ghosts = e.chargeGhosts;
+    if (!ghosts || !ghosts.length) return;
+    var b = G.playfield(state);
+    var ms = ((e.def && e.def.size) || 22) * 0.92;
+    var i, g, hitEdge;
+    for (i = 0; i < ghosts.length; i++) {
+      g = ghosts[i];
+      if (!g.alive) continue;
+      if (g.vx || g.vy) {
+        g.x += g.vx * dt;
+        g.y += g.vy * dt;
+        g.rot = Math.atan2(g.vy, g.vx || 1);
+      }
+      hitEdge = g.x < b.x0 + ms || g.x > b.x1 - ms || g.y < b.y0 + ms || g.y > b.y1 - ms;
+      if (hitEdge) {
+        g.alive = false;
+        G.burst(state, g.x, g.y, "#7af7ff", 10, 50);
+        continue;
+      }
+      if (target && !g.hit && Math.hypot(target.x - g.x, target.y - g.y) < ms + (target.def.size || 12) + 14) {
+        g.hit = true;
+        hurt(state, target, Math.round(e.def.dmg * 1.65 * mul), g.x, g.y);
+        state.shake = Math.max(state.shake || 0, 6);
+        G.burst(state, g.x, g.y, "#ffe08a", 8, 40);
+      }
+    }
+  }
+
+  function hiveKingChargeWarn(state, e, t, color) {
+    var aim = e.chargeAim || e.rot || 0;
+    var b = G.playfield(state);
+    var hit = rayExitPlay(b, e.x, e.y, Math.cos(aim), Math.sin(aim), 24);
+    warnAt(state, {
+      kind: "lane",
+      x: e.x,
+      y: e.y,
+      ang: aim,
+      len: hit.dist || 520,
+      w: e.enrage ? 32 : 30,
+      t: t,
+      max: t,
+      r: 30,
+      dmg: 0,
+      color: color || "#ffb030",
+      followId: e.id,
+      followRot: true
+    });
+    if (!e.enrage) return;
+    var side, off, spread, gx, gy, ghit, pang, px, py;
+    off = hiveKingGhostOff();
+    spread = hiveKingGhostSpread();
+    px = -Math.sin(aim);
+    py = Math.cos(aim);
+    for (side = -1; side <= 1; side += 2) {
+      gx = e.x + px * off * side;
+      gy = e.y + py * off * side;
+      pang = aim - side * spread;
+      ghit = rayExitPlay(b, gx, gy, Math.cos(pang), Math.sin(pang), 24);
+      warnAt(state, {
+        kind: "lane",
+        x: gx,
+        y: gy,
+        ang: pang,
+        angOff: -side * spread,
+        followOff: off * side,
+        len: ghit.dist || 520,
+        w: 22,
+        t: t,
+        max: t,
+        r: 22,
+        dmg: 0,
+        color: "#7af7ff",
+        followId: e.id,
+        followRot: true
+      });
+    }
+  }
+
+  function hiveQueenStartBeeWall(state, e) {
+    var from = state.squad;
+    var dx, dy, d;
+    if (!from) {
+      hiveQueenStartEscape(state, e);
+      return;
+    }
+    dx = from.x - e.x;
+    dy = from.y - e.y;
+    d = Math.hypot(dx, dy) || 1;
+    var n = 9;
+    var i, bee, t;
+    e.queenAct = "beewall";
+    e.wallT = 8;
+    e.beeWallCd = 8;
+    e.laserOn = 0;
+    e.immortal = false;
+    e.zDraw = 6;
+    e.wallNx = dx / d;
+    e.wallNy = dy / d;
+    e.wallPx = -e.wallNy;
+    e.wallPy = e.wallNx;
+    e.wallX = e.x + e.wallNx * 38;
+    e.wallY = e.y + e.wallNy * 38;
+    hiveClearBeeWall(state, e.id);
+    for (i = 0; i < n; i++) {
+      t = n <= 1 ? 0 : (i - (n - 1) / 2) / ((n - 1) / 2);
+      bee = G.game.spawnAt(state, "hive_bee", e.wallX + e.wallPx * t * 80, e.wallY + e.wallPy * t * 80, { noDrop: true, noLink: true });
+      if (!bee) continue;
+      bee.noDrop = true;
+      bee.hiveCmd = "beewall";
+      bee.hiveHost = e.id;
+      bee.wallSlot = i;
+      bee.wallN = n;
+      bee.immortal = true;
+      bee.scenery = true;
+    }
+    state.banner = { text: "Muro de abelhas", t: 1.3 };
+    state.floaters.push(G.createFloater(e.x, e.y - 28, "muro de abelhas", "#ffe08a"));
+    G.burst(state, e.wallX, e.wallY, "#ffc44a", 16, 80);
+  }
+
+  function hiveQueenStartEscape(state, e) {
+    var dest = hiveQueenFarCorner(state, e);
+    e.queenAct = "escape";
+    e.escapeT = 0.45;
+    e.escapeDid = false;
+    e.escapeX = dest.x;
+    e.escapeY = dest.y;
+    e.escapeTpCd = 30;
+    e.laserOn = 0;
+    e.immortal = false;
+    e.zDraw = 10;
+    e.vx = e.vy = 0;
+    warnAt(state, { kind: "tp", x: dest.x, y: dest.y, t: 0.45, max: 0.45, r: 34, dmg: 0, color: "#7af7ff" });
+    state.banner = { text: "Fuga real", t: 1.4 };
+    state.floaters.push(G.createFloater(e.x, e.y - 28, "fuga", "#7af7ff"));
+  }
+
+  function hiveQueenMaybePanic(state, e, dt) {
+    var act = e.queenAct || "";
+    if (act === "beewall" || act === "escape" || act === "beespear" || act === "beam") return;
+    if (hiveQueenCornered(state, e)) e.corneredT = (e.corneredT || 0) + dt;
+    else e.corneredT = Math.max(0, (e.corneredT || 0) - dt * 1.2);
+    if ((e.corneredT || 0) < 0.2) return;
+    if ((e.beeWallCd || 0) <= 0) {
+      hiveQueenStartBeeWall(state, e);
+      e.corneredT = 0;
+      return;
+    }
+    if ((e.escapeTpCd || 0) <= 0) {
+      hiveQueenStartEscape(state, e);
+      e.corneredT = 0;
+    }
+  }
+
+  function hiveQueenRetreat(state, e, target, dt, spd, mul) {
+    var from = state.squad || target;
+    if (!from) return;
+    var dest = hiveQueenFleeDest(state, e, from);
+    var d = dest.d;
+    mul = mul || 1;
+    if (d < 210) mul = Math.max(mul, 1);
+    var run = d < 240 ? Math.max(spd * 4.2, 200) : spd * 1.45;
+    moveTowards(e, dest.x, dest.y, run * mul, dt);
+    e.rot = Math.atan2(from.y - e.y, from.x - e.x);
+  }
+
+  function tickQueenHive(state, e, target, dt, spd) {
+    hiveEnsure(state);
+    e.skillT = (e.skillT == null ? 1.15 : e.skillT) - dt;
+    if ((e.hiveVuln || 0) > 0) e.hiveVuln -= dt;
+    if ((e.escapeTpCd || 0) > 0) e.escapeTpCd -= dt;
+    if ((e.beeWallCd || 0) > 0) e.beeWallCd -= dt;
+    if ((e.blinkFxT || 0) > 0) e.blinkFxT -= dt;
+    hiveQueenMaybePanic(state, e, dt);
+    var act = e.queenAct || "";
+    var b = G.playfield(state);
+    var topY = b.y0 + 52;
+    var midX = (b.x0 + b.x1) / 2;
+    e.immortal = act === "rain" || act === "protect";
+    var king = hiveKingOf(state);
+    if (act === "beewall") {
+      e.zDraw = 6;
+      e.vx = e.vy = 0;
+      e.wallT = (e.wallT || 0) - dt;
+      e.wallX = (e.wallX || e.x) + (e.wallNx || 0) * 220 * dt;
+      e.wallY = (e.wallY || e.y) + (e.wallNy || 0) * 220 * dt;
+      var span = 82;
+      var bi, bee, t, n, along, thru, push;
+      n = 9;
+      for (bi = 0; bi < state.enemies.length; bi++) {
+        bee = state.enemies[bi];
+        if (bee.hp <= 0 || bee.hiveCmd !== "beewall" || bee.hiveHost !== e.id) continue;
+        n = bee.wallN || n;
+        t = n <= 1 ? 0 : ((bee.wallSlot || 0) - (n - 1) / 2) / ((n - 1) / 2);
+        bee.x = e.wallX + (e.wallPx || 0) * t * span;
+        bee.y = e.wallY + (e.wallPy || 0) * t * span;
+        bee.rot = Math.atan2(e.wallNy || 0, e.wallNx || 1);
+        bee.vx = bee.vy = 0;
+      }
+      along = (state.squad.x - e.wallX) * (e.wallPx || 0) + (state.squad.y - e.wallY) * (e.wallPy || 0);
+      thru = (state.squad.x - e.wallX) * (e.wallNx || 0) + (state.squad.y - e.wallY) * (e.wallNy || 0);
+      if (Math.abs(along) < span + 20 && thru > -22 && thru < 30) {
+        push = 400 * dt;
+        state.squad.x += (e.wallNx || 0) * push;
+        state.squad.y += (e.wallNy || 0) * push;
+        G.clampPlay(state.squad, state);
+      }
+      if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      if (e.wallT <= 0 || e.wallX < b.x0 - 28 || e.wallX > b.x1 + 28 || e.wallY < b.y0 - 28 || e.wallY > b.y1 + 28) {
+        hiveClearBeeWall(state, e.id);
+        e.queenAct = "";
+        e.skillT = 0.25;
+        e.zDraw = 0;
+        if (hiveQueenCornered(state, e) && (e.escapeTpCd || 0) <= 0) hiveQueenStartEscape(state, e);
+      }
+      return;
+    }
+    if (act === "beespear") {
+      e.zDraw = 8;
+      e.vx = e.vy = 0;
+      if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      if ((e.spearWind || 0) > 0) {
+        e.spearWind -= dt;
+        if (target) hiveQueenAimSpear(e, target);
+        e.spearX = e.x + (e.spearNx || 0) * 46;
+        e.spearY = e.y + (e.spearNy || 0) * 46;
+        var sw, shitW;
+        shitW = rayExitPlay(b, e.spearX, e.spearY, e.spearNx || 1, e.spearNy || 0, 8);
+        for (sw = 0; sw < (state.warnings || []).length; sw++) {
+          if (state.warnings[sw].hiveSpear) {
+            state.warnings[sw].x = e.spearX;
+            state.warnings[sw].y = e.spearY;
+            state.warnings[sw].ang = Math.atan2(e.spearNy || 0, e.spearNx || 1);
+            state.warnings[sw].len = shitW.dist || 720;
+          }
+        }
+      } else {
+        var sp = e.enrage ? 780 : 640;
+        e.spearX = (e.spearX || e.x) + (e.spearNx || 0) * sp * dt;
+        e.spearY = (e.spearY || e.y) + (e.spearNy || 0) * sp * dt;
+      }
+      var si, sbee, hitR, knock;
+      for (si = 0; si < state.enemies.length; si++) {
+        sbee = state.enemies[si];
+        if (sbee.hp <= 0 || sbee.hiveCmd !== "beespear" || sbee.hiveHost !== e.id) continue;
+        hivePlaceBeeSpear(e, sbee);
+        if ((e.spearWind || 0) > 0) continue;
+        hitR = (sbee.def.size || 10) + (state.squad.def && state.squad.def.size ? state.squad.def.size : 12) + 10;
+        if (Math.hypot(state.squad.x - sbee.x, state.squad.y - sbee.y) < hitR) {
+          if ((e.spearHitCd || 0) <= 0) {
+            e.spearHitCd = 0.1;
+            hurt(state, state.squad, Math.round(e.def.dmg * (e.enrage ? 0.85 : 0.68)), sbee.x, sbee.y);
+            state.shake = Math.max(state.shake || 0, 7);
+          }
+          knock = (e.enrage ? 520 : 420) * dt;
+          state.squad.x += (e.spearNx || 0) * knock;
+          state.squad.y += (e.spearNy || 0) * knock;
+          G.clampPlay(state.squad, state);
+        }
+      }
+      if ((e.spearHitCd || 0) > 0) e.spearHitCd -= dt;
+      if ((e.spearWind || 0) <= 0 && (e.spearX < b.x0 - 36 || e.spearX > b.x1 + 36 || e.spearY < b.y0 - 36 || e.spearY > b.y1 + 36)) {
+        hiveClearBeeForm(state, e.id, "beespear");
+        e.queenAct = "";
+        e.skillT = e.enrage ? 1.05 : 1.65;
+        e.zDraw = 0;
+      }
+      return;
+    }
+    if (act === "escape") {
+      e.zDraw = 10;
+      e.vx = e.vy = 0;
+      e.escapeT = (e.escapeT || 0) - dt;
+      if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      if (!e.escapeDid && e.escapeT <= 0.08) {
+        e.escapeDid = true;
+        princessBlinkTo(state, e, e.escapeX, e.escapeY);
+        G.burst(state, e.x, e.y, "#ffe08a", 18, 90);
+        state.shake = Math.max(state.shake || 0, 6);
+      }
+      if (e.escapeT <= 0) {
+        e.queenAct = "";
+        e.skillT = e.enrage ? 1.2 : 1.6;
+        e.zDraw = 0;
+      }
+      return;
+    }
+    if (act === "beam") {
+      e.zDraw = 10;
+      e.laserT = (e.laserT || 0) - dt;
+      if (e.enrage) e.vx = e.vy = 0;
+      else if (target) hiveQueenRetreat(state, e, target, dt, spd, 0.42);
+      if (target && !e.laserSweeping) {
+        if (e.laserLockX == null) {
+          e.laserLockX = target.x;
+          e.laserLockY = target.y;
+        }
+        var lag = (e.laserOn || 0) > 0 ? (e.enrage ? 2.8 : 1.55) : (e.enrage ? 6.2 : 4.2);
+        e.laserLockX += (target.x - e.laserLockX) * Math.min(1, dt * lag);
+        e.laserLockY += (target.y - e.laserLockY) * Math.min(1, dt * lag);
+        e.laserAng = Math.atan2(e.laserLockY - e.y, e.laserLockX - e.x);
+      }
+      if (!e.laserOn && e.laserT <= (e.laserBeam || 0.85)) {
+        e.laserOn = e.laserBeam || 0.85;
+        if (e.enrage) {
+          e.laserSweeping = true;
+          e.laserSweepMid = e.laserAng || 0;
+          e.laserSweep = 1.22;
+          e.laserFork = 0.38;
+          e.laserHoneyCd = 0;
+          state.floaters.push(G.createFloater(e.x, e.y - 30, "varredura", "#ff8a3a"));
+          state.shake = Math.max(state.shake || 0, 6);
+        }
+      }
+      if ((e.laserOn || 0) > 0) {
+        e.laserOn -= dt;
+        if (e.enrage && e.laserSweeping) {
+          var maxOn = e.laserBeam || 1.25;
+          var k = 1 - Math.max(0, e.laserOn) / maxOn;
+          if (k < 0) k = 0;
+          if (k > 1) k = 1;
+          e.laserSweepAng = e.laserSweepMid - e.laserSweep * 0.5 + e.laserSweep * k;
+          e.laserAng = e.laserSweepAng - e.laserFork;
+          e.laserAng2 = e.laserSweepAng + e.laserFork;
+        }
+        e.rot = e.enrage && e.laserSweepAng != null ? e.laserSweepAng : (e.laserAng || 0);
+        var angs = e.enrage && e.laserAng2 != null ? [e.laserAng, e.laserAng2] : [e.laserAng];
+        var ai, ang, hitL, wide, dmgL;
+        wide = e.enrage ? 28 : 17;
+        dmgL = Math.round(e.def.dmg * (e.enrage ? 0.95 : 0.62));
+        e.laserHitCd = (e.laserHitCd || 0) - dt;
+        e.laserHoneyCd = (e.laserHoneyCd || 0) - dt;
+        for (ai = 0; ai < angs.length; ai++) {
+          ang = angs[ai] || 0;
+          hitL = rayExitPlay(b, e.x, e.y, Math.cos(ang), Math.sin(ang), 18);
+          if (ai === 0) e.laserLen = hitL.dist || 520;
+          else e.laserLen2 = hitL.dist || 520;
+          if (e.laserHitCd <= 0) {
+            hurtBeam(state, e.x, e.y, ang, hitL.dist || 520, wide, dmgL);
+            if (inBeam(state.squad.x, state.squad.y, e.x, e.y, ang, hitL.dist || 520, e.enrage ? 32 : 22)) {
+              state.hiveHexT = Math.max(state.hiveHexT || 0, e.enrage ? 3.4 : 2.5);
+              if (e.enrage) state.honeyT = Math.max(state.honeyT || 0, 0.7);
+              else if (!e.laserSlowTried) {
+                e.laserSlowTried = true;
+                if (Math.random() < 0.32) state.honeyT = Math.max(state.honeyT || 0, 0.5);
+              }
+            }
+          }
+          if (e.enrage && e.laserHoneyCd <= 0) {
+            hiveLandHoney(state, e.x + Math.cos(ang) * 90, e.y + Math.sin(ang) * 90, 20);
+            hiveLandHoney(state, e.x + Math.cos(ang) * 190, e.y + Math.sin(ang) * 190, 18);
+          }
+        }
+        if (e.laserHitCd <= 0) e.laserHitCd = e.enrage ? 0.08 : 0.09;
+        if (e.enrage && e.laserHoneyCd <= 0) e.laserHoneyCd = 0.2;
+      } else {
+        e.rot = e.laserAng || 0;
+      }
+      if (e.laserT <= 0) {
+        e.queenAct = "";
+        e.laserOn = 0;
+        e.laserSweeping = false;
+        e.laserAng2 = null;
+        e.skillT = e.enrage ? 1.15 : 2.05;
+        e.zDraw = 0;
+      }
+      return;
+    }
+    if (act === "warp") {
+      e.zDraw = 8;
+      e.warpT = (e.warpT || 0) - dt;
+      if (target) hiveQueenRetreat(state, e, target, dt, spd, 0.85);
+      var waNow = king ? Math.atan2(state.squad.y - king.y, state.squad.x - king.x) : 0;
+      var destX = state.squad.x - Math.cos(waNow) * 62;
+      var destY = state.squad.y - Math.sin(waNow) * 62;
+      if (e.warpX == null) e.warpX = destX;
+      if (e.warpY == null) e.warpY = destY;
+      e.warpX += (destX - e.warpX) * Math.min(1, dt * 3.1);
+      e.warpY += (destY - e.warpY) * Math.min(1, dt * 3.1);
+      var wi;
+      for (wi = 0; wi < (state.warnings || []).length; wi++) {
+        if (state.warnings[wi].kind === "tp" && state.warnings[wi].hiveWarp) {
+          state.warnings[wi].x = e.warpX;
+          state.warnings[wi].y = e.warpY;
+        }
+      }
+      if (king && king.hp > 0) e.rot = Math.atan2(king.y - e.y, king.x - e.x);
+      if (!e.warpDid && e.warpT <= 0) {
+        e.warpDid = true;
+        if (hiveKingCanWarp(king)) {
+          hiveBlinkKing(state, king, e.warpX, e.warpY);
+          var waim = Math.atan2(state.squad.y - king.y, state.squad.x - king.x);
+          king.chargeAim = waim;
+          king.rot = waim;
+          king.chargeWindup = 0.5;
+          king.chargeWindupMax = 0.5;
+          king.chargeChain = king.enrage ? 1 : 0;
+          king.kingAct = "windup";
+          hiveKingChargeWarn(state, king, 0.5);
+        }
+      }
+      if (e.warpT <= 0 && e.warpDid) {
+        e.queenAct = "";
+        e.skillT = e.enrage ? 1.7 : 2.2;
+        e.zDraw = 0;
+      }
+      return;
+    }
+    if (act === "prism") {
+      e.zDraw = 8;
+      e.prismT = (e.prismT || 0) - dt;
+      if (target) hiveQueenRetreat(state, e, target, dt, spd, 0.4);
+      if (!e.prismDid && e.prismT <= 0.05) {
+        e.prismDid = true;
+        hivePlantPrism(state, e.prismX, e.prismY);
+        G.burst(state, e.prismX, e.prismY, "#7af7ff", 12, 60);
+        if (e.enrage) {
+          hivePlantPrism(state, e.prismX + 36, e.prismY - 28);
+        }
+      }
+      if (e.prismT <= 0) {
+        e.queenAct = "";
+        e.skillT = e.enrage ? 1.8 : 2.3;
+        e.zDraw = 0;
+      }
+      return;
+    }
+    if (act === "ward") {
+      e.zDraw = 8;
+      e.wardT = (e.wardT || 0) - dt;
+      if (target) hiveQueenRetreat(state, e, target, dt, spd, 0.85);
+      if (king && king.hp > 0) e.rot = Math.atan2(king.y - e.y, king.x - e.x);
+      if (!e.wardDid && e.wardT <= 0.08) {
+        e.wardDid = true;
+        if (king && king.hp > 0) {
+          king.kingWardT = 5.2;
+          G.burst(state, king.x, king.y, "#7af7ff", 18, 80);
+          state.floaters.push(G.createFloater(king.x, king.y - 28, "amparo", "#7af7ff"));
+        }
+      }
+      if (e.wardT <= 0) {
+        e.queenAct = "";
+        e.skillT = e.enrage ? 1.9 : 2.4;
+        e.zDraw = 0;
+      }
+      return;
+    }
+    if (act === "rain") {
+      e.zDraw = 36 + Math.sin((e.phase || 0) * 6) * 6;
+      e.vx = e.vy = 0;
+      moveTowards(e, midX, topY, spd * 1.8, dt);
+      e.rainT = (e.rainT || 0) - dt;
+      e.dropCd = (e.dropCd || 0) - dt;
+      if (e.dropCd <= 0 && e.dropsLeft > 0) {
+        e.dropCd = 0.28;
+        e.dropsLeft--;
+        var tx = state.squad.x + (Math.random() - 0.5) * 160;
+        var ty = state.squad.y + (Math.random() - 0.5) * 120;
+        tx = Math.max(b.x0 + 40, Math.min(b.x1 - 40, tx));
+        ty = Math.max(b.y0 + 80, Math.min(b.y1 - 40, ty));
+        warnAt(state, { kind: "honeydrop", x: tx, y: ty, t: 0.55, max: 0.55, r: 40, dmg: 0, color: "#e8c050" });
+      }
+      if (e.rainT <= 0) {
+        e.queenAct = "push";
+        e.pushT = 4.6;
+        e.zDraw = 8;
+      }
+      return;
+    }
+    if (act === "push") {
+      e.zDraw = 6;
+      e.pushT = (e.pushT || 0) - dt;
+      var pud = hiveNearestPuddle(state, state.squad.x, state.squad.y);
+      var aimX = pud ? pud.x : state.squad.x;
+      var aimY = pud ? pud.y : state.squad.y;
+      moveTowards(e, state.squad.x + (state.squad.x - aimX) * 0.15, state.squad.y + (state.squad.y - aimY) * 0.15, spd * 1.7, dt);
+      var dd = Math.hypot(state.squad.x - e.x, state.squad.y - e.y);
+      if (dd < e.def.size + 28) {
+        var nx = state.squad.x - e.x;
+        var ny = state.squad.y - e.y;
+        var nl = Math.hypot(nx, ny) || 1;
+        var push = 220 * dt;
+        if (pud) {
+          nx = pud.x - state.squad.x;
+          ny = pud.y - state.squad.y;
+          nl = Math.hypot(nx, ny) || 1;
+        }
+        state.squad.x += (nx / nl) * push;
+        state.squad.y += (ny / nl) * push;
+        G.clampPlay(state.squad, state);
+      }
+      if (e.pushT <= 0) {
+        e.queenAct = "";
+        e.skillT = e.enrage ? 2.4 : 3.4;
+        e.zDraw = 0;
+      }
+      return;
+    }
+    if (act === "cmd") {
+      e.vx = e.vy = 0;
+      e.cmdT = (e.cmdT || 0) - dt;
+      if (!e.cmdDid && e.cmdT <= 0.05) {
+        e.cmdDid = true;
+        hiveSpawnBees(state, 8, e.x, e.y, e.cmdKind, e.id);
+      }
+      if (e.cmdT <= 0) {
+        if (e.cmdKind === "protect") {
+          e.queenAct = "protect";
+          e.protectT = 6.2;
+        } else {
+          e.queenAct = "";
+          e.skillT = e.enrage ? 2.6 : 3.8;
         }
       }
       return;
     }
-    if ((e.diveT || 0) > 0) {
-      e.diveT -= dt;
-      e.diveZ = Math.sin((1 - e.diveT / 0.55) * Math.PI) * 70;
-      e.zDraw = e.diveZ;
-      if (e.diveT <= 0) {
-        e.x = e.diveX != null ? e.diveX : state.squad.x;
-        e.y = e.diveY != null ? e.diveY : state.squad.y;
-        e.zDraw = 0;
-        explode(state, e.x, e.y, 78, Math.round(e.def.dmg * 1.6), "enemy", "#ffe08a");
-        G.audio.explosion();
-        e.kingT = 1.6;
-        e.kingAct = "";
+    if (act === "protect") {
+      e.protectT = (e.protectT || 0) - dt;
+      e.vx = e.vy = 0;
+      var ring = e.def.size + 46;
+      var dx = state.squad.x - e.x;
+      var dy = state.squad.y - e.y;
+      var d = Math.hypot(dx, dy) || 1;
+      if (d < ring + 18) {
+        state.squad.x = e.x + (dx / d) * (ring + 20);
+        state.squad.y = e.y + (dy / d) * (ring + 20);
+        G.clampPlay(state.squad, state);
+      }
+      if (e.protectT <= 0) {
+        e.queenAct = "";
+        e.skillT = 3.2;
+        e.immortal = false;
       }
       return;
     }
-    if ((e.cascaDashT || 0) > 0) {
-      e.cascaDashT -= dt;
+    e.immortal = false;
+    e.zDraw = 4 + Math.sin((e.phase || 0) * 3.2) * 3;
+    if (target) {
+      hiveQueenRetreat(state, e, target, dt, spd, e.enrage ? 1.12 : 1);
+      if (e.cooldown <= 0 && dist(e, target) < e.def.range + 140) {
+        e.cooldown = e.enrage ? 0.62 : 0.95;
+        var ball = {
+          speed: e.enrage ? 290 : 250,
+          r: 12,
+          dmg: Math.round(e.def.dmg * (e.enrage ? 0.82 : 1.05)),
+          color: "#f0c040",
+          muzzle: e.def.size * 0.85,
+          life: 1.85
+        };
+        if (e.enrage) enemyFan(state, e, target, 3, 0.46, "honeyball", ball);
+        else enemyFire(state, e, target, "honeyball", ball);
+      }
+    }
+    if (e.skillT > 0) return;
+    var pool = e.enrage ? ["beam", "beam", "spear", "prism", "rain"] : ["beam", "beam", "prism", "spear"];
+    if (king && king.hp > 0 && !king.fallen && hiveKingCanWarp(king)) {
+      pool.push("warp", "warp");
+      if ((king.kingWardT || 0) <= 0.4) pool.push("ward");
+    }
+    if (hiveCountPrisms(state) >= (e.enrage ? 3 : 2)) {
+      var np = [];
+      var pi;
+      for (pi = 0; pi < pool.length; pi++) if (pool[pi] !== "prism") np.push(pool[pi]);
+      if (np.length) pool = np;
+    }
+    if (e.lastQueen) {
+      var filtered = [];
+      var fi;
+      for (fi = 0; fi < pool.length; fi++) if (pool[fi] !== e.lastQueen) filtered.push(pool[fi]);
+      if (filtered.length) pool = filtered;
+    }
+    var pick = pool[(Math.random() * pool.length) | 0] || "beam";
+    e.lastQueen = pick;
+    if (pick === "beam") {
+      e.queenAct = "beam";
+      e.laserT = e.enrage ? 2.1 : 1.4;
+      e.laserBeam = e.enrage ? 1.28 : 0.88;
+      e.laserOn = 0;
+      e.laserHitCd = 0;
+      e.laserSlowTried = false;
+      e.laserSweeping = false;
+      e.laserAng2 = null;
+      e.laserAng = target ? Math.atan2(target.y - e.y, target.x - e.x) : 0;
+      e.laserLockX = target ? target.x : e.x;
+      e.laserLockY = target ? target.y : e.y;
+      e.rot = e.laserAng;
+      var hit0 = rayExitPlay(b, e.x, e.y, Math.cos(e.laserAng), Math.sin(e.laserAng), 18);
+      e.laserLen = hit0.dist || 520;
+      warnAt(state, {
+        kind: "lane",
+        x: e.x,
+        y: e.y,
+        ang: e.laserAng,
+        len: e.laserLen,
+        w: e.enrage ? 38 : 16,
+        t: e.laserT - e.laserBeam,
+        max: e.laserT - e.laserBeam,
+        r: e.enrage ? 28 : 16,
+        dmg: 0,
+        color: e.enrage ? "#ff8a3a" : "#7af7ff",
+        followId: e.id,
+        followRot: true
+      });
+      if (e.enrage) state.floaters.push(G.createFloater(e.x, e.y - 28, "raio âmbar", "#ff8a3a"));
+    } else if (pick === "warp") {
+      e.queenAct = "warp";
+      e.warpT = 0.5;
+      e.warpDid = false;
+      var wa = king ? Math.atan2(state.squad.y - king.y, state.squad.x - king.x) : 0;
+      e.warpX = state.squad.x - Math.cos(wa) * 62;
+      e.warpY = state.squad.y - Math.sin(wa) * 62;
+      warnAt(state, { kind: "tp", x: e.warpX, y: e.warpY, t: 0.5, max: 0.5, r: 32, dmg: 0, color: "#7af7ff", hiveWarp: true });
+    } else if (pick === "prism") {
+      e.queenAct = "prism";
+      e.prismT = 0.72;
+      e.prismDid = false;
+      var pang = (e.phase || 0) * 1.7;
+      e.prismX = state.squad.x + Math.cos(pang) * 92;
+      e.prismY = state.squad.y + Math.sin(pang) * 92;
+      warnAt(state, { kind: "mark", x: e.prismX, y: e.prismY, t: 0.72, max: 0.72, r: 22, dmg: 0, color: "#7af7ff" });
+    } else if (pick === "spear") {
+      hiveQueenStartBeeSpear(state, e);
+    } else if (pick === "rain") {
+      e.queenAct = "rain";
+      e.rainT = 2.6;
+      e.dropsLeft = 8;
+      e.dropCd = 0.08;
+    } else {
+      e.queenAct = "ward";
+      e.wardT = 0.7;
+      e.wardDid = false;
+      if (king) warnAt(state, { kind: "mark", x: king.x, y: king.y, t: 0.7, max: 0.7, r: king.def.size + 28, dmg: 0, color: "#7af7ff", followId: king.id });
+    }
+  }
+
+  function tickKingHive(state, e, target, dt, spd) {
+    hiveEnsure(state);
+    if ((e.hiveVuln || 0) > 0) e.hiveVuln -= dt;
+    if ((e.kingWardT || 0) > 0) e.kingWardT -= dt;
+    if ((e.blinkFxT || 0) > 0) e.blinkFxT -= dt;
+    if ((e.kingStun || 0) > 0) {
+      e.kingStun -= dt;
+      e.immortal = false;
+      e.vx = e.vy = 0;
+      e.flash = Math.max(e.flash || 0, 0.16);
+      e.zDraw = 0;
+      e.rot += Math.sin((e.phase || 0) * 22) * 0.04;
+      e.chargeWindup = 0;
+      if (e.kingAct === "charge" || e.kingAct === "windup") e.kingAct = "";
+      hiveKingClearGhosts(e);
+      return;
+    }
+    if ((e.chargeCd || 0) > 0) e.chargeCd -= dt;
+    var act = e.kingAct || "";
+    var mul = hiveAtk(state, e);
+    var hexed = (state.hiveHexT || 0) > 0;
+    if ((e.chargeWindup || 0) > 0) {
+      e.chargeWindup = Math.max(0, e.chargeWindup - dt);
+      e.vx = e.vy = 0;
+      if (target) {
+        e.chargeAim = Math.atan2(
+          (target.y + (state.squad.vy || 0) * 0.1) - e.y,
+          (target.x + (state.squad.vx || 0) * 0.1) - e.x
+        );
+      }
+      e.rot = e.chargeAim || 0;
+      if (e.enrage) hiveKingPlaceGhosts(state, e);
+      if (e.chargeWindup <= 0) {
+        var sp = (e.enrage ? 1240 : 1020) * (hexed ? 1.12 : 1);
+        e.vx = Math.cos(e.chargeAim) * sp;
+        e.vy = Math.sin(e.chargeAim) * sp;
+        e.kingAct = "charge";
+        e.chargeT = 0.78;
+        e.chargeHit = false;
+        e.immortal = true;
+        if (e.enrage) {
+          hiveKingLaunchGhosts(e, sp);
+          G.burst(state, e.x, e.y, "#7af7ff", 10, 40);
+        }
+      }
+      return;
+    }
+    if (act === "charge") {
+      e.immortal = true;
+      e.chargeT = (e.chargeT || 0) - dt;
+      var b = G.playfield(state);
+      var ms = e.def.size;
       e.x += (e.vx || 0) * dt;
       e.y += (e.vy || 0) * dt;
       e.rot = Math.atan2(e.vy || 0, e.vx || 1);
-      G.clampPlay(e, state);
-      var dd = dist(e, target);
-      if (dd < e.def.size + target.def.size + 8 && e.contactCd <= 0) {
-        e.contactCd = 0.18;
-        hurt(state, target, Math.round(e.def.dmg * (knight && e.kingAct === "thrust" ? 1.55 : 1.15)), e.x, e.y);
+      e.trailT = (e.trailT || 0) - dt;
+      if (e.trailT <= 0) {
+        e.trailT = e.enrage ? 0.1 : 0.18;
+        hiveLandHoney(state, e.x, e.y, e.enrage ? 26 : 20);
       }
-      if (e.cascaDashT <= 0) {
-        e.kingT = knight ? 1.15 : 1.45;
+      var hitWall = false;
+      var hitPillar = false;
+      if (e.x < b.x0 + ms) { e.x = b.x0 + ms; hitWall = true; }
+      if (e.x > b.x1 - ms) { e.x = b.x1 - ms; hitWall = true; }
+      if (e.y < b.y0 + ms) { e.y = b.y0 + ms; hitWall = true; }
+      if (e.y > b.y1 - ms) { e.y = b.y1 - ms; hitWall = true; }
+      var pi, p;
+      for (pi = 0; pi < state.enemies.length; pi++) {
+        p = state.enemies[pi];
+        if (p.hp <= 0) continue;
+        if (p.type === "hive_pillar" && Math.hypot(p.x - e.x, p.y - e.y) < ms + p.def.size) {
+          hitWall = true;
+          hitPillar = true;
+          hiveDownPillar(state, p);
+          p.hp = 0;
+          p.noDrop = true;
+          G.burst(state, p.x, p.y, "#d4a024", 22, 110);
+        }
+        if ((p.type === "hive_bee" || p.type === "elite_bee") && Math.hypot(p.x - e.x, p.y - e.y) < ms + p.def.size) {
+          p.hp = 0;
+          p.noDrop = true;
+          G.burst(state, p.x, p.y, "#ffc44a", 8, 40);
+        }
+      }
+      if (target && !e.chargeHit && Math.hypot(target.x - e.x, target.y - e.y) < ms + (target.def.size || 12) + 18) {
+        e.chargeHit = true;
+        hurt(state, target, Math.round(e.def.dmg * 2.25 * mul), e.x, e.y);
+        state.shake = Math.max(state.shake || 0, 9);
+      }
+      hiveKingTickGhosts(state, e, target, dt, mul);
+      if (hitWall || e.chargeT <= 0) {
+        e.immortal = false;
         e.kingAct = "";
+        e.vx = e.vy = 0;
+        hiveKingClearGhosts(e);
+        if (hitWall) {
+          e.kingStun = hitPillar ? 5 : 1;
+          e.hiveVuln = hitPillar ? 5 : 1;
+          e.chargeChain = 0;
+          e.chargeCd = e.enrage ? 2.4 : 3.2;
+          G.burst(state, e.x, e.y, "#ffe08a", hitPillar ? 28 : 18, hitPillar ? 140 : 90);
+          state.shake = Math.max(state.shake || 0, hitPillar ? 14 : 8);
+          if (hitPillar) {
+            state.banner = { text: "O rei bateu na coluna", t: 1.8 };
+            state.floaters.push(G.createFloater(e.x, e.y - 36, "atordoado", "#ffe08a"));
+            if (G.audio && G.audio.thud) G.audio.thud();
+            else if (G.audio && G.audio.hit) G.audio.hit();
+          }
+        } else if (e.enrage && (e.chargeChain || 0) > 0) {
+          e.chargeChain--;
+          e.chargeCd = 0;
+          e.chargeAim = target
+            ? Math.atan2(target.y - e.y, target.x - e.x)
+            : e.chargeAim;
+          e.chargeWindup = 0.22;
+          e.chargeWindupMax = 0.22;
+          e.kingAct = "windup";
+          hiveKingChargeWarn(state, e, 0.22, "#ff6a28");
+        } else {
+          e.chargeCd = e.enrage ? 2.4 : 3.2;
+          e.chargeChain = 0;
+        }
       }
       return;
     }
-    if (knight) {
-      var standK = 130 + Math.sin(e.phase * 2) * 24;
-      moveTowards(e, target.x + Math.cos(e.phase) * standK, target.y + Math.sin(e.phase) * standK * 0.6, spd * 1.25, dt);
-      if (e.kingT > 0) return;
-      var kpool = ["thrust", "lance", "dive"];
-      if (e.kingLast) {
-        var kk = [];
-        for (var ki = 0; ki < kpool.length; ki++) if (kpool[ki] !== e.kingLast) kk.push(kpool[ki]);
-        kpool = kk.length ? kk : kpool;
+    e.immortal = false;
+    if (e.chargeCd == null) e.chargeCd = 1.6;
+    if (target) {
+      var chase = spd * (e.enrage ? 2.18 : 1.68) * (hexed ? 1.28 : 1);
+      moveTowards(e, target.x, target.y, chase, dt);
+      e.rot = Math.atan2(target.y - e.y, target.x - e.x);
+      var kd = Math.hypot(target.x - e.x, target.y - e.y);
+      if (e.cooldown <= 0 && kd > 44 && kd < (e.enrage ? 320 : 280)) {
+        e.cooldown = e.enrage ? 0.7 : 1.02;
+        var spearShot = {
+          speed: e.enrage ? 430 : 380,
+          r: 8,
+          dmg: Math.round(e.def.dmg * (e.enrage ? 0.55 : 0.62) * mul),
+          muzzle: e.def.size * 0.75,
+          life: 1.55
+        };
+        if (e.enrage) enemyFan(state, e, target, 3, 0.4, "spear", spearShot);
+        else enemyFire(state, e, target, "spear", spearShot);
       }
-      var kact = kpool[(Math.random() * kpool.length) | 0];
-      e.kingLast = kact;
-      e.kingAct = kact;
-      if (kact === "lance") {
-        var lang = Math.atan2(target.y - e.y, target.x - e.x);
-        warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: lang, len: 340, w: 16, t: 0.4, max: 0.4, r: 16, dmg: 0, color: "#ffe08a" });
-        e.kingT = 0.4;
-        e.throwLance = 0.4;
+      if (kd < e.def.size + target.def.size + 8 && e.contactCd <= 0) {
+        e.contactCd = e.enrage ? 0.2 : 0.26;
+        if (!(G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e))) {
+          hurt(state, target, Math.round(e.def.dmg * 1.2 * mul), e.x, e.y);
+        }
+      }
+    }
+    if ((e.chargeCd || 0) > 0) return;
+    var aim = target
+      ? Math.atan2(
+          (target.y + (state.squad.vy || 0) * 0.1) - e.y,
+          (target.x + (state.squad.vx || 0) * 0.1) - e.x
+        )
+      : 0;
+    e.chargeAim = aim;
+    e.chargeWindup = e.enrage ? 0.28 : 0.4;
+    e.chargeWindupMax = e.chargeWindup;
+    e.chargeChain = e.enrage ? 1 : 0;
+    e.kingAct = "windup";
+    hiveKingChargeWarn(state, e, e.chargeWindup);
+  }
+
+  function tickHiveBee(state, e, target, dt, spd) {
+    var host = findEnemy(state, e.hiveHost);
+    var cmd = e.hiveCmd || "";
+    e.zDraw = 5 + Math.sin((e.phase || 0) * 9) * 2;
+    if (cmd === "beewall") {
+      if (!host || host.hp <= 0 || host.queenAct !== "beewall") {
+        e.hp = 0;
+        e.noDrop = true;
         return;
       }
-      if (kact === "dive") {
-        e.diveX = state.squad.x;
-        e.diveY = state.squad.y;
-        warnAt(state, { kind: "mark", x: e.diveX, y: e.diveY, t: 0.75, max: 0.75, r: 72, dmg: 0, color: "#ffd24a", followSquad: true });
-        e.chargeAim = Math.atan2(e.diveY - e.y, e.diveX - e.x);
-        e.chargeWindup = 0.75;
-        e.chargeWindupMax = 0.75;
-        state.floaters.push(G.createFloater(e.x, e.y - 24, "mergulho", "#ffe08a"));
-        return;
-      }
-      var tAng = Math.atan2(target.y - e.y, target.x - e.x);
-      e.chargeAim = tAng;
-      e.chargeWindup = 0.55;
-      e.chargeWindupMax = 0.55;
-      warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: tAng, len: 280, w: 18, t: 0.55, max: 0.55, r: 18, dmg: 0, color: "#ffe08a" });
-      state.floaters.push(G.createFloater(e.x, e.y - 24, "estocada", "#ffe08a"));
+      e.immortal = true;
+      e.vx = e.vy = 0;
+      e.zDraw = 8;
       return;
     }
-    if (queen && queen.hp > 0) {
-      if ((e.guardT || 0) > 0) {
-        e.guardT -= dt;
-        var gx = queen.x + (state.squad.x - queen.x) * 0.35;
-        var gy = queen.y + (state.squad.y - queen.y) * 0.35;
-        moveTowards(e, gx, gy, spd * 1.4, dt);
-        if (G.invasion) G.invasion.heal(queen, queen.maxHp * 0.012 * dt);
-        else queen.hp = Math.min(queen.maxHp, queen.hp + queen.maxHp * 0.012 * dt);
+    if (cmd === "beespear") {
+      if (!host || host.hp <= 0 || host.queenAct !== "beespear") {
+        e.hp = 0;
+        e.noDrop = true;
         return;
       }
-      var hoverK = 150 + Math.sin(e.phase * 2.2) * 30;
-      moveTowards(e, target.x + Math.cos(e.phase * 1.1) * hoverK, target.y + Math.sin(e.phase * 1.1) * hoverK * 0.65, spd, dt);
-      if (e.kingT > 0) return;
-      if (Math.random() < 0.34) {
-        e.guardT = 2.2;
-        e.kingT = 2.4;
-        state.floaters.push(G.createFloater(e.x, e.y - 24, "guarda", "#7cffb0"));
-        return;
-      }
-      var aim = Math.atan2(
-        (target.y + (state.squad.vy || 0) * 0.1) - e.y,
-        (target.x + (state.squad.vx || 0) * 0.1) - e.x
-      );
-      e.chargeAim = aim;
-      e.chargeWindup = 0.7;
-      e.chargeWindupMax = 0.7;
-      e.kingAct = "dash";
-      warnAt(state, { kind: "lane", x: e.x, y: e.y, ang: aim, len: 520, w: 20, t: 0.7, max: 0.7, r: 20, dmg: 0, color: "#ffe08a" });
-      state.floaters.push(G.createFloater(e.x, e.y - 24, "investida", "#ffe08a"));
+      e.immortal = true;
+      e.vx = e.vy = 0;
+      e.zDraw = 10;
+      return;
     }
+    if (cmd === "protect") {
+      if (!host || host.hp <= 0 || host.queenAct !== "protect") {
+        e.hiveCmd = "attack";
+        e.immortal = false;
+        return;
+      }
+      e.immortal = true;
+      e.orbitAng = (e.orbitAng || 0) + dt * 2.4;
+      var rr = host.def.size + 42;
+      e.x = host.x + Math.cos(e.orbitAng) * rr;
+      e.y = host.y + Math.sin(e.orbitAng) * rr;
+      e.vx = e.vy = 0;
+      return;
+    }
+    if (cmd === "harvest") {
+      var flower = null;
+      var fi, f, best = 1e9;
+      for (fi = 0; fi < state.enemies.length; fi++) {
+        f = state.enemies[fi];
+        if (f.hp > 0 && f.type === "hive_flower") {
+          var fd = Math.hypot(f.x - e.x, f.y - e.y);
+          if (fd < best) { best = fd; flower = f; }
+        }
+      }
+      if (!e.harvested && flower) {
+        moveTowards(e, flower.x, flower.y, spd * 1.2, dt);
+        if (Math.hypot(flower.x - e.x, flower.y - e.y) < 18) {
+          e.harvested = true;
+          e.carryT = 0.4;
+        }
+        return;
+      }
+      var q = host && host.hp > 0 ? host : hiveQueenOf(state);
+      if (q) {
+        moveTowards(e, q.x, q.y, spd * 1.15, dt);
+        if (Math.hypot(q.x - e.x, q.y - e.y) < q.def.size + 16) {
+          if (G.invasion) G.invasion.heal(q, q.maxHp * 0.012);
+          else q.hp = Math.min(q.maxHp, q.hp + q.maxHp * 0.012);
+          e.hp = 0;
+          e.noDrop = true;
+          G.burst(state, q.x, q.y, "#7cffb0", 8, 40);
+        }
+      }
+      return;
+    }
+    if (cmd === "orbit") {
+      if (!host || host.hp <= 0) {
+        e.hiveCmd = "attack";
+        return;
+      }
+      e.orbitAng = (e.orbitAng || 0) + dt * (e.type === "royal_bee" ? 1.4 : 2.1);
+      var orad = host.def.size + 34 + (e.type === "royal_bee" ? 14 : e.type === "elite_bee" ? 8 : 0);
+      var tx = host.x + Math.cos(e.orbitAng) * orad;
+      var ty = host.y + Math.sin(e.orbitAng) * orad;
+      moveTowards(e, tx, ty, spd * 1.35, dt);
+      if (target && e.cooldown <= 0 && Math.hypot(target.x - e.x, target.y - e.y) < e.def.range) {
+        e.cooldown = 1 / Math.max(0.35, e.def.fire);
+        enemyFire(state, e, target, "sting", { speed: 240, r: 3, color: e.def.color });
+      }
+      return;
+    }
+    if (target) {
+      moveTowards(e, target.x, target.y, spd * (cmd === "attack" ? 1.55 : 1.1), dt);
+      if (Math.hypot(target.x - e.x, target.y - e.y) < e.def.size + target.def.size + 6) {
+        hurt(state, target, Math.round(e.def.dmg * (cmd === "attack" ? 1.4 : 1)), e.x, e.y);
+        if (cmd === "attack") {
+          explode(state, e.x, e.y, 28, Math.round(e.def.dmg * 0.8), "enemy", "#ffc44a");
+          e.hp = 0;
+          e.noDrop = true;
+        } else if (e.contactCd <= 0) {
+          e.contactCd = 0.25;
+        }
+      }
+    }
+  }
+
+  function tickKing(state, e, target, dt, spd) {
+    tickKingHive(state, e, target, dt, spd);
   }
 
   function wormJetLen(state) {
@@ -5503,6 +7742,10 @@
     for (var i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
       if (e.hp <= 0) continue;
+      if (e.fallen) {
+        e.vx = e.vy = 0;
+        continue;
+      }
       if (state.glinderMaze && state.glinderMaze.phase !== "done" && e.type !== "chefe_vulto") {
         e.vx = 0;
         e.vy = 0;
@@ -5592,7 +7835,7 @@
         target = { x: state.squad.x, y: state.squad.y, def: { size: 12 }, hp: 1, id: -1 };
       }
       var d = dist(e, target);
-      if (!(e.spinMode > 0 || e.seqMode > 0 || e.wormAct === "spin" || e.vultoAct === "strafe" || e.vultoAct === "laser" || e.vultoAct === "nova" || e.vultoAct === "maze" || e.vultoAct === "burn" || e.buried || e.kaskaStep === "spin" || e.kaskaStep === "spin_warn" || e.kaskaStep === "dash" || e.kaskaStep === "dash_warn" || e.kaskaStep === "hop" || e.kaskaStep === "stun" || kaskaAirborne(e))) {
+      if (!(e.type === "hive_pillar" || e.type === "hive_flower" || e.type === "hive_cocoon" || e.type === "hive_cell" || (e.kingStun || 0) > 0 || e.spinMode > 0 || e.seqMode > 0 || e.wormAct === "spin" || e.vultoAct === "strafe" || e.vultoAct === "laser" || e.vultoAct === "nova" || e.vultoAct === "maze" || e.vultoAct === "burn" || e.buried || e.kaskaStep === "spin" || e.kaskaStep === "spin_warn" || e.kaskaStep === "dash" || e.kaskaStep === "dash_warn" || e.kaskaStep === "hop" || e.kaskaStep === "stun" || kaskaAirborne(e) || e.kingAct === "charge" || e.kingAct === "windup" || e.queenAct === "beam" || e.queenAct === "warp" || e.queenAct === "ward" || e.queenAct === "beewall" || e.queenAct === "escape" || e.queenAct === "beespear" || e.princessAct === "thrust" || e.princessAct === "laser")) {
         face(e, target.x, target.y, dt);
       }
       var kind = e.def.kind;
@@ -5899,115 +8142,7 @@
         if (e.shieldPending && spawnDuskShields(state, e)) e.shieldPending = false;
         tickKaskaP1(state, e, target, spd, dt, d);
       } else if (kind === "boss_charge") {
-        e.miniT -= dt;
-        if (e.miniT <= 0) {
-          e.miniT = e.enrage ? 14 : 30;
-          G.game.spawnAt(state, "mini_beemote", e.x + 40, e.y, { noDrop: false });
-          if (e.enrage) G.game.spawnAt(state, "mini_beemote", e.x - 36, e.y + 10, { noDrop: false });
-          state.floaters.push(G.createFloater(e.x, e.y - 24, e.enrage ? "enxame" : "cria", "#ffb070"));
-        }
-        if (e.enrage) {
-          e.honeyT = (e.honeyT || 4) - dt;
-          if (e.honeyT <= 0 && (e.chargeWindup || 0) <= 0 && e.ricoLeft <= 0) {
-            e.honeyT = 5.5;
-            warnAt(state, { kind: "mark", x: state.squad.x, y: state.squad.y, t: 0.45, max: 0.45, r: 42, dmg: 0, color: "#e8c050", followSquad: true });
-            e.honeyShot = 0.45;
-            state.floaters.push(G.createFloater(e.x, e.y - 24, "mel", "#e8c050"));
-          }
-          if ((e.honeyShot || 0) > 0) {
-            e.honeyShot -= dt;
-            if (e.honeyShot <= 0) {
-              enemyFire(state, e, { x: state.squad.x, y: state.squad.y }, "honey", { speed: 240, r: 8, dmg: 4, color: "#e8c050", life: 1.2 });
-            }
-          }
-        }
-        var charging = e.ricoLeft > 0 || e.chargeT > 1.35;
-        if ((e.chargeWindup || 0) > 0) {
-          e.chargeWindup = Math.max(0, e.chargeWindup - dt);
-          var wAng = e.chargeAim || 0;
-          e.rot = wAng;
-          e.flash = Math.max(e.flash || 0, 0.1);
-          e.x -= Math.cos(wAng) * 55 * dt;
-          e.y -= Math.sin(wAng) * 55 * dt;
-          G.clampPlay(e, state);
-          if (e.chargeWindup <= 0) {
-            var dashSp = e.chargeRico ? 680 + Math.random() * 80 : (e.enrage ? 860 : 780) + Math.random() * 80;
-            e.vx = Math.cos(wAng) * dashSp;
-            e.vy = Math.sin(wAng) * dashSp;
-            if (e.chargeRico) {
-              e.ricoLeft = 5;
-              e.chargeRico = false;
-            }
-            e.chargeT = 1.9;
-            charging = true;
-          }
-        } else if (e.ricoLeft > 0) {
-          var rsp = Math.sqrt(e.vx * e.vx + e.vy * e.vy) || 1;
-          var rwob = Math.sin(e.phase * 22) * 22 + Math.sin(e.phase * 9) * 10;
-          e.x += e.vx * dt + (-e.vy / rsp) * rwob * dt;
-          e.y += e.vy * dt + (e.vx / rsp) * rwob * dt;
-          e.rot = Math.atan2(e.vy, e.vx);
-          var bf = G.playfield(state);
-          var ms = e.def.size;
-          var bounced = false;
-          if (e.x < bf.x0 + ms) { e.x = bf.x0 + ms; e.vx = Math.abs(e.vx); bounced = true; }
-          else if (e.x > bf.x1 - ms) { e.x = bf.x1 - ms; e.vx = -Math.abs(e.vx); bounced = true; }
-          if (e.y < bf.y0 + ms) { e.y = bf.y0 + ms; e.vy = Math.abs(e.vy); bounced = true; }
-          else if (e.y > bf.y1 - ms) { e.y = bf.y1 - ms; e.vy = -Math.abs(e.vy); bounced = true; }
-          if (bounced) {
-            e.ricoLeft--;
-            var twist = (Math.random() - 0.5) * 0.7;
-            var spB = Math.sqrt(e.vx * e.vx + e.vy * e.vy) || 700;
-            var angB = Math.atan2(e.vy, e.vx) + twist;
-            e.vx = Math.cos(angB) * spB;
-            e.vy = Math.sin(angB) * spB;
-          }
-        } else {
-          e.chargeT -= dt;
-          if (e.chargeT <= 0) {
-            e.chargeCount = (e.chargeCount || 0) + 1;
-            var aim = Math.atan2(
-              (target.y + (state.squad.vy || 0) * 0.12) - e.y,
-              (target.x + (state.squad.vx || 0) * 0.12) - e.x
-            ) + (Math.random() - 0.5) * 0.12;
-            e.chargeAim = aim;
-            e.chargeWindup = e.enrage ? 0.55 : 0.9;
-            e.chargeWindupMax = e.chargeWindup;
-            e.chargeRico = e.chargeCount >= 5;
-            if (e.chargeRico) e.chargeCount = 0;
-            e.chargeT = 0.05;
-            e.rot = aim;
-            state.floaters.push(G.createFloater(e.x, e.y - 36, e.chargeRico ? "ricochete" : "investida", "#ff6a3a"));
-          }
-          charging = e.ricoLeft > 0 || e.chargeT > 1.35;
-          if (e.ricoLeft <= 0 && e.chargeT > 1.35) {
-            var dsp = Math.sqrt(e.vx * e.vx + e.vy * e.vy) || 1;
-            var dwob = Math.sin(e.phase * 26) * 16;
-            e.x += e.vx * dt + (-e.vy / dsp) * dwob * dt;
-            e.y += e.vy * dt + (e.vx / dsp) * dwob * dt;
-            e.rot = Math.atan2(e.vy, e.vx);
-          } else if (e.ricoLeft <= 0 && !charging && (e.chargeWindup || 0) <= 0) {
-            var angH = e.phase * 0.9;
-            var stand = 145 + Math.sin(e.phase * 1.4) * 36;
-            var fig8x = Math.sin(e.phase * 3.2) * 58;
-            var fig8y = Math.sin(e.phase * 6.4) * 30;
-            var bzX = Math.sin(e.phase * 28) * 20 + Math.cos(e.phase * 17) * 10;
-            var bzY = Math.cos(e.phase * 31) * 16;
-            var hx = target.x + Math.cos(angH) * stand + fig8x + bzX;
-            var hy = target.y + Math.sin(angH) * stand * 0.6 + fig8y + bzY;
-            moveTowards(e, hx, hy, spd * 1.65, dt);
-            if (e.cooldown <= 0 && edgeDist(e, target) < e.def.range) {
-              e.cooldown = 1 / Math.max(0.25, e.def.fire);
-              enemyFan(state, e, target, 3, 0.52, "sting", { poison: true, speed: 220, r: 4, life: 1.5 });
-            }
-          }
-        }
-        if (d < e.def.size + target.def.size && e.contactCd <= 0) {
-          e.contactCd = 0.16;
-          if (!(G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e))) {
-            hurt(state, target, e.def.dmg, e.x, e.y);
-          }
-        }
+        tickQueenHive(state, e, target, dt, spd);
       } else if (kind === "boss_spawn") {
         if (G.invasion) G.invasion.enterP2(state, e, "Fortilax · ninho aberto");
         if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
@@ -6082,7 +8217,7 @@
           enemyFire(state, e, target);
         }
       } else if (kind === "boss_veil") {
-        if (e.type === "chefe_espectro" && !e.fake && e.inv) {
+        if (e.type === "chefe_espectro" && !e.fake && !e.helperOf && e.inv) {
           if (G.invasion) G.invasion.enterP2(state, e, "Moonlight permanente");
           if (G.invasion && G.invasion.tookP2Hook(e)) {
             e.moonLock = true;
@@ -6272,6 +8407,13 @@
         tickArchitect(state, e, dt);
       } else if (kind === "hive_wall") {
         e.vx = e.vy = 0;
+      } else if (kind === "hive_drone" || kind === "hive_elite" || kind === "hive_royal") {
+        tickHiveBee(state, e, target, dt, spd);
+      } else if (kind === "hive_cell" || kind === "hive_cocoon" || kind === "hive_pillar" || kind === "hive_flower") {
+        e.vx = e.vy = 0;
+        if (kind === "hive_pillar") e.rot = 0;
+        if (kind === "hive_cocoon") hivePinCocoon(state, e);
+        if (kind === "hive_cocoon" || kind === "hive_flower") e.phase = (e.phase || 0) + dt;
       } else if (kind === "mini_antlion") {
         tickAntlion(state, e, target, dt, spd);
       } else if (kind === "mini_bomber") {
@@ -6380,7 +8522,7 @@
         e.fuseCd = (e.fuseCd || 0) - dt;
       }
 
-      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && e.vultoAct !== "strafe" && e.vultoAct !== "maze" && e.vultoAct !== "burn" && e.wormAct !== "dive" && !e.buried && !kaskaAirborne(e)) G.clampPlay(e, state);
+      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && kind !== "hive_cell" && kind !== "hive_cocoon" && kind !== "hive_pillar" && kind !== "hive_flower" && e.vultoAct !== "strafe" && e.vultoAct !== "maze" && e.vultoAct !== "burn" && e.wormAct !== "dive" && e.kingAct !== "charge" && e.princessAct !== "thrust" && e.princessAct !== "hellish" && !e.buried && !kaskaAirborne(e)) G.clampPlay(e, state);
     }
     separateBodies(state.enemies, state, true);
   }
@@ -6397,7 +8539,12 @@
         p.z = Math.max(0, p.z - dt * 320);
         p.life -= dt;
         if (p.z > 0 && p.life > 0) continue;
-        explode(state, p.x, p.y, p.boomR || 22, p.dmg, "enemy", "#c8ff6a");
+        if (p.honeyLand) {
+          hiveLandHoney(state, p.x, p.y, 40);
+          G.burst(state, p.x, p.y, "#e8c050", 8, 40);
+        } else {
+          explode(state, p.x, p.y, p.boomR || 22, p.dmg, "enemy", "#c8ff6a");
+        }
         state.projectiles.splice(i, 1);
         continue;
       }
@@ -6460,6 +8607,15 @@
         }
       }
       if (!hit) continue;
+      if (hit.immortal && hit.type === "chefe_beeking" && hit.kingAct === "charge" && p.team === "player") {
+        G.burst(state, p.x, p.y, "#ffe08a", 6, 36);
+        state.projectiles.splice(i, 1);
+        continue;
+      }
+      if (hit.immortal && (hit.type === "hive_cocoon" || hit.type === "hive_pillar" || hit.type === "hive_flower" || hit.hiveCmd === "protect")) {
+        state.projectiles.splice(i, 1);
+        continue;
+      }
       if (G.tactics && G.tactics.onBulletHit && G.tactics.onBulletHit(state, p, hit)) {
         state.projectiles.splice(i, 1);
         continue;
@@ -6469,6 +8625,9 @@
         var wasEx = hit.exposedT || 0;
         hit.exposedT = Math.max(wasEx, 4);
         if (wasEx <= 0.2) state.floaters.push(G.createFloater(hit.x, hit.y - 14, "exposto", "#ffe08a"));
+      }
+      if (p.kind === "honeyball" && hit.team === "player") {
+        state.honeyT = Math.max(state.honeyT || 0, 0.4);
       }
       if (p.kind === "honey" && hit.team === "player") {
         state.honeyT = Math.max(state.honeyT || 0, 3.4);
@@ -6590,8 +8749,14 @@
       if (w.followId) {
         var fol = findEnemy(state, w.followId);
         if (fol && fol.hp > 0) {
+          var fang = w.followRot ? (fol.rot || 0) : 0;
           w.x = fol.x;
           w.y = fol.y;
+          if (w.followOff) {
+            w.x += -Math.sin(fang) * w.followOff;
+            w.y += Math.cos(fang) * w.followOff;
+          }
+          if (w.followRot) w.ang = fang + (w.angOff || 0);
         }
       }
       w.t -= dt;
@@ -6605,8 +8770,25 @@
           if (uu.hp <= 0) continue;
           if (Math.hypot(uu.x - w.x, uu.y - w.y) <= (w.r || 62) + 8) uu.poisonT = Math.max(uu.poisonT || 0, 4);
         }
-      } else if (w.kind === "mark" || w.kind === "lane" || w.kind === "cone" || w.kind === "tp" || w.kind === "spin") {
+      } else if (w.kind === "mark" || w.kind === "lane" || w.kind === "cone" || w.kind === "tp" || w.kind === "spin" || w.kind === "slash" || w.kind === "half") {
         /* telegraph only */
+      } else if (w.kind === "honeydrop") {
+        var drop = G.createProjectile({
+          x: w.x,
+          y: w.y,
+          vx: 0,
+          vy: 0,
+          dmg: 0,
+          team: "enemy",
+          kind: "dropshot",
+          life: 0.45,
+          r: 8,
+          color: "#e8c050"
+        });
+        drop.z = 92;
+        drop.honeyLand = true;
+        drop.boomR = 0;
+        state.projectiles.push(drop);
       } else if (w.kind === "drop" || w.dropShot) {
         var drop = G.createProjectile({
           x: w.x,
@@ -6903,6 +9085,7 @@
       if (state.run.activeFire == null) state.run.activeFire = 0;
       if (state.run.activeDmg == null) state.run.activeDmg = 0;
       if (state.honeyT > 0) state.honeyT = Math.max(0, state.honeyT - dt);
+      if (state.royalMarkT > 0) state.royalMarkT = Math.max(0, state.royalMarkT - dt);
       var hasVulto = false;
       for (var vt = 0; vt < (state.enemies || []).length; vt++) {
         if (state.enemies[vt].hp > 0 && state.enemies[vt].type === "chefe_vulto") hasVulto = true;
@@ -7008,6 +9191,7 @@
       }
       if (G.tactics && G.tactics.update) G.tactics.update(state, dt);
       playerShoot(state, dt);
+      tickHiveWorld(state, dt);
       updateEnemies(state, dt);
       tickGlinderSun(state, dt);
       tickGlinderFoci(state, dt);
@@ -7051,6 +9235,7 @@
     aimGhost: aimGhost,
     fireTarget: fireTarget,
     tryDash: tryDash,
+    ensureHive: hiveEnsure,
     spawnDashBurst: spawnDashBurst,
     pickupRadius: pickupRadius,
     applyDrop: applyDrop,

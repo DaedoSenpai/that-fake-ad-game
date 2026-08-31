@@ -47,6 +47,7 @@
     stageIndex: 0,
     waveIndex: 0,
     bossShown: 1,
+    bossShownB: 1,
     camZoom: 1,
     camZoomTo: 1,
     offer: [],
@@ -1418,47 +1419,92 @@
     document.getElementById("hp-fill").style.width = (max ? Math.max(0, (hp / max) * 100) : 0) + "%";
     document.getElementById("btn-mute").textContent = G.audio.muted ? "Mudo" : "Som";
     syncVolumeUi();
+    var bossHud = document.getElementById("boss-hud");
+    var rowA = document.getElementById("boss-row-a");
+    var rowB = document.getElementById("boss-row-b");
+    var pips = document.getElementById("souls-pips");
+    function livingBoss(e) {
+      return e && e.def && e.def.boss && e.hp > 0 && !e.fake && !e.glinderDying && !e.fallen;
+    }
+    function easeBar(key, frac) {
+      var cur = state[key];
+      if (cur == null || !isFinite(cur)) cur = frac;
+      if (frac < cur) cur = Math.max(frac, cur - dt * 0.55);
+      else cur = frac;
+      state[key] = cur;
+      return cur;
+    }
+    function paintTrack(fillId, delayId, frac, delayKey, snap) {
+      frac = Math.max(0, Math.min(1, frac));
+      if (snap) state[delayKey] = frac;
+      var fill = document.getElementById(fillId);
+      var delay = document.getElementById(delayId);
+      if (fill) fill.style.width = frac * 100 + "%";
+      if (delay) delay.style.width = easeBar(delayKey, frac) * 100 + "%";
+    }
+    var queen = null;
+    var king = null;
     var boss = null;
+    var core = null;
     for (var b = 0; b < state.enemies.length; b++) {
       var be = state.enemies[b];
-      if (!be.def || !be.def.boss || be.hp <= 0 || be.fake || be.glinderDying) continue;
-      if (be.type === "chefe_final") {
-        boss = be;
-        break;
-      }
-      if (!boss || be.maxHp > boss.maxHp) boss = be;
+      if (!livingBoss(be)) continue;
+      if (be.type === "chefe_megatanque") queen = be;
+      else if (be.type === "chefe_beeking") king = be;
+      if (be.type === "chefe_final") core = be;
+      else if (!boss || be.maxHp > boss.maxHp) boss = be;
     }
-    var bossHud = document.getElementById("boss-hud");
-    if (boss) {
-      bossHud.classList.remove("hidden");
+    if (core) boss = core;
+    var duo = !!(queen && king);
+    if (duo) {
+      bossHud.classList.remove("hidden", "p2");
+      bossHud.classList.add("duo");
+      if (rowB) rowB.classList.remove("hidden");
+      if (rowA) {
+        rowA.classList.add("queen");
+        rowA.classList.remove("king");
+      }
+      document.getElementById("boss-name").textContent = queen.def.name;
+      document.getElementById("boss-title").textContent = queen.enrage ? "Enrage · a colmeia sem rei" : (queen.def.title || "");
+      document.getElementById("boss-name-b").textContent = king.def.name;
+      document.getElementById("boss-title-b").textContent = king.enrage ? "Fúria do rei" : (king.def.title || "");
+      paintTrack("souls-fill", "souls-delay", queen.hp / queen.maxHp, "bossShown", state._hudBossA !== queen);
+      paintTrack("souls-fill-b", "souls-delay-b", king.hp / king.maxHp, "bossShownB", state._hudBossB !== king);
+      state._hudBossA = queen;
+      state._hudBossB = king;
+      if (pips) pips.classList.add("hidden");
+    } else if (boss) {
+      bossHud.classList.remove("hidden", "duo");
+      if (rowB) rowB.classList.add("hidden");
+      if (rowA) {
+        rowA.classList.toggle("queen", boss.type === "chefe_megatanque");
+        rowA.classList.toggle("king", boss.type === "chefe_beeking");
+      }
       document.getElementById("boss-name").textContent = boss.def.name;
       var title = boss.def.title || "";
       if (boss.type === "chefe_final") {
         var ph = boss.bossPhase || 1;
         title = ph === 1 ? "Camada 1 · a Colmeia protege" : ph === 2 ? "Camada 2 · a Mariposa esconde" : "Camada 3 · núcleo exposto";
       } else if (boss.type === "chefe_megatanque") {
-        var kingHud = false;
-        for (var kh = 0; kh < state.enemies.length; kh++) {
-          if (state.enemies[kh].type === "chefe_beeking" && state.enemies[kh].hp > 0) kingHud = true;
-        }
-        if (kingHud) title = (title || "Imperatriz da Colmeia") + " · com o Beeking-08";
         if (boss.enrage) title = "Enrage · a colmeia sem rei";
+      } else if (boss.type === "beeprincess") {
+        if (boss.princessHive || state.hiveRealm) title = "Colmeia alienígena";
+        else title = (title || "A herdeira da colmeia") + " · herança real";
       } else if (boss.type === "chefe_beeking" && boss.enrage) {
         title = "Fúria do rei";
       }
       document.getElementById("boss-title").textContent = title;
       bossHud.classList.toggle("p2", !!(boss.p2 || boss.invP2));
-      var bars = Math.max(1, boss.hpBars || 1);
+      var hiveHud = boss.type === "chefe_megatanque" || boss.type === "chefe_beeking";
+      var bars = hiveHud ? 1 : Math.max(1, boss.hpBars || 1);
       if (boss.p2 || boss.invP2) bars = 1;
       var per = 1 / bars;
       var frac = Math.max(0, boss.hp / boss.maxHp);
       var barI = Math.max(0, Math.min(bars - 1, Math.floor((frac - 1e-6) / per)));
       var local = bars === 1 ? frac : Math.max(0, Math.min(1, (frac - barI * per) / per));
-      if (local < state.bossShown) state.bossShown = Math.max(local, state.bossShown - dt * 0.55);
-      else state.bossShown = local;
-      document.getElementById("souls-fill").style.width = local * 100 + "%";
-      document.getElementById("souls-delay").style.width = state.bossShown * 100 + "%";
-      var pips = document.getElementById("souls-pips");
+      paintTrack("souls-fill", "souls-delay", local, "bossShown", state._hudBossA !== boss);
+      state._hudBossA = boss;
+      state._hudBossB = null;
       if (pips) {
         pips.classList.toggle("hidden", bars < 2);
         if (bars >= 2) {
@@ -1471,22 +1517,29 @@
       }
     } else {
       bossHud.classList.add("hidden");
-      bossHud.classList.remove("p2");
+      bossHud.classList.remove("p2", "duo");
+      if (rowB) rowB.classList.add("hidden");
+      if (rowA) rowA.classList.remove("queen", "king");
       state.bossShown = 1;
-      var pipsOff = document.getElementById("souls-pips");
-      if (pipsOff) pipsOff.classList.add("hidden");
+      state.bossShownB = 1;
+      state._hudBossA = null;
+      state._hudBossB = null;
+      if (pips) pips.classList.add("hidden");
     }
     var bar = document.getElementById("active-bar");
     if (!bar) return;
     bar.innerHTML = "";
-    var dashReady = (state.dashCd || 0) <= 0;
+    var dashStuck = G.combat.dashLocked && G.combat.dashLocked(state);
+    var dashReady = (state.dashCd || 0) <= 0 && !dashStuck;
     var dashMax = state.dashCdMax || G.combat.dashCd();
-    var dashFrac = dashReady ? 100 : Math.max(0, 1 - (state.dashCd || 0) / dashMax) * 100;
+    var dashFrac = dashStuck ? 0 : dashReady ? 100 : Math.max(0, 1 - (state.dashCd || 0) / dashMax) * 100;
     var dashSlot = document.createElement("button");
     dashSlot.type = "button";
-    dashSlot.className = "active-slot" + (dashReady ? " ready" : " cd");
+    dashSlot.className = "active-slot" + (dashStuck ? " stuck" : dashReady ? " ready" : " cd");
     dashSlot.style.setProperty("--cd", dashFrac + "%");
-    dashSlot.title = "Ímpeto — avanço curto na direção do movimento, ou da mira se o esquadrão estiver parado.";
+    dashSlot.title = dashStuck
+      ? "O mel líquido prende o SHIFT. Saia da poça pra voltar a usar o Ímpeto."
+      : "Ímpeto — avanço curto na direção do movimento, ou da mira se o esquadrão estiver parado.";
     dashSlot.innerHTML =
       "<span class=\"key\">⇧</span>" +
       "<span class=\"ico\">»</span>" +
@@ -1665,7 +1718,10 @@
     ctx.fillStyle = theme.ground;
     ctx.fillRect(gx, gy, gw, gh);
     var img = state.bgImg;
-    if ((!img || !img.naturalWidth) && G.STAGES[state.stageIndex]) {
+    if (state.hiveRealm && G.stageBgs["img/cenarios/bg-hive-robo.png"]) {
+      img = G.stageBgs["img/cenarios/bg-hive-robo.png"];
+      state.bgImg = img;
+    } else if ((!img || !img.naturalWidth) && G.STAGES[state.stageIndex]) {
       img = G.stageBg(G.STAGES[state.stageIndex]);
       state.bgImg = img;
     }
@@ -1838,6 +1894,8 @@
         if (enDraw.mazeHide) continue;
         try { G.drawEnemy(ctx, enDraw); } catch (ee) {}
       }
+      if (G.drawHiveKingGhosts) G.drawHiveKingGhosts(ctx, state);
+      if (G.drawHeirTake) G.drawHeirTake(ctx, state);
       for (var au = 0; au < state.units.length; au++) {
         if (!state.units[au].commander && !state.units[au].stowed) G.drawPlayerUnit(ctx, state.units[au], state.time);
       }
@@ -2187,6 +2245,91 @@
         fg.addColorStop(0, "rgba(255, 255, 255, " + (fa * 0.35) + ")");
         fg.addColorStop(1, "rgba(255, 210, 160, 0)");
         ctx.fillStyle = fg;
+        ctx.fillRect(0, 0, state.W, state.H);
+      }
+    }
+    if (state.hiveWake) {
+      var hw = state.hiveWake;
+      var lids = Math.max(0, Math.min(1, hw.lids != null ? hw.lids : 1));
+      var black = Math.max(0, Math.min(1, hw.black || 0));
+      var flash = Math.max(0, Math.min(1, hw.flash || 0));
+      var lidH = (1 - lids) * (state.H * 0.5 + 28);
+      if (lids > 0.97 && black < 0.02 && flash < 0.02) {
+        if (state._hiveHudFade && !(state.stageOutro && state.stageOutro.phase === "fade")) {
+          hud.style.opacity = "";
+          state._hiveHudFade = false;
+        }
+      } else {
+      ctx.save();
+      ctx.fillStyle = "#010000";
+      ctx.fillRect(0, 0, state.W, lidH);
+      ctx.fillRect(0, state.H - lidH, state.W, Math.max(0, state.H - (state.H - lidH)));
+      if (lidH > 1 && lids < 0.98) {
+        ctx.fillStyle = "rgba(48, 10, 12, 0.7)";
+        ctx.fillRect(0, Math.max(0, lidH - 4), state.W, 4);
+        ctx.fillRect(0, state.H - lidH, state.W, 4);
+        var edge = ctx.createLinearGradient(0, lidH - 10, 0, lidH + 14);
+        edge.addColorStop(0, "rgba(0, 0, 0, 0.55)");
+        edge.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = edge;
+        ctx.fillRect(0, lidH - 10, state.W, 24);
+        var edge2 = ctx.createLinearGradient(0, state.H - lidH - 14, 0, state.H - lidH + 10);
+        edge2.addColorStop(0, "rgba(0, 0, 0, 0)");
+        edge2.addColorStop(1, "rgba(0, 0, 0, 0.55)");
+        ctx.fillStyle = edge2;
+        ctx.fillRect(0, state.H - lidH - 14, state.W, 24);
+      }
+      var vig = 0.06 + (1 - lids) * 0.48;
+      var vg = ctx.createRadialGradient(state.W / 2, state.H / 2, 18, state.W / 2, state.H / 2, Math.max(state.W, state.H) * 0.62);
+      vg.addColorStop(0, "rgba(0, 0, 0, 0)");
+      vg.addColorStop(0.45, "rgba(4, 0, 0, " + (vig * 0.25) + ")");
+      vg.addColorStop(1, "rgba(0, 0, 0, " + vig + ")");
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, state.W, state.H);
+      if (black > 0.01) {
+        ctx.fillStyle = "rgba(0, 0, 0, " + black + ")";
+        ctx.fillRect(0, 0, state.W, state.H);
+      }
+      if (flash > 0.02) {
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = "rgba(255, 248, 220, " + (flash * 0.92) + ")";
+        ctx.fillRect(0, 0, state.W, state.H);
+        var flg = ctx.createRadialGradient(state.W / 2, state.H * 0.42, 12, state.W / 2, state.H * 0.42, Math.max(state.W, state.H) * 0.7);
+        flg.addColorStop(0, "rgba(255, 255, 255, " + flash + ")");
+        flg.addColorStop(0.4, "rgba(255, 220, 90, " + (flash * 0.55) + ")");
+        flg.addColorStop(1, "rgba(255, 170, 40, 0)");
+        ctx.fillStyle = flg;
+        ctx.fillRect(0, 0, state.W, state.H);
+      }
+      ctx.restore();
+      var cover = Math.max(black, 1 - lids);
+      hud.style.opacity = cover > 0.06 ? String(Math.max(0, 1 - cover)) : "";
+      state._hiveHudFade = cover > 0.06;
+      }
+    } else if (state._hiveHudFade && !(state.stageOutro && state.stageOutro.phase === "fade")) {
+      hud.style.opacity = "";
+      state._hiveHudFade = false;
+    }
+    if (state.princessBlink) {
+      var bt = state.princessBlink.t || 0;
+      function blinkPulse(t0, close, hold, open) {
+        if (bt < t0) return 0;
+        var u = bt - t0;
+        if (u < close) return u / close;
+        u -= close;
+        if (u < hold) return 1;
+        u -= hold;
+        if (u < open) return 1 - u / open;
+        return 0;
+      }
+      var ba = Math.max(
+        blinkPulse(0.5, 0.14, 0.08, 0.22),
+        blinkPulse(1.1, 0.16, 0.7, 0.28),
+        blinkPulse(2.35, 0.12, 0.16, 0.32),
+        blinkPulse(3.15, 0.18, 0.85, 0.7)
+      );
+      if (ba > 0.02) {
+        ctx.fillStyle = "rgba(6, 4, 10, " + (ba * 0.96) + ")";
         ctx.fillRect(0, 0, state.W, state.H);
       }
     }

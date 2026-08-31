@@ -1,6 +1,6 @@
 ---
 description: Retratos Metal Slug das unidades — prompt, fidelidade de cor, variedade M/F e close cômico de veículos
-globs: img/portrait-*.png
+globs: img/aliados/portrait-*.png,img/inimigos/portrait-*.png
 alwaysApply: false
 ---
 
@@ -12,9 +12,9 @@ Estilo de character-select **Metal Slug / SNK Neo Geo**. Não inventar anime, re
 
 1. Ler `G.UNIT_DEFS` em `js/units.js` (`color`, `accent`, `role`, `name`, `blurb`).
 2. Conferir o sprite em `G.drawPlayerUnit` (`js/entities.js`) — o retrato copia o visual in-game, não o nome.
-3. Referência de estilo: `img/portrait-comandante.png`.
-4. Arquivo: `img/portrait-{kind}.png` (chave de `UNIT_DEFS`). Quadrado 1:1, sem texto, sem UI, sem watermark.
-5. Copiar o PNG gerado para `img/`. `G.preloadPortraits()` já carrega todo `unitList()`.
+3. Referência de estilo: `img/aliados/portrait-comandante.png`.
+4. Arquivo: `img/aliados/portrait-{kind}.png` (chave de `UNIT_DEFS`). Quadrado 1:1, sem texto, sem UI, sem watermark.
+5. Copiar o PNG gerado para `img/aliados/` (unidades) ou `img/inimigos/` (inimigos). `G.preloadPortraits()` já carrega todo `unitList()` e os chefes.
 
 **Comandante** é dourado `#ffd24a` / `#fff4c4` (jaqueta, boina, halo). Nunca verde-oliva.
 
@@ -30,18 +30,18 @@ Humanos: variedade de homens e mulheres, rostos distintos. Veículos: visor/faro
 
 > Pixel art Metal Slug SNK Neo Geo character-select bust, SAME style as the reference: chunky pixels, bold black outlines, dithering, dark navy background, 3/4 facing right, rim light from the right. Head and shoulders. [IDADE/GÊNERO/ROSTO]. Uniform hex `{color}` with `{accent}` highlights. [ARMA E DETALHE DO SPRITE]. No text, no UI, no watermark.
 
-Referência: `img/portrait-comandante.png`.
+Referência: `img/aliados/portrait-comandante.png`.
 
 ## Prompt — veículos
 
 > Pixel art Metal Slug SNK Neo Geo, SAME chunky pixel style as the reference. COMICAL close-up of the vehicle filling the frame like a character-select portrait. Body hex `{color}` with `{accent}` visor. Headlights or visor acting as a goofy cartoon face, slightly personified. 3/4 view facing right, dark navy background. No human, no text, no UI, no watermark.
 
-Referência: o mesmo `portrait-comandante.png` (só o estilo pixel, não o rosto).
+Referência: o mesmo `img/aliados/portrait-comandante.png` (só o estilo pixel, não o rosto).
 
 ## Prompt — bosses (mais grandioso)
 
-Mesmo pixel Metal Slug, mas intro de chefão: a criatura **enche o quadro**, luz mais dramática, glow, faísca, fundo navy quase preto. Fidelidade ao sprite em `G.drawEnemy` + `color`/`title`/`blurb` de `ENEMY_DEFS`. Arquivo: `img/portrait-{type}.png` (chave do inimigo, ex. `chefe_invasao`). Não gerar clone/fake/`codexHide`.
+Mesmo pixel Metal Slug, mas intro de chefão: a criatura **enche o quadro**, luz mais dramática, glow, faísca, fundo navy quase preto. Fidelidade ao sprite em `G.drawEnemy` + `color`/`title`/`blurb` de `ENEMY_DEFS`. Arquivo: `img/inimigos/portrait-{type}.png` (chave do inimigo, ex. `chefe_invasao`). Não gerar clone/fake/`codexHide`.
 
 > Pixel art Metal Slug SNK Neo Geo BOSS character-select portrait, SAME chunky pixel style as the reference but MORE GRANDIOSE and imposing: the creature fills the frame, dramatic rim light, sparks and glow, dark navy-to-black background, bold black outlines, dithering. 3/4 view facing right. Epic Metal Slug boss intro, not a cute mascot. Body hex `{color}`. [DETALHE DO SPRITE]. No text, no UI, no watermark.
 
-Referência de estilo: `img/portrait-comandante.png`.
+Referência de estilo: `img/aliados/portrait-comandante.png`.

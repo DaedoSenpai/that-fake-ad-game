@@ -684,6 +684,13 @@
       cryo: "Gelo",
       orbit_shield: "Escudo orbital",
       mini_beemote: "Operária da colmeia",
+      hive_drone: "Abelha da corte",
+      hive_elite: "Abelha de elite",
+      hive_royal: "Guarda real",
+      hive_cell: "Célula do favo",
+      hive_cocoon: "Casulo real",
+      hive_pillar: "Coluna de favo",
+      hive_flower: "Flor de néctar",
       alien_rifle: "Fuzileiro da invasão",
       pin_spike: "Espinho de areia",
       boss_burst: "Chefe · rajada",
@@ -694,6 +701,7 @@
       boss_invasao: "Chefe · invasão",
       boss_vulto: "Chefe · vagalume",
       boss_king: "Chefe · rei",
+      boss_princess: "Chefe · princesa",
       boss_worm: "Chefe · devorador"
     };
     return map[kind] || "Combate";

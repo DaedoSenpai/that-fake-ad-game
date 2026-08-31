@@ -160,6 +160,12 @@
       if (!G.loadImg) img.src = src;
       G.stageBgs[src] = img;
     }
+    var hiveBg = "img/cenarios/bg-hive-robo.png";
+    if (!G.stageBgs[hiveBg]) {
+      var himg = (G.loadImg ? G.loadImg(G.stageBgUrls(hiveBg)) : new Image());
+      if (!G.loadImg) himg.src = hiveBg;
+      G.stageBgs[hiveBg] = himg;
+    }
   };
 
   G.stageBg = function (stage) {
@@ -173,12 +179,12 @@
     spawnAt: function (state, type, x, y, extra) {
       var e = G.createEnemy(type, x, y, scaleFor(state.stageIndex));
       if (!e) return null;
-      if (G.invasion) G.invasion.stamp(state, e);
       if (extra) {
         Object.keys(extra).forEach(function (k) {
           e[k] = extra[k];
         });
       }
+      if (G.invasion) G.invasion.stamp(state, e);
       state.enemies.push(e);
       if (type === "chefe_final" && !(extra && extra.noLink)) {
         var cit = G.createEnemy("chefe_fortaleza", e.x + 88, e.y, scaleFor(state.stageIndex));
@@ -194,6 +200,7 @@
         e.kingId = king.id;
         state.enemies.push(king);
         state.banner = { text: "A rainha e o rei", t: 2.0 };
+        if (G.combat && G.combat.ensureHive) G.combat.ensureHive(state);
       }
       if (type === "chefe_arklan" && !(extra && extra.noLink)) {
         state.camZoomTo = 0.68;
@@ -242,6 +249,7 @@
       state.defeat = null;
       state.camLook = null;
       state.bossShown = 1;
+      state.bossShownB = 1;
       state.camZoom = 1;
       state.camZoomTo = 1;
       var field = G.playfield(state);
@@ -296,6 +304,14 @@
       state.clearTimer = 0;
       state.stageOutro = null;
       state.bossCutscene = null;
+      state.hiveRealm = false;
+      state.hivePrisms = [];
+      state.hiveHexT = 0;
+      state.hive = null;
+      state.princessBlink = null;
+      state.hiveWake = null;
+      state.heirFlash = 0;
+      state.royalMarkT = 0;
       state.timeLock = null;
       state.vacuumLoot = false;
       state.bumperHp = 5;
@@ -362,7 +378,7 @@
         var rate = state.defeat ? 1.05 : (state.bossCutscene ? 2.4 : 1.6);
         z += (state.camZoomTo - z) * Math.min(1, dt * rate);
         state.camZoom = z;
-        if (!state.defeat && !(state.stageOutro && state.stageOutro.phase === "march")) G.clampPlay(state.squad, state);
+        if (!state.defeat && !state.bossCutscene && !(state.stageOutro && state.stageOutro.phase === "march")) G.clampPlay(state.squad, state);
       } else if (state.camZoomTo) {
         state.camZoom = state.camZoomTo;
       }
@@ -373,7 +389,7 @@
         var living = 0;
         if (!nextBoss) {
           for (var le = 0; le < state.enemies.length; le++) {
-            if (state.enemies[le].hp > 0 && !state.enemies[le].stolen && !(state.enemies[le].def && state.enemies[le].def.boss)) living++;
+            if (state.enemies[le].hp > 0 && !state.enemies[le].stolen && !state.enemies[le].scenery && !(state.enemies[le].def && state.enemies[le].def.boss)) living++;
           }
         }
         if (!nextBoss && living >= res.concurrent) {
@@ -397,7 +413,7 @@
       if (!state.spawnQueue.length && !state.waitingClear && !state.stageOutro && !state.bossCutscene && !state.glinderDeath) {
         var hostilesLeft = 0;
         for (var he = 0; he < state.enemies.length; he++) {
-          if (state.enemies[he].hp > 0 && !state.enemies[he].stolen) hostilesLeft++;
+          if (state.enemies[he].hp > 0 && !state.enemies[he].stolen && !state.enemies[he].scenery) hostilesLeft++;
         }
         if (hostilesLeft === 0) {
         state.waitingClear = true;
