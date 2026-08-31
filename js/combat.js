@@ -8654,7 +8654,7 @@
       p.hitsLeft--;
       if ((p.enemyBounce || 0) > 0 && p.team === "player") {
         var next = null;
-        var nextD = 150;
+        var nextD = p.bounceRange > 0 ? p.bounceRange : 150;
         for (var nb = 0; nb < state.enemies.length; nb++) {
           var ne = state.enemies[nb];
           if (ne.hp <= 0 || ne.id === hit.id || p.hitIds[ne.id]) continue;
@@ -8675,6 +8675,18 @@
           p.vx = (nx / nl) * nsp;
           p.vy = (ny / nl) * nsp;
           p.life = Math.max(p.life, 0.55);
+          if (p.kind === "colo_fist") {
+            p.hitIds = {};
+            p.hitIds[hit.id] = 1;
+            p.fistAng = Math.atan2(p.vy, p.vx);
+            if (p.coloRico != null) {
+              p.coloRico--;
+              if (p.coloRico <= 0) {
+                p.wallBounce = 0;
+                p.enemyBounce = 0;
+              }
+            }
+          }
           continue;
         }
       }

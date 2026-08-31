@@ -1960,7 +1960,7 @@
     if (state.vfx && worldA > 0.02) {
       for (var v = 0; v < state.vfx.length; v++) {
         var fx = state.vfx[v];
-        if (fx.slash || fx.phalanxBeam || fx.warSlash || fx.flameCone) continue;
+        if (fx.slash || fx.phalanxBeam || fx.warSlash || fx.flameCone || fx.coloBeam || fx.coloSlash || fx.coloSlam || fx.coloBash || fx.coloPunch || fx.scalpelRain) continue;
         var k = Math.max(0, fx.t / fx.max);
         ctx.save();
         ctx.globalAlpha = k;

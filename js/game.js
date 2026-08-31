@@ -314,7 +314,7 @@
       state.royalMarkT = 0;
       state.timeLock = null;
       state.vacuumLoot = false;
-      state.bumperHp = 5;
+      state.bumperHp = 7;
       state.bumperCd = 0;
       state.bumperRegenT = 0;
       state.booms = [];
