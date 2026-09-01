@@ -215,8 +215,10 @@
       opts = opts || {};
       var perm = G.save.data.perm;
       state.run = G.upgrades.defaultRun();
+      if (G.upgrades.applyHqStart) G.upgrades.applyHqStart(state.run, perm);
       state.run.invasion = (G.save.data && G.save.data.invasion) | 0;
       state.history = [];
+      if (G.upgrades.grantDoctrineManual) G.upgrades.grantDoctrineManual(state, perm);
       state.debugFight = !!opts.debug;
       state.debugOpts = state.debugFight
         ? {
@@ -265,7 +267,7 @@
       state.run.rerolls = perm.rerolls | 0;
       state.run.reserve = [];
       state.run.intel = {
-        arquivo: state.debugFight && state.debugOpts && state.debugOpts.startArchives ? 1000 : 0
+        arquivo: state.debugFight && state.debugOpts && state.debugOpts.startArchives ? 1000 : (perm.startArquivo | 0)
       };
       state.paused = false;
       state.userPaused = false;
@@ -364,6 +366,8 @@
         u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.22));
       }
       if (!state.debugFight) G.save.noteStage(state.stageIndex + 1);
+      var pocket = (G.save.data.perm.gold | 0) * 20;
+      if (pocket) state.run.coins = (state.run.coins || 0) + pocket;
       if (customBoss) {
         state.spawnQueue = [];
         queueSpawn(state, customBoss);

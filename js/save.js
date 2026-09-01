@@ -23,7 +23,13 @@
       regen: 0,
       magnet: 0,
       maxUnits: 0,
-      rerolls: 0
+      rerolls: 0,
+      choque: 0,
+      disparo: 0,
+      mobilidade: 0,
+      startArquivo: 0,
+      briefing: 0,
+      manualCampo: 0
     };
   }
 
@@ -62,19 +68,15 @@
       gold: clamp(p.gold, 5),
       regen: clamp(p.regen, 5),
       magnet: clamp(p.magnet, 5),
-      maxUnits: 0,
-      rerolls: clamp(p.rerolls, 2)
+      maxUnits: clamp(p.maxUnits, 1),
+      rerolls: clamp(p.rerolls, 2),
+      choque: clamp(p.choque, 3),
+      disparo: clamp(p.disparo, 3),
+      mobilidade: clamp(p.mobilidade, 3),
+      startArquivo: clamp(p.startArquivo, 1),
+      briefing: clamp(p.briefing, 1),
+      manualCampo: clamp(p.manualCampo, 1)
     };
-  }
-
-  function refundRetiredMaxUnits(rawPerm, vault) {
-    var lv = (rawPerm && rawPerm.maxUnits) | 0;
-    if (lv <= 0) return vault | 0;
-    var costs = [180, 320, 520, 840, 1300];
-    var back = vault | 0;
-    var i;
-    for (i = 0; i < lv && i < costs.length; i++) back += costs[i];
-    return back;
   }
 
   function normalizeSlot(raw, i) {
@@ -82,7 +84,7 @@
     if (!raw) return base;
     return {
       name: (raw.name && String(raw.name).trim()) || base.name,
-      vault: refundRetiredMaxUnits(raw.perm, raw.vault),
+      vault: raw.vault | 0,
       bestStage: raw.bestStage | 0,
       perm: normalizePerm(raw.perm),
       invasion: clamp(raw.invasion, 8),
@@ -100,7 +102,7 @@
       var parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
       if (!parsed) return null;
       var slot = emptySlot(0);
-      slot.vault = refundRetiredMaxUnits(parsed.perm, parsed.vault);
+      slot.vault = parsed.vault | 0;
       slot.bestStage = parsed.bestStage | 0;
       slot.perm = normalizePerm(parsed.perm);
       slot.codex = {
@@ -188,7 +190,8 @@
     var permSum =
       (p.extraStart | 0) + (p.dmg | 0) + (p.hp | 0) + (p.earlyTier | 0) +
       (p.fireRate | 0) + (p.speed | 0) + (p.luck | 0) + (p.gold | 0) +
-      (p.regen | 0) + (p.magnet | 0) + (p.maxUnits | 0) + (p.rerolls | 0);
+      (p.regen | 0) + (p.magnet | 0) + (p.maxUnits | 0) + (p.rerolls | 0) +
+      (p.choque | 0) + (p.disparo | 0) + (p.mobilidade | 0) + (p.startArquivo | 0) + (p.briefing | 0) + (p.manualCampo | 0);
     var units = s.codex && s.codex.units ? Object.keys(s.codex.units).length : 0;
     var enemies = s.codex && s.codex.enemies ? Object.keys(s.codex.enemies).length : 0;
     var renamed = s.name && !/^Soldado [123]$/.test(String(s.name).trim()) ? 1 : 0;

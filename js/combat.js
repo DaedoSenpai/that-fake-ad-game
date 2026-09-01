@@ -64,20 +64,30 @@
     return list;
   }
 
+  function runRank(v) {
+    if (G.upgrades && G.upgrades.rank) return G.upgrades.rank(v);
+    if (v === true) return 1;
+    return v | 0;
+  }
+
+  function boomAdd(state) {
+    return runRank(state.run && state.run.boom) * 10;
+  }
+
   function dmgMul(state) {
-    var mul = state.run.dmg * (1 + G.save.data.perm.dmg * 0.08);
+    var mul = state.run.dmg * (1 + G.save.data.perm.dmg * 0.08) * (1 + (G.save.data.perm.disparo | 0) * 0.07);
     if (state.aura && state.aura.dmg) mul *= 1 + state.aura.dmg;
     mul *= state.run.tempDmg || 1;
     mul *= 1 + (state.run.activeDmg || 0);
     if (state.tacticsAura && state.tacticsAura.dmg) mul *= 1 + state.tacticsAura.dmg;
-    if (state.run.berserk) {
+    if (runRank(state.run.berserk)) {
       var hp = 0;
       var max = 0;
       for (var i = 0; i < state.units.length; i++) {
         hp += state.units[i].hp;
         max += state.units[i].maxHp;
       }
-      if (max > 0) mul *= 1 + (1 - hp / max) * 0.7;
+      if (max > 0) mul *= 1 + (1 - hp / max) * (runRank(state.run.berserk) >= 2 ? 1.15 : 0.7);
     }
     if (state.debugFight && state.debugOpts) {
       var dmgScale = state.debugOpts.dmgMul | 0;
@@ -87,7 +97,7 @@
   }
 
   function fireMul(state) {
-    var mul = state.run.fireRate * (1 + (G.save.data.perm.fireRate | 0) * 0.08);
+    var mul = state.run.fireRate * (1 + (G.save.data.perm.fireRate | 0) * 0.08) * (1 + (G.save.data.perm.disparo | 0) * 0.08);
     mul *= 1 + ((state.aura && state.aura.fire) || 0);
     mul *= 1 + (state.run.activeFire || 0);
     if (state.tacticsAura && state.tacticsAura.fire) mul *= 1 + state.tacticsAura.fire;
@@ -188,6 +198,23 @@
     return null;
   }
 
+  function enemyInPullField(state, unit) {
+    if (!unit || unit.team !== "enemy" || !state.zones) return false;
+    var size = (unit.def && unit.def.size) || 10;
+    var zi, z, dx, dy, d;
+    for (zi = 0; zi < state.zones.length; zi++) {
+      z = state.zones[zi];
+      if (z.t <= 0) continue;
+      if (z.kind === "blackhole" && z.t > 0.78) {
+        dx = unit.x - z.x;
+        dy = unit.y - z.y;
+        d = Math.hypot(dx, dy);
+        if (d <= z.r + size) return true;
+      }
+    }
+    return false;
+  }
+
   function hurt(state, unit, amount, srcX, srcY, fromPlayer, opts) {
     if (unit.hp <= 0) return;
     if (unit.type === "fogueira" && unit.glinderCoal) {
@@ -223,6 +250,7 @@
       if (state.run.smokeT > 0) return;
       if (!trueDmg) {
         amount *= 1 - (state.run.shield || 0) - ((state.aura && state.aura.shield) || 0) - (state.run.tempShield || 0) - ((state.tacticsAura && state.tacticsAura.shield) || 0);
+        amount *= 1 - (G.save.data.perm.choque | 0) * 0.05;
         if ((state.run.coilHp || 0) > 0) {
           var soak = Math.min(amount, state.run.coilHp);
           state.run.coilHp -= soak;
@@ -280,19 +308,22 @@
       state.floaters.push(G.createFloater(unit.x, unit.y - 12, String(Math.round(amount)), unit.team === "player" ? "#ffd0d0" : "#fff"));
     }
     if (fromPlayer && unit.team === "enemy") {
-      if (state.run.freeze) unit.slowT = Math.max(unit.slowT, 0.9);
-      var doKnock = state.run.knockback;
-      if (doKnock && srcX != null && unit.type !== "arklan_spike" && !unit.scenery) {
+      if (runRank(state.run.freeze) || (state.bannerFreezeT || 0) > 0) {
+        unit.slowT = Math.max(unit.slowT, runRank(state.run.freeze) >= 2 ? 1.5 : 0.9);
+      }
+      var doKnock = runRank(state.run.knockback) || (state.bannerKnockT || 0) > 0;
+      if (doKnock && !(opts && opts.noKnockback) && !enemyInPullField(state, unit) && srcX != null && unit.type !== "arklan_spike" && !unit.scenery) {
         var dx = unit.x - srcX;
         var dy = unit.y - srcY;
         var len = Math.sqrt(dx * dx + dy * dy) || 1;
-        unit.x += (dx / len) * 10;
-        unit.y += (dy / len) * 10;
+        var push = runRank(state.run.knockback) >= 2 ? 22 : 10;
+        unit.x += (dx / len) * push;
+        unit.y += (dy / len) * push;
         G.clampPlay(unit, state);
       }
-      if (state.run.lifesteal) {
+      if (runRank(state.run.lifesteal)) {
         var ally = nearest(state.units, unit.x, unit.y);
-        if (ally) ally.hp = Math.min(ally.maxHp, ally.hp + amount * 0.12);
+        if (ally) ally.hp = Math.min(ally.maxHp, ally.hp + amount * (runRank(state.run.lifesteal) >= 2 ? 0.2 : 0.12));
       }
     }
     if (unit.hp > 0 && unit.team === "enemy" && G.invasion && G.invasion.enterP2) {
@@ -395,7 +426,7 @@
       }
       var extra = Math.random() < (G.save.data.perm.luck | 0) * 0.08 + (state.run.luck || 0) ? 1 : 0;
       var dropKind = extra ? "fuzileiro" : "recruta";
-      var nodeChance = (state.run.dropChance + ((state.aura && state.aura.drop) || 0)) * (obs ? 2.4 : 1);
+      var nodeChance = (state.run.dropChance + ((state.aura && state.aura.drop) || 0) + (G.save.data.perm.mobilidade | 0) * 0.03) * (obs ? 2.4 : 1);
       if (Math.random() < Math.min(0.85, nodeChance)) {
         state.drops.push(G.createDrop(e.x + 10, e.y, "unit", { unitKind: dropKind }));
       }
@@ -407,9 +438,18 @@
       G.game.spawnAt(state, "larva", e.x - 10, e.y, { noDrop: true });
       G.game.spawnAt(state, "larva", e.x + 10, e.y, { noDrop: true });
     }
-    if (state.run.explode && !skipLoot) {
+    if (runRank(state.run.explode) && !skipLoot) {
       G.audio.explosion();
-      explode(state, e.x, e.y, 42 + (state.run.boom || 0), Math.round((18 + (state.run.boom || 0)) * dmgMul(state)), "player");
+      var er = 42 + boomAdd(state) + (runRank(state.run.explode) >= 2 ? 22 : 0);
+      explode(state, e.x, e.y, er, Math.round((18 + boomAdd(state) + (runRank(state.run.explode) >= 2 ? 10 : 0)) * dmgMul(state)), "player");
+      if (runRank(state.run.freeze)) {
+        for (var fz = 0; fz < state.enemies.length; fz++) {
+          var fe = state.enemies[fz];
+          if (fe.hp <= 0 || fe.scenery) continue;
+          if (dist(fe, e) > er + (fe.def.size || 10)) continue;
+          fe.slowT = Math.max(fe.slowT || 0, runRank(state.run.freeze) >= 2 ? 1.5 : 0.9);
+        }
+      }
     }
     if (e.attached) {
       for (var i = 0; i < state.units.length; i++) {
@@ -517,7 +557,7 @@
     var dy = target.y - u.y;
     var len = Math.sqrt(dx * dx + dy * dy) || 1;
     var kind = u.def.projectile;
-    var dmg = Math.round(u.def.dmg * dmgMul(state));
+    var dmg = Math.round(u.def.dmg * dmgMul(state) * (G.upgrades.favorMul ? G.upgrades.favorMul(state, u) : 1));
     if (u.marked > 0) {
       dmg = Math.round(dmg * (u.marked <= 1 ? 4 : u.marked));
       u.marked = 0;
@@ -536,10 +576,12 @@
         kind: kind,
         life: kind === "missile" ? 2.2 : 1.35,
         r: r,
-        ricochet: state.run.ricochet,
-        pierce: state.run.pierce || kind === "laser",
+        ricochet: runRank(state.run.ricochet) > 0,
+        ricoLeft: runRank(state.run.ricochet),
+        pierce: runRank(state.run.pierce) > 0 || kind === "laser",
         homing: kind === "missile",
-        hitsLeft: state.run.pierce || kind === "laser" ? 4 : 1
+        hitsLeft: runRank(state.run.pierce) > 0 || kind === "laser" ? (runRank(state.run.pierce) >= 2 ? 7 : 4) : 1,
+        pierceGrow: runRank(state.run.pierce) >= 2 ? 1.15 : 0
       })
     );
   }
@@ -548,8 +590,8 @@
     opt = opt || {};
     var ang = Math.atan2(target.y - u.y, target.x - u.x);
     var cone = 0.38;
-    var range = u.def.range * (1 + (state.run.flame || 0) * 0.12);
-    var dmg = Math.round(u.def.dmg * dmgMul(state));
+    var range = u.def.range * (1 + runRank(state.run.flame) * 0.12);
+    var dmg = Math.round(u.def.dmg * dmgMul(state) * (G.upgrades.favorMul ? G.upgrades.favorMul(state, u) : 1));
     var burnMul = opt.burnMul || 1;
     for (var i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
@@ -7368,7 +7410,7 @@
   }
 
   function squadSpeedMul(state) {
-    var speedMul = state.run.speed * (1 + (G.save.data.perm.speed | 0) * 0.06) * (state.run.tempSpeed || 1);
+    var speedMul = state.run.speed * (1 + (G.save.data.perm.speed | 0) * 0.06) * (1 + (G.save.data.perm.mobilidade | 0) * 0.08) * (state.run.tempSpeed || 1);
     if (state.aura) speedMul *= 1 + state.aura.speed;
     if (state.aura && state.aura.slowSquad) speedMul *= Math.max(0.55, 1 - state.aura.slowSquad);
     if (G.tactics && G.tactics.speedMul) speedMul *= G.tactics.speedMul(state);
@@ -7556,7 +7598,7 @@
       if (state.units[i].commander) cmd = state.units[i];
       else soldiers.push(state.units[i]);
     }
-    var speedMul = state.run.speed * (1 + (G.save.data.perm.speed | 0) * 0.06) * (state.run.tempSpeed || 1);
+    var speedMul = state.run.speed * (1 + (G.save.data.perm.speed | 0) * 0.06) * (1 + (G.save.data.perm.mobilidade | 0) * 0.08) * (state.run.tempSpeed || 1);
     if (state.aura) speedMul *= 1 + state.aura.speed;
     if (state.aura && state.aura.slowSquad) speedMul *= Math.max(0.55, 1 - state.aura.slowSquad);
     var regen = (G.save.data.perm.regen | 0) * 0.004 + (state.run.regen || 0) + ((state.aura && state.aura.regen) || 0);
@@ -8640,7 +8682,11 @@
         if (p.hitsLeft <= 0) state.projectiles.splice(i, 1);
         continue;
       }
-      if (p.kind === "grenade" || p.kind === "missile" || p.kind === "crate") explode(state, p.x, p.y, p.kind === "missile" ? (p.boomR || 72) : (p.boomR || 52), p.dmg, p.team);
+      if (p.kind === "grenade" || p.kind === "missile" || p.kind === "crate") {
+        var br = p.kind === "missile" ? (p.boomR || 72) : (p.boomR || 52);
+        if (p.team === "player") br += boomAdd(state);
+        explode(state, p.x, p.y, br, p.dmg, p.team);
+      }
       else if (p.team === "enemy" && ((p.boomR || 0) > 0 || p.kind === "ember")) {
         var boomR = p.boomR || 42;
         explode(state, p.x, p.y, boomR, p.dmg, "enemy", "#ff6a18");
@@ -8652,6 +8698,7 @@
       }
       p.hitIds[hit.id] = 1;
       p.hitsLeft--;
+      if (p.pierceGrow && p.team === "player") p.dmg = Math.round(p.dmg * p.pierceGrow);
       if ((p.enemyBounce || 0) > 0 && p.team === "player") {
         var next = null;
         var nextD = p.bounceRange > 0 ? p.bounceRange : 150;
@@ -8693,7 +8740,8 @@
       if (p.ricochet && p.team === "player" && p.hitsLeft <= 0) {
         var other = nearest(state.enemies, p.x, p.y, hit.id);
         if (other) {
-          p.ricochet = false;
+          p.ricoLeft = Math.max(0, (p.ricoLeft || 1) - 1);
+          if (p.ricoLeft <= 0) p.ricochet = false;
           p.hitsLeft = 1;
           var dx2 = other.x - p.x;
           var dy2 = other.y - p.y;
@@ -8853,7 +8901,7 @@
   }
 
   function updateDrops(state, dt) {
-    var magnet = 70 + state.run.magnet + (G.save.data.perm.magnet | 0) * 18 + ((state.aura && state.aura.magnet) || 0);
+    var magnet = 70 + state.run.magnet + (G.save.data.perm.magnet | 0) * 18 + (G.save.data.perm.mobilidade | 0) * 22 + ((state.aura && state.aura.magnet) || 0);
     for (var i = state.drops.length - 1; i >= 0; i--) {
       var d = state.drops[i];
       d.t += dt;
@@ -9028,7 +9076,7 @@
         if (G.tactics && G.tactics.meltCone) {
           G.tactics.meltCone(state, { chance: 1, unit: u, range: u.def.range, ang: nang });
         }
-        var nrange = u.def.range * (1 + (state.run.flame || 0) * 0.12);
+        var nrange = u.def.range * (1 + runRank(state.run.flame) * 0.12);
         for (var np = 1; np <= 5; np++) {
           var nd = nrange * (np / 5.6);
           pushZone(state, {
@@ -9235,6 +9283,7 @@
     dist: dist,
     nearest: nearest,
     hurt: hurt,
+    enemyInPullField: enemyInPullField,
     flameAt: flameAt,
     explode: explode,
     dmgMul: dmgMul,

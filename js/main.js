@@ -367,30 +367,75 @@
   }
 
   function renderShop() {
-    var list = document.getElementById("shop-list");
+    var board = document.getElementById("hq-board");
     document.getElementById("shop-vault").textContent = "Cofre: " + G.save.data.vault;
-    list.innerHTML = "";
-    G.PERM.forEach(function (item) {
-      var lv = G.save.data.perm[item.id] | 0;
-      var maxed = lv >= item.max;
-      var cost = maxed ? 0 : item.cost(lv);
-      var btn = document.createElement("button");
-      btn.className = "btn shop-item";
-      btn.disabled = maxed || G.save.data.vault < cost;
-      btn.innerHTML =
-        "<strong>" + item.title + "</strong> · " + lv + "/" + item.max +
-        "<span class=\"price\">" + (maxed ? "MAX" : cost) + "</span><br>" +
-        "<span style=\"font-weight:600;color:#b8c0d4\">" + (maxed ? "Nível máximo." : item.desc(lv)) + "</span>";
-      btn.onclick = function () {
-        G.audio.ui();
-        if (G.upgrades.buy(item)) renderShop();
-      };
-      list.appendChild(btn);
+    board.innerHTML = "";
+    var funded = G.upgrades.fundedSchool ? G.upgrades.fundedSchool() : "";
+    var schoolName = { choque: "Choque", disparo: "Disparo", mobilidade: "Mobilidade" };
+    (G.PERM_WINGS || []).forEach(function (wing) {
+      var col = document.createElement("div");
+      col.className = "hq-wing wing-" + wing.id + (wing.id === "doutrina" && funded ? " has-funded" : "");
+      var head = document.createElement("header");
+      head.className = "hq-wing-head";
+      var fundedLine = "";
+      if (wing.id === "doutrina" && funded) {
+        fundedLine = "<p class=\"hq-funded\">Seu estilo: " + (schoolName[funded] || funded) + "</p>";
+      }
+      head.innerHTML =
+        "<span class=\"hq-tab\">" + wing.kicker + "</span>" +
+        "<span class=\"hq-stamp\">" + wing.stamp + "</span>" +
+        "<h3>" + wing.title + "</h3>" +
+        "<p class=\"hq-blurb\">" + wing.blurb + "</p>" +
+        fundedLine;
+      col.appendChild(head);
+      var list = document.createElement("div");
+      list.className = "hq-nodes";
+      wing.items.forEach(function (item) {
+        var lv = G.save.data.perm[item.id] | 0;
+        var maxed = lv >= item.max;
+        var cost = maxed ? 0 : item.cost(lv);
+        var tax = !!(item.school && G.upgrades.schoolTax && G.upgrades.schoolTax(item.id) > 1);
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = [
+          "hq-node",
+          item.capstone ? "capstone" : "",
+          item.school ? "school school-" + item.id : "",
+          item.school && funded === item.id ? "funded" : "",
+          tax ? "taxed" : "",
+          lv > 0 ? "owned" : "",
+          maxed ? "maxed" : ""
+        ].filter(Boolean).join(" ");
+        btn.disabled = maxed || G.save.data.vault < cost;
+        var pips = "";
+        var p;
+        for (p = 0; p < item.max; p++) pips += "<i class=\"" + (p < lv ? "on" : "") + "\"></i>";
+        var badges = "";
+        if (item.capstone) badges += "<span class=\"hq-ink\">MÁXIMO</span>";
+        if (item.school && funded === item.id) badges += "<span class=\"hq-ribbon\">A SUA</span>";
+        else if (tax) badges += "<span class=\"hq-tax\">+60%</span>";
+        btn.innerHTML =
+          badges +
+          "<span class=\"hq-rank\">" + lv + "/" + item.max + "</span>" +
+          "<span class=\"hq-node-top\">" +
+            "<strong>" + item.title + "</strong>" +
+            "<span class=\"price\">" + (maxed ? "MÁX" : cost) + "</span>" +
+          "</span>" +
+          "<span class=\"hq-pips\" aria-hidden=\"true\">" + pips + "</span>" +
+          "<span class=\"hq-node-desc\">" + (maxed ? "Nível máximo." : item.desc(lv)) + "</span>";
+        btn.onclick = function () {
+          G.audio.ui();
+          if (G.upgrades.buy(item)) renderShop();
+        };
+        list.appendChild(btn);
+      });
+      col.appendChild(list);
+      board.appendChild(col);
     });
     var refundBtn = document.getElementById("btn-refund");
     var spent = G.upgrades.spentPerm();
     refundBtn.disabled = spent <= 0;
-    refundBtn.textContent = spent ? "Reembolsar build (+" + spent + ")" : "Reembolsar build";
+    refundBtn.textContent = spent ? "Reembolsar QG (+" + spent + ")" : "Reembolsar QG";
   }
 
   function stickerFor(id) {
@@ -399,7 +444,7 @@
       explode: "💣", ricochet: "↗", dual: "🎯", pierce: "⚡", freeze: "❄",
       lifesteal: "🧛", shield: "💠", luck: "🍀", gold: "💰", knockback: "👊",
       minesPlus: "⚠", flame: "🔥", berserk: "☠", regen: "🍞", boom: "✴",
-      clone: "👥", ficha: "🎫"
+      clone: "👥", ficha: "🎫", fieldMed: "✚", impact: "🦾", optics: "👁", raid: "🗡"
     };
     return map[id] || "★";
   }
@@ -408,10 +453,22 @@
     var row = document.getElementById("card-row");
     row.innerHTML = "";
     state.hoverCard = null;
+    var run = state.run || {};
     state.offer.forEach(function (card) {
       var btn = document.createElement("button");
-      btn.className = "card";
-      btn.innerHTML = "<span class=\"sticker\">" + stickerFor(card.id) + "</span><h3>" + card.title + "</h3><p>" + card.desc + "</p>";
+      var rarity = G.upgrades.rarityOf(card);
+      btn.className = "card rarity-" + rarity;
+      var title = G.upgrades.titleOf(card, run);
+      var desc = G.upgrades.descOf(card, run);
+      var combo = G.upgrades.comboOf(card, run);
+      var rank = card.ranks ? G.upgrades.rank(run[card.id]) + 1 : 0;
+      var rankHtml = card.ranks && rank > 1 ? "<span class=\"card-rank\">II</span>" : "";
+      btn.innerHTML =
+        "<span class=\"card-stamp\">" + G.upgrades.stamp(card) + "</span>" +
+        rankHtml +
+        "<span class=\"sticker\">" + stickerFor(card.id) + "</span>" +
+        "<h3>" + title + "</h3><p>" + desc + "</p>" +
+        (combo ? "<p class=\"card-combo\">" + combo + "</p>" : "");
       btn.onmouseenter = function () { state.hoverCard = card; };
       btn.onmouseleave = function () { state.hoverCard = null; };
       btn.onclick = function () {
@@ -1626,7 +1683,41 @@
       })(s);
       bar.appendChild(slot);
     }
+    syncDossier(state);
     syncBuffTray(state);
+  }
+
+  function syncDossier(state) {
+    var tray = document.getElementById("dossier");
+    if (!tray) return;
+    var list = (state.run && state.run.dossier) || [];
+    tray.classList.toggle("hidden", !list.length);
+    if (!list.length) {
+      tray.innerHTML = "";
+      tray.dataset.sig = "";
+      return;
+    }
+    var sig = list.map(function (d) { return d.id + ":" + (d.rank || 1); }).join(",");
+    if (tray.dataset.sig === sig) return;
+    tray.dataset.sig = sig;
+    var html = "<div class=\"buff-kicker\">Dossiê</div>";
+    for (var i = 0; i < list.length; i++) {
+      var entry = list[i];
+      var card = G.upgrades.cardById(entry.id);
+      if (!card) continue;
+      var rarity = G.upgrades.rarityOf(card);
+      var title = G.upgrades.titleOf(card, state.run);
+      var desc = G.upgrades.descOf(card, state.run);
+      var combo = G.upgrades.comboOf(card, state.run);
+      var rankMark = card.ranks && (entry.rank | 0) >= 2 ? " II" : "";
+      html +=
+        "<div class=\"dossier-icon rarity-" + rarity + "\" tabindex=\"0\">" +
+        "<span>" + stickerFor(entry.id) + "</span>" +
+        (rankMark ? "<em>II</em>" : "") +
+        "<div class=\"buff-tip\"><b>" + title + "</b><p class=\"buff-desc\">" + desc + (combo ? " " + combo : "") + "</p></div>" +
+        "</div>";
+    }
+    tray.innerHTML = html;
   }
 
   function syncBuffTray(state) {

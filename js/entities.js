@@ -439,7 +439,9 @@
   })();
 
   G.maxUnits = function () {
-    return G.MAX_UNITS;
+    var extra = 0;
+    if (G.save && G.save.data && G.save.data.perm) extra = G.save.data.perm.maxUnits | 0;
+    return G.MAX_UNITS + (extra > 0 ? 1 : 0);
   };
 
   G.soldierCount = function (state) {
@@ -729,7 +731,7 @@
   G.createPlayerUnit = function (x, y, kind, run, perm) {
     kind = G.unitKind(kind);
     var def = G.UNIT_DEFS[kind] || G.UNIT_DEFS.recruta;
-    var hpMul = (run && run.hp ? run.hp : 1) * (1 + (perm ? perm.hp : 0) * 0.1);
+    var hpMul = (run && run.hp ? run.hp : 1) * (1 + (perm ? perm.hp : 0) * 0.1) * (1 + (perm ? perm.choque : 0) * 0.06);
     var hp = Math.round(def.hp * hpMul);
     return {
       id: uid(),
@@ -871,7 +873,9 @@
       life: opt.life || 1.2,
       r: opt.r || 3,
       ricochet: !!opt.ricochet,
+      ricoLeft: opt.ricoLeft || 0,
       pierce: !!opt.pierce,
+      pierceGrow: opt.pierceGrow || 0,
       homing: !!opt.homing,
       homeId: opt.homeId || 0,
       homeCursor: !!opt.homeCursor,
@@ -1442,7 +1446,7 @@
       var corePulse = glow ? 0.55 + Math.sin(timeN * 14 + idOff) * 0.35 : 0.22 + Math.sin(timeN * 4 + idOff) * 0.08;
       var squat = slamHit ? 0.84 : 1 + Math.sin(gait) * (moving ? 0.02 : 0);
       if (u.coloSquash) squat = Math.min(squat, 1 - u.coloSquash);
-      var lean = slamUp * -0.2 + bashFwd * 0.14 + punchExt * 0.1 + (glow ? (u.coloSlashK || 0) * 0.16 : 0);
+      var lean = slamUp * -0.2 + bashFwd * 0.22 + punchExt * 0.1 + (glow ? (u.coloSlashK || 0) * 0.16 : 0);
       ctx.save();
       ctx.scale(1, squat);
       ctx.rotate(lean);
@@ -1496,10 +1500,10 @@
       ctx.fill();
       ctx.restore();
       ctx.save();
-      var shx = -s * 0.95 - bashFwd * s * 0.55;
-      var shy = -s * 0.08 + slamUp * -s * 0.55 + slamHit * s * 0.35;
+      var shx = -s * 0.95 + bashFwd * s * 1.62;
+      var shy = -s * 0.08 + slamUp * -s * 0.55 + slamHit * s * 0.35 + bashFwd * s * 0.02;
       ctx.translate(shx, shy);
-      ctx.rotate(-0.2 - bashFwd * 0.72 + slamUp * -0.7 + slamHit * 0.85);
+      ctx.rotate(-0.2 + bashFwd * 0.48 + slamUp * -0.7 + slamHit * 0.85);
       fillRound(ctx, -s * 0.18, -s * 0.72, s * 0.42, s * 1.48, 5, "#1c2838");
       fillRound(ctx, -s * 0.1, -s * 0.62, s * 0.3, s * 1.28, 4, "#4a6a88");
       ctx.strokeStyle = acc;
@@ -1510,25 +1514,37 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
       gleam(ctx, -s * 0.02, -s * 0.4, s * 0.12, s * 0.2, 0.22);
-      if (bashFwd > 0.15) {
+      if (bashFwd > 0.12) {
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
-        ctx.globalAlpha = 0.35 + bashFwd * 0.55;
-        ctx.fillStyle = "rgba(40, 120, 255, 0.45)";
+        var plate = s * (0.5 + bashFwd * 1.45);
+        var hw = s * (0.4 + bashFwd * 0.58);
+        ctx.globalAlpha = 0.3 + bashFwd * 0.55;
+        ctx.fillStyle = "rgba(40, 120, 255, 0.5)";
         ctx.beginPath();
-        var hr = s * (0.55 + bashFwd * 0.55);
+        ctx.moveTo(s * 0.1, -hw * 0.7);
+        ctx.lineTo(plate * 0.55, -hw);
+        ctx.quadraticCurveTo(plate * 0.95, -hw * 0.5, plate, 0);
+        ctx.quadraticCurveTo(plate * 0.95, hw * 0.5, plate * 0.55, hw);
+        ctx.lineTo(s * 0.1, hw * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(180, 230, 255, " + (0.45 + bashFwd * 0.55) + ")";
+        ctx.lineWidth = 2.6;
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(232, 246, 255, " + (0.4 + bashFwd * 0.5) + ")";
+        ctx.lineWidth = 1.5;
+        var hr = s * (0.16 + bashFwd * 0.12);
         var hi;
+        ctx.beginPath();
         for (hi = 0; hi < 6; hi++) {
           var ha = -Math.PI / 2 + hi * Math.PI / 3;
-          var hx = Math.cos(ha) * hr + s * 0.18;
+          var hx = plate * 0.52 + Math.cos(ha) * hr;
           var hy = Math.sin(ha) * hr;
           if (hi === 0) ctx.moveTo(hx, hy);
           else ctx.lineTo(hx, hy);
         }
         ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "rgba(180, 230, 255, " + (0.5 + bashFwd * 0.5) + ")";
-        ctx.lineWidth = 2.4;
         ctx.stroke();
         ctx.restore();
       }

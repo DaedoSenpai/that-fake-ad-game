@@ -53,6 +53,7 @@
           </div>
         </div>
         <div id="active-bar"></div>
+        <div id="dossier" class="hidden" aria-label="Dossiê da run"></div>
         <div id="buff-tray" class="hidden" aria-label="Buffs ativos"></div>
       </div>
 
@@ -67,7 +68,7 @@
             <div id="invasion-picks" class="invasion-picks"></div>
           </div>
           <button id="btn-play" class="btn primary" type="button">Jogar</button>
-          <button id="btn-shop" class="btn" type="button">Upgrades permanentes</button>
+          <button id="btn-shop" class="btn" type="button">QG</button>
           <button id="btn-codex" class="btn" type="button">Compêndio</button>
           <button id="btn-how" class="btn" type="button">Como jogar</button>
           <button id="btn-update" class="btn" type="button">Verificar atualizações</button>
@@ -90,25 +91,28 @@
             <li>A <strong>passiva</strong> já vem ligada: é o jeito da unidade atirar ou o efeito que ela faz sozinha. A <strong>ativa</strong> fica na barra. <strong>1 a 9</strong> escolhe a skill, <strong>direito</strong> habilidades são usadas na mira.</li>
             <li>O <strong>comandante</strong> não ocupa vaga. O laser marca quem você aponta. O esquadrão pega o reforço caído e vira arquivo. <strong>R</strong> abre o quadro da formação e os arquivos: arrasta dois iguais no quadro pra merge, 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. O Colosso custa <strong>100 arquivos</strong>. Com a ativa dele, segura o <strong>direito</strong>: menu radial — cima aura de cura em volta do comandante (2% da vida máxima por segundo, 5s), direita airstrike, esquerda recruta perto do comandante. Solta na fatia; volta ao centro pra cancelar.</li>
             <li>Duas unidades iguais se juntam no quadro do <strong>R</strong>: arrasta uma em cima da outra pra confirmar o merge. Vale no máximo <strong>2 de cada tipo</strong> (fuzileiro, batedor, anti-matéria etc.). <strong>Míssil, Inferno e Colosso</strong> são únicos — só 1. Recruta não tem esse teto.</li>
-            <li>Cabe <strong>5</strong> soldados. O comandante não ocupa vaga.</li>
+            <li>Cabe <strong>5</strong> soldados (o QG pode abrir uma 6ª vaga). O comandante não ocupa vaga.</li>
+            <li>No fim da fase caem 3 <strong>arquivos</strong>: doutrina comum, confidencial e (se o esquadrão pedir) máximo. Pegar de novo a mesma confidencial vira posto II. O dossiê da run fica na esquerda.</li>
             <li><strong>Esc</strong> pausa. Na pausa, passa o mouse em alguém pra ler o que ele faz.</li>
             <li>O <strong>compêndio</strong> anota unidades aliadas quando você faz merge e inimigo no primeiro abate.</li>
             <li>São 3 perfis de save. O progresso é o mesmo no Jogar.bat e no index.html. Se o esquadrão cair durante uma run, as moedas adquiridas na run vão para o cofre.</li>
+            <li>No <strong>QG</strong> (menu) você compra bônus permanentes: começa a campanha mais forte, escolhe um estilo de luta e ganha mais moeda / cartas melhores no fim da fase.</li>
           </ul>
           <button id="btn-how-back" class="btn primary" type="button">Voltar</button>
         </section>
 
-        <section id="screen-shop" class="screen hidden">
-          <h2>Upgrades permanentes</h2>
+        <section id="screen-shop" class="screen wide hq-screen hidden">
+          <p class="kicker">Quartel-general · permanente</p>
+          <h2>QG</h2>
           <p class="tagline" id="shop-vault">Cofre: 0</p>
-          <div id="shop-list" class="shop-list"></div>
-          <button id="btn-refund" class="btn" type="button">Reembolsar build</button>
+          <div id="hq-board" class="hq-board"></div>
+          <button id="btn-refund" class="btn" type="button">Reembolsar QG</button>
           <button id="btn-shop-back" class="btn" type="button">Voltar</button>
         </section>
 
         <section id="screen-cards" class="screen hidden">
-          <h2>Fase concluída</h2>
-          <p class="tagline">Escolhe 1 upgrade pra próxima fase.</p>
+          <h2>Arquivo interceptado</h2>
+          <p class="tagline">Escolhe 1 doutrina pra próxima fase.</p>
           <div id="card-row" class="card-row"></div>
           <div class="card-tools">
             <button id="btn-reroll" class="btn" type="button">Trocar cartas</button>

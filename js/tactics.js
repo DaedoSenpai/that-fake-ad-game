@@ -48,6 +48,7 @@
 
   function knockEnemy(state, e, srcX, srcY, push) {
     if (!e || e.hp <= 0 || e.scenery) return;
+    if (C().enemyInPullField && C().enemyInPullField(state, e)) return;
     var dx = e.x - srcX;
     var dy = e.y - srcY;
     var len = hypot(dx, dy) || 1;
@@ -56,12 +57,50 @@
     G.clampPlay(e, state);
   }
 
+  function knockAlong(state, e, ang, push) {
+    if (!e || e.hp <= 0 || e.scenery) return;
+    e.x += Math.cos(ang) * (push || 16);
+    e.y += Math.sin(ang) * (push || 16);
+    G.clampPlay(e, state);
+  }
+
+  function coloWallHit(px, py, ox, oy, ang, depth, halfW) {
+    var dx = px - ox;
+    var dy = py - oy;
+    var along = dx * Math.cos(ang) + dy * Math.sin(ang);
+    var side = -dx * Math.sin(ang) + dy * Math.cos(ang);
+    return along > -12 && along < depth && Math.abs(side) < halfW;
+  }
+
+  function coloEatWall(state, ox, oy, ang, depth, halfW) {
+    var n = 0;
+    for (var i = state.projectiles.length - 1; i >= 0; i--) {
+      var p = state.projectiles[i];
+      if (p.team !== "enemy") continue;
+      if (!coloWallHit(p.x, p.y, ox, oy, ang, depth, halfW)) continue;
+      G.burst(state, p.x, p.y, "#7ad4ff", 5, 36);
+      state.projectiles.splice(i, 1);
+      n++;
+    }
+    return n;
+  }
+
   function angTo(from, to) {
     return Math.atan2(to.y - from.y, to.x - from.x);
   }
 
   function hypot(x, y) {
     return Math.sqrt(x * x + y * y);
+  }
+
+  function runRank(v) {
+    if (G.upgrades && G.upgrades.rank) return G.upgrades.rank(v);
+    if (v === true) return 1;
+    return v | 0;
+  }
+
+  function favorMul(state, u) {
+    return G.upgrades && G.upgrades.favorMul ? G.upgrades.favorMul(state, u) : 1;
   }
 
   function clampAim(from, to, range) {
@@ -379,7 +418,7 @@
 
   function bolt(state, u, ang, extra) {
     extra = extra || {};
-    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * (extra.dmgMul || 1) * speedDmgMul(state, u.kind));
+    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * (extra.dmgMul || 1) * speedDmgMul(state, u.kind) * favorMul(state, u));
     if (u.marked > 0) {
       dmg = Math.round(dmg * (u.marked <= 1 ? 4 : u.marked));
       u.marked = 0;
@@ -429,10 +468,14 @@
     p.spreadExplode = extra.spreadExplode;
     p.homeId = extra.homeId || 0;
     p.homeCursor = !!extra.homeCursor;
-    if (state.run && state.run.ricochet) p.ricochet = true;
-    if (state.run && state.run.pierce && !p.pierce) {
+    if (state.run && runRank(state.run.ricochet)) {
+      p.ricochet = true;
+      p.ricoLeft = runRank(state.run.ricochet);
+    }
+    if (state.run && runRank(state.run.pierce) && !p.pierce) {
       p.pierce = true;
-      p.hitsLeft = Math.max(p.hitsLeft || 1, 4);
+      p.hitsLeft = Math.max(p.hitsLeft || 1, runRank(state.run.pierce) >= 2 ? 7 : 4);
+      if (runRank(state.run.pierce) >= 2) p.pierceGrow = 1.15;
     }
     if (extra.homing !== false && !p.homeCursor && !p.homeId) {
       var spotHome = holofoteTarget(state);
@@ -1271,6 +1314,7 @@
   function holdingLeap(u) {
     if (u && u.leap && (u.leap.slash || u.leap.hold)) return true;
     if (u && u.coloAct && u.coloAct.style === "slam") return true;
+    if (u && u.coloAct && u.coloAct.style === "bash" && u.coloAct.phase !== "wind") return true;
     if (u && u.warCombo && (u.warCombo.phase | 0) >= 2) return true;
     return false;
   }
@@ -1287,6 +1331,7 @@
     if ((state.spearRamT || 0) > 0) return true;
     if (unit.leap && !unit.leap.noIframe) return true;
     if (unit.coloAct && unit.coloAct.style === "slam") return true;
+    if (unit.coloAct && unit.coloAct.style === "bash" && unit.coloAct.phase !== "wind") return true;
     if (unit.warCombo) return true;
     if (unit.kind === "assassino" && (state.assassinHunt && state.assassinHunt.id === unit.id)) return true;
     return false;
@@ -1501,14 +1546,15 @@
   }
 
   function coloStrike(state, u, style, ang) {
-    var dmg = Math.round(u.def.dmg * C().dmgMul(state));
+    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * favorMul(state, u));
     var x = u.x;
     var y = u.y;
     var i;
     var e;
+    var impact = runRank(state.run && state.run.impact);
     state.vfx = state.vfx || [];
     if (style === "slam") {
-      var slamR = u.def.aoe || 250;
+      var slamR = Math.round((u.def.aoe || 250) * (1 + 0.12 * impact));
       for (i = 0; i < state.enemies.length; i++) {
         e = state.enemies[i];
         if (e.hp <= 0 || e.scenery) continue;
@@ -1524,19 +1570,39 @@
       if (G.audio && G.audio.explosion) G.audio.explosion();
       else if (G.audio && G.audio.thud) G.audio.thud();
     } else if (style === "bash") {
-      var bashR = 150;
-      var bx = x + Math.cos(ang) * 62;
-      var by = y + Math.sin(ang) * 62;
+      var bashDepth = 176;
+      var bashHalf = 118;
       for (i = 0; i < state.enemies.length; i++) {
         e = state.enemies[i];
         if (e.hp <= 0 || e.scenery) continue;
-        if (hypot(e.x - bx, e.y - by) > bashR + (e.def.size || 10)) continue;
-        C().hurt(state, e, Math.round(dmg * 1.15), x, y, true);
-        knockEnemy(state, e, x, y, 72);
+        if (!coloWallHit(e.x, e.y, x, y, ang, bashDepth + (e.def.size || 10), bashHalf + (e.def.size || 10) * 0.4)) continue;
+        C().hurt(state, e, Math.round(dmg * 1.25), x, y, true);
+        knockAlong(state, e, ang, 156 + impact * 36);
       }
-      state.vfx.push({ coloBash: true, x: bx, y: by, ox: x, oy: y, r: bashR, t: 0.78, max: 0.78, ang: ang, seed: (u.id || 1) });
-      G.burst(state, bx, by, "#3a8aff", 18, 140);
-      G.burst(state, bx, by, "#9ad4ff", 12, 90);
+      coloEatWall(state, x, y, ang, bashDepth, bashHalf);
+      state.vfx.push({
+        coloBash: true,
+        x: x,
+        y: y,
+        depth: bashDepth,
+        halfW: bashHalf,
+        t: 0.48,
+        max: 0.48,
+        ang: ang,
+        seed: (u.id || 1)
+      });
+      zone(state, {
+        kind: "colo_wall",
+        x: x,
+        y: y,
+        ang: ang,
+        depth: bashDepth,
+        halfW: bashHalf,
+        t: 0.82,
+        max: 0.82
+      });
+      G.burst(state, x + Math.cos(ang) * 78, y + Math.sin(ang) * 78, "#3a8aff", 18, 140);
+      G.burst(state, x + Math.cos(ang) * 110, y + Math.sin(ang) * 110, "#9ad4ff", 12, 90);
       if (G.audio && G.audio.thud) G.audio.thud();
       else if (G.audio && G.audio.hit) G.audio.hit();
     } else {
@@ -1667,16 +1733,37 @@
           }
         } else if (A.style === "bash") {
           if (A.phase === "wind") {
+            A.ang = coloAimAng(state, u);
+            u.rot = A.ang;
             u.coloBashK = k;
             if (A.t >= A.dur) {
+              A.phase = "dash";
+              A.t = 0;
+              A.dur = 0.12;
+              A.x0 = u.x;
+              A.y0 = u.y;
+              var land = { x: u.x + Math.cos(A.ang) * 54, y: u.y + Math.sin(A.ang) * 54 };
+              clampField(state, land);
+              A.tx = land.x;
+              A.ty = land.y;
+              u.coloBashK = 1;
+            }
+          } else if (A.phase === "dash") {
+            u.x = A.x0 + (A.tx - A.x0) * k;
+            u.y = A.y0 + (A.ty - A.y0) * k;
+            u.coloBashK = 1;
+            if (A.t >= A.dur) {
+              u.x = A.tx;
+              u.y = A.ty;
               coloStrike(state, u, "bash", A.ang);
               A.phase = "hold";
               A.t = 0;
               A.dur = 0.28;
-              u.coloBashK = 1;
             }
           } else {
-            u.coloBashK = 1 - k;
+            u.x = A.tx;
+            u.y = A.ty;
+            u.coloBashK = 1 - k * 0.4;
             if (A.t >= A.dur) {
               u.coloAct = null;
               u.coloBashK = 0;
@@ -1740,7 +1827,7 @@
           ty: land.y
         };
       } else if (style === "bash") {
-        u.coloAct = { style: "bash", phase: "wind", t: 0, dur: 0.14, ang: ang };
+        u.coloAct = { style: "bash", phase: "wind", t: 0, dur: 0.16, ang: ang };
       } else {
         u.coloAct = { style: "punch", phase: "wind", t: 0, dur: 0.16, ang: ang };
       }
@@ -1942,7 +2029,7 @@
         e.x += nx * Math.min(36, dist * 0.22);
         e.y += ny * Math.min(36, dist * 0.22);
       }
-      C().hurt(state, e, dmg, x, y, true);
+      C().hurt(state, e, dmg, x, y, true, pull ? { noKnockback: true } : null);
     }
     state.vfx = state.vfx || [];
     if (opt.sweep) {
@@ -2196,10 +2283,10 @@
     { id: "couraca", name: "Couraça", icon: "🛡", col: "#9ad4ff", desc: "35% de redução de dano por 6s.", apply: function (s) { s.run.tempShield = 0.35; s.run.tempT = Math.max(s.run.tempT || 0, 6); } },
     { id: "vital", name: "Vital", icon: "✚", col: "#7cffb0", desc: "Cura 12% da vida máxima do esquadrão.", apply: function (s) { healSquad(s, 0); for (var i = 0; i < s.units.length; i++) { var u = s.units[i]; if (u.hp > 0) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.12); } } },
     { id: "ima", name: "Ímã", icon: "◎", col: "#e8d080", desc: "Puxa loot de mais longe por 6s.", apply: function (s) { s.run.magnet = (s.run.magnet || 0) + 80; s.bannerMagnetT = 6; } },
-    { id: "gelo", name: "Gelo", icon: "❄", col: "#7ad8ff", desc: "Os tiros congelam inimigos por 6s.", apply: function (s) { s.run.freeze = true; s.bannerFreezeT = 6; } },
+    { id: "gelo", name: "Gelo", icon: "❄", col: "#7ad8ff", desc: "Os tiros congelam inimigos por 6s.", apply: function (s) { s.bannerFreezeT = 6; } },
     { id: "chamas", name: "Chamas", icon: "🔥", col: "#ff7a2a", desc: "O esquadrão deixa fogo no chão por 5s.", apply: function (s) { s.bannerFireT = 5; } },
     { id: "fortuna", name: "Fortuna", icon: "$", col: "#ffd24a", desc: "+50% de ouro coletado por 8s.", apply: function (s) { s.run.gold = (s.run.gold || 0) + 0.5; s.bannerGoldT = 8; } },
-    { id: "impacto", name: "Impacto", icon: "💥", col: "#ff8a4a", desc: "Os tiros empurram inimigos por 6s.", apply: function (s) { s.run.knockback = true; s.bannerKnockT = 6; } }
+    { id: "impacto", name: "Impacto", icon: "💥", col: "#ff8a4a", desc: "Os tiros empurram inimigos por 6s.", apply: function (s) { s.bannerKnockT = 6; } }
   ];
 
   function grantBannerBuff(state, u) {
@@ -4185,10 +4272,10 @@
       if (state[key] <= 0 && onEnd) onEnd();
     }
     decay("bannerMagnetT", function () { state.run.magnet = Math.max(0, (state.run.magnet || 0) - 80); });
-    decay("bannerFreezeT", function () { if (!state.run._permFreeze) state.run.freeze = false; });
+    decay("bannerFreezeT");
     decay("bannerFireT");
     decay("bannerGoldT", function () { state.run.gold = Math.max(0, (state.run.gold || 0) - 0.5); });
-    decay("bannerKnockT", function () { if (!state.run._permKnock) state.run.knockback = false; });
+    decay("bannerKnockT");
     decay("coloOverT", function () {
       endColoBlade(state, "lâmina off");
     });
@@ -4199,8 +4286,9 @@
   }
 
   function bumperCap(state) {
-    if (hasAny(state, ["minitanque", "tanque", "quartel", "oficina", "colosso"])) return BUMPER_MERGE_MAX;
-    return BUMPER_MAX;
+    var extra = runRank(state.run && state.run.impact);
+    if (hasAny(state, ["minitanque", "tanque", "quartel", "oficina", "colosso"])) return BUMPER_MERGE_MAX + extra;
+    return BUMPER_MAX + extra;
   }
 
   function bumperGeom(state) {
@@ -4469,6 +4557,9 @@
       }
       if (z.kind === "forcewall") {
         eatForceWall(state, z);
+      }
+      if (z.kind === "colo_wall") {
+        coloEatWall(state, z.x, z.y, z.ang || 0, z.depth || 176, z.halfW || 118);
       }
       if (z.kind === "phalanx") {
         tickPhalanxRing(state, z, dt);
@@ -4811,7 +4902,8 @@
         bolt(state, u, ang, {});
       }
       if (u.doubleShotT > 0) bolt(state, u, ang + 0.08, {});
-      if (state.run && state.run.dual) bolt(state, u, ang + 0.12, { dmgMul: 0.8 });
+      if (state.run && runRank(state.run.dual)) bolt(state, u, ang + 0.12, { dmgMul: 0.8 });
+      if (state.run && runRank(state.run.dual) >= 2) bolt(state, u, ang - 0.12, { dmgMul: 0.8 });
       sfx = true;
     }
 
@@ -4863,7 +4955,7 @@
     if (p.ownerKind === "pistoleiro" && hit.team === "enemy" && Math.random() < 0.28) {
       state.drops.push(G.createDrop(hit.x, hit.y, "hp", { value: 14 }));
     }
-    if (p.ownerKind === "medico" && hit.team === "enemy" && (hit.slowT || 0) > 0.05 && Math.random() < 0.28) {
+    if (p.ownerKind === "medico" && hit.team === "enemy" && (hit.slowT || 0) > 0.05 && Math.random() < 0.28 + 0.16 * runRank(state.run && state.run.fieldMed)) {
       state.drops.push(G.createDrop(hit.x, hit.y, "hp", { value: 14 }));
     }
     if (p.pairId && hit.team === "enemy") {
@@ -5206,8 +5298,8 @@
       var p = aim(state);
       var host = C().nearest(state.enemies, p.x, p.y);
       if (host) {
-        host.obsMarkT = 8;
-        zone(state, { kind: "obsmark", x: host.x, y: host.y, r: 36, t: 8, max: 8, followId: host.id });
+        host.obsMarkT = 8 + 5 * runRank(state.run && state.run.optics);
+        zone(state, { kind: "obsmark", x: host.x, y: host.y, r: 36, t: 8 + 5 * runRank(state.run && state.run.optics), max: 8 + 5 * runRank(state.run && state.run.optics), followId: host.id });
         state.floaters.push(G.createFloater(host.x, host.y - 18, "marcado", "#80e0ff"));
       } else {
         u.activeCd = 0;
@@ -5221,7 +5313,7 @@
     }
     if (id === "bless") {
       var a = aim(state);
-      zone(state, { kind: "anchor", x: a.x, y: a.y, r: 176, t: 9, shield: 0.35 });
+      zone(state, { kind: "anchor", x: a.x, y: a.y, r: Math.round(176 * (1 + 0.2 * runRank(state.run && state.run.fieldMed))), t: 9, shield: 0.35 + 0.1 * runRank(state.run && state.run.fieldMed) });
       return true;
     }
     if (id === "order") {
@@ -5244,6 +5336,9 @@
       state.drops.push(G.createDrop(sx, sy - 10, "hp", { value: 16 }));
       state.drops.push(G.createDrop(sx - 16, sy + 8, "hp", { value: 16 }));
       state.drops.push(G.createDrop(sx + 16, sy + 8, "hp", { value: 16 }));
+      if (runRank(state.run && state.run.fieldMed) >= 2) {
+        state.drops.push(G.createDrop(sx, sy + 16, "hp", { value: 16 }));
+      }
       for (var ki = 0; ki < state.enemies.length; ki++) {
         var ke = state.enemies[ki];
         if (ke.hp <= 0) continue;
@@ -6164,74 +6259,107 @@
     ctx.closePath();
   }
 
+  function coloHeaterPath(ctx, depth, halfW) {
+    ctx.beginPath();
+    ctx.moveTo(14, -halfW * 0.68);
+    ctx.lineTo(depth * 0.52, -halfW);
+    ctx.quadraticCurveTo(depth * 0.92, -halfW * 0.52, depth, 0);
+    ctx.quadraticCurveTo(depth * 0.92, halfW * 0.52, depth * 0.52, halfW);
+    ctx.lineTo(14, halfW * 0.68);
+    ctx.closePath();
+  }
+
   function drawColoBash(ctx, fx) {
-    var progress = 1 - Math.max(0, fx.t) / (fx.max || 0.78);
-    var grow = 1 - Math.pow(1 - Math.min(1, progress * 1.35), 2.2);
-    var fade = progress < 0.42 ? 1 : Math.max(0, 1 - (progress - 0.42) / 0.58);
-    var r = (fx.r || 150) * (0.42 + grow * 0.62);
+    var progress = 1 - Math.max(0, fx.t) / (fx.max || 0.48);
+    var slam = 1 - Math.pow(1 - Math.min(1, progress * 1.55), 2.4);
+    var fade = progress < 0.36 ? 1 : Math.max(0, 1 - (progress - 0.36) / 0.64);
+    var depth = (fx.depth || 176) * (0.4 + slam * 0.6);
+    var halfW = (fx.halfW || 118) * (0.52 + slam * 0.48);
     var ang = fx.ang || 0;
+    var i;
     ctx.save();
     ctx.translate(fx.x, fx.y);
     ctx.rotate(ang);
-    ctx.globalAlpha = fade * 0.28;
-    ctx.fillStyle = "#1a4aad";
-    coloHexPath(ctx, r * 1.08);
+    ctx.globalAlpha = fade * 0.3;
+    ctx.fillStyle = "#10285a";
+    coloHeaterPath(ctx, depth * 1.05, halfW * 1.08);
     ctx.fill();
-    ctx.globalAlpha = fade * 0.42;
-    var fill = ctx.createRadialGradient(0, 0, r * 0.12, 0, 0, r);
-    fill.addColorStop(0, "rgba(180, 230, 255, 0.7)");
-    fill.addColorStop(0.45, "rgba(40, 120, 255, 0.5)");
-    fill.addColorStop(1, "rgba(10, 50, 180, 0.08)");
+    ctx.globalAlpha = fade * 0.62;
+    var fill = ctx.createLinearGradient(18, 0, depth, 0);
+    fill.addColorStop(0, "rgba(20, 70, 170, 0.12)");
+    fill.addColorStop(0.42, "rgba(40, 120, 255, 0.55)");
+    fill.addColorStop(1, "rgba(210, 245, 255, 0.9)");
     ctx.fillStyle = fill;
-    coloHexPath(ctx, r);
+    coloHeaterPath(ctx, depth, halfW);
     ctx.fill();
     ctx.globalAlpha = fade;
-    ctx.strokeStyle = "#b8e8ff";
-    ctx.lineWidth = 4.4;
-    coloHexPath(ctx, r);
+    ctx.strokeStyle = "#e8f6ff";
+    ctx.lineWidth = 4.2;
+    coloHeaterPath(ctx, depth, halfW);
     ctx.stroke();
     ctx.strokeStyle = "rgba(58, 138, 255, 0.95)";
     ctx.lineWidth = 2;
-    coloHexPath(ctx, r * 0.78);
+    coloHeaterPath(ctx, depth * 0.86, halfW * 0.76);
     ctx.stroke();
-    ctx.strokeStyle = "rgba(232, 246, 255, 0.55)";
-    ctx.lineWidth = 1.2;
-    coloHexPath(ctx, r * 0.52);
+    ctx.save();
+    ctx.translate(depth * 0.54, 0);
+    ctx.strokeStyle = "rgba(232, 246, 255, " + (0.75 * fade) + ")";
+    ctx.lineWidth = 2;
+    coloHexPath(ctx, halfW * 0.26);
     ctx.stroke();
-    var i;
-    ctx.strokeStyle = "rgba(154, 212, 255, " + (0.45 * fade) + ")";
-    ctx.lineWidth = 1.1;
-    for (i = 0; i < 6; i++) {
-      var a = -Math.PI / 2 + i * Math.PI / 3;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78);
-      ctx.stroke();
-    }
-    ctx.fillStyle = "rgba(232, 246, 255, " + (0.85 * fade) + ")";
-    ctx.beginPath();
-    ctx.moveTo(0, -r * 0.22);
-    ctx.lineTo(r * 0.16, 0);
-    ctx.lineTo(0, r * 0.22);
-    ctx.lineTo(-r * 0.16, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(58, 138, 255, " + fade + ")";
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
+    ctx.restore();
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = fade * 0.55;
-    ctx.strokeStyle = "#7ad4ff";
-    ctx.lineWidth = 7;
-    coloHexPath(ctx, r * 1.02);
+    ctx.lineCap = "round";
+    for (i = 0; i < 5; i++) {
+      var side = i % 2 ? 1 : -1;
+      var t0 = 0.18 + i * 0.13;
+      var t1 = Math.min(0.92, t0 + 0.2);
+      ctx.globalAlpha = fade * 0.72;
+      ctx.strokeStyle = i % 2 ? "#7af7ff" : "#3a8aff";
+      ctx.lineWidth = i % 2 ? 1.4 : 2.5;
+      drawJaggedBolt(
+        ctx,
+        depth * t0,
+        side * halfW * (0.58 + t0 * 0.18),
+        depth * t1,
+        side * halfW * (0.32 + t1 * 0.12),
+        4,
+        7,
+        (fx.seed || 1) + i + progress * 9
+      );
+    }
+    ctx.globalAlpha = fade * 0.8;
+    ctx.strokeStyle = "#c8f0ff";
+    ctx.lineWidth = 7 * (1 - progress * 0.45);
+    ctx.beginPath();
+    ctx.arc(depth * 0.08, 0, depth * (0.5 + slam * 0.48), -1.12, 1.12);
     ctx.stroke();
-    if (progress < 0.28) {
-      var flash = 1 - progress / 0.28;
-      ctx.globalAlpha = flash * 0.65;
-      ctx.fillStyle = "#c8f0ff";
-      coloHexPath(ctx, r * 0.35);
+    if (progress < 0.3) {
+      var flash = 1 - progress / 0.3;
+      ctx.globalAlpha = flash * 0.85;
+      ctx.fillStyle = "#e8ffff";
+      ctx.beginPath();
+      ctx.arc(depth * 0.88, 0, halfW * 0.2, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
+  }
+
+  function drawColoWall(ctx, z) {
+    var life = Math.max(0, z.t) / Math.max(0.01, z.max || 0.82);
+    var fade = Math.min(1, life * 2.4) * (life > 0.35 ? 1 : Math.max(0.2, life / 0.35));
+    ctx.save();
+    ctx.translate(z.x, z.y);
+    ctx.rotate(z.ang || 0);
+    ctx.globalAlpha = fade * 0.28;
+    ctx.fillStyle = "rgba(40, 110, 220, 0.55)";
+    coloHeaterPath(ctx, z.depth || 176, z.halfW || 118);
+    ctx.fill();
+    ctx.globalAlpha = fade * 0.7;
+    ctx.strokeStyle = "rgba(180, 230, 255, 0.85)";
+    ctx.lineWidth = 2.4;
+    coloHeaterPath(ctx, z.depth || 176, z.halfW || 118);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -7051,6 +7179,8 @@
         ctx.stroke();
         isoCyl(ctx, 5, 10, "rgba(220, 245, 255, 0.55)", "rgba(120, 180, 220, 0.4)");
         ctx.restore();
+      } else if (z.kind === "colo_wall") {
+        drawColoWall(ctx, z);
       } else if (z.kind === "forcewall") {
         ctx.save();
         ctx.translate(z.x, z.y);

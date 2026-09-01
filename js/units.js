@@ -399,7 +399,7 @@
       aoe: 250,
       color: "#e8f6ff", accent: "#7af7ff", projectile: "none", role: "colossus",
       unique: true,
-      blurb: "Gundam de combate corpo a corpo. Salta no inimigo mais perto e cicla slam elétrico, escudo de energia e rocket punch que ricocheteia. Caríssimo: 100 arquivos de guerra pra fazer.",
+      blurb: "Gundam de combate corpo a corpo. Salta no inimigo mais perto e cicla slam elétrico, investida de escudo (parede de energia que come bala) e rocket punch que ricocheteia. Caríssimo: 100 arquivos de guerra pra fazer.",
       active: { id: "energy_blade", name: "Lâmina de energia", cd: 30, dur: 10, desc: "Empunha a espada de energia. Ao atirar, lança até 5 slashes de luz lentos, de alcance infinito e largura enorme." },
       merge: []
     }),
@@ -652,7 +652,7 @@
     missil: { id: "swarm", name: "Saraivada", desc: "Cinco mísseis na mira. Mira parada no chefe: orbitam. Mira em movimento: espalham e estouram." },
     tanque: { id: "heavycannon", name: "Couraça pesada", desc: "Escudo de 10 pontos. Três modos de tiro, incluindo barragem na tela." },
     gunship: { id: "lockgun", name: "Metralhadora teleguiada", desc: "As balas seguem a mira." },
-    colosso: { id: "melee", name: "Tríade do Colosso", desc: "Salta no inimigo mais perto e dá slam (250px, slow, rachadura elétrica). Escudo de energia azul que empurra. Rocket punch: o punho voa e ricocheteia 10 vezes. Mantém o escudo de 10 pontos da linha do caminhão." },
+    colosso: { id: "melee", name: "Tríade do Colosso", desc: "Salta no inimigo mais perto e dá slam (250px, slow, rachadura elétrica). Investida de escudo: parede de energia à frente, empurra, come bala e bloqueia por um instante. Rocket punch: o punho voa e ricocheteia 10 vezes. Mantém o escudo de 10 pontos da linha do caminhão." },
     comandante: { id: "archive", name: "Arquivo de guerra", desc: "O esquadrão pega o reforço caído e vira arquivo. R gasta: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Colosso custa 100." },
     designado: { id: "marksman", name: "Fuzil longo", desc: "Alcance infinito. Atira como fuzileiro, com cadência maior." },
     giratoria: { id: "spinup", name: "Aquecimento", desc: "Precisa aquecer. Depois o cano não para, mas o esquadrão fica bem mais lento." },
