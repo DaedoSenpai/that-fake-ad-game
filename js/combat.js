@@ -159,6 +159,9 @@
         if (a.phased || b.phased) continue;
         if (a.kingAct === "charge" || b.kingAct === "charge") continue;
         if (a.wormAct === "dive" || b.wormAct === "dive") continue;
+        if (a.wormAct === "devour" || b.wormAct === "devour") continue;
+        if (a.type === "chefe_arklan" && a.buried) continue;
+        if (b.type === "chefe_arklan" && b.buried) continue;
         var dx = b.x - a.x;
         var dy = b.y - a.y;
         var d = Math.sqrt(dx * dx + dy * dy) || 0.001;
@@ -330,6 +333,10 @@
       G.invasion.enterP2(state, unit);
     }
     if (unit.hp <= 0) {
+      if (unit.team === "enemy" && unit.type === "chefe_arklan" && (unit.p2 || unit.invP2) && !unit.arklanBroken) {
+        if (G.arklanP2 && G.arklanP2.onBroken) G.arklanP2.onBroken(state, unit);
+        return;
+      }
       if (unit.team === "enemy" && advanceCorePhase(state, unit)) return;
       if (unit.type === "chefe_vulto" && !unit.glinderDying) {
         startGlinderDeath(state, unit);
@@ -535,6 +542,7 @@
       if (G.invasion) G.invasion.maybePrincess(state);
     }
     if (e.type === "chefe_arklan") {
+      e.wormSegs = null;
       var keepZ = false;
       for (var az = 0; az < state.enemies.length; az++) {
         var ae = state.enemies[az];
@@ -544,7 +552,13 @@
           ae.noDrop = true;
         }
       }
-      if (!keepZ) state.camZoomTo = 1;
+      if (!keepZ) {
+        // Stay at desert zoom-out if that fight was using it
+        state.camZoomTo = state.desertZoom > 0 ? state.desertZoom : 1;
+      }
+      state.arklanCage = null;
+      state.arklanEyes = [];
+      state.arklanSeals = null;
     }
     if (e.type === "veu_clone" && e.ownerId) {
       var owner = findEnemy(state, e.ownerId);
@@ -6834,70 +6848,52 @@
     return L;
   }
 
-  function pointOnPoly(pts, dist) {
-    var left = dist;
-    for (var i = 0; i < pts.length - 1; i++) {
-      var d = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y) || 1;
-      if (left <= d) {
-        var f = left / d;
-        return {
-          x: pts[i].x + (pts[i + 1].x - pts[i].x) * f,
-          y: pts[i].y + (pts[i + 1].y - pts[i].y) * f,
-          ang: Math.atan2(pts[i + 1].y - pts[i].y, pts[i + 1].x - pts[i].x)
-        };
-      }
-      left -= d;
+  function wormGrowScale(e) {
+    return 1 + Math.min(1.15, (e.wormGrow || 0) * 0.12);
+  }
+
+  function wormSegRadius(e) {
+    return Math.round(38 * wormGrowScale(e));
+  }
+
+  function wormStormRadius(e) {
+    return Math.round(62 * wormGrowScale(e));
+  }
+
+  function applyWormGrow(e, gen) {
+    e.wormGrow = (e.wormGrow || 0) + Math.max(1, (gen | 0) + 1);
+    if (!e._wormDefOwn) {
+      e.def = Object.assign({}, e.def);
+      e._wormDefOwn = true;
     }
-    var last = pts[pts.length - 1];
-    var prev = pts[pts.length - 2] || last;
-    return { x: last.x, y: last.y, ang: Math.atan2(last.y - prev.y, last.x - prev.x) };
+    var base = (G.ENEMY_DEFS.chefe_arklan && G.ENEMY_DEFS.chefe_arklan.size) || 74;
+    e.def.size = Math.round(base * wormGrowScale(e));
+    if (e.wormSegs) {
+      for (var i = 0; i < e.wormSegs.length; i++) e.wormSegs[i].r = wormSegRadius(e);
+    }
   }
 
-  function planWormDive(state, e, target) {
-    var b = G.playfield(state);
-    var A = { x: e.x, y: e.y };
-    var dx = target.x - A.x;
-    var dy = target.y - A.y;
-    var len = Math.hypot(dx, dy) || 1;
-    dx /= len;
-    dy /= len;
-    var C = rayExitPlay(b, target.x, target.y, dx, dy, -90);
-    if (Math.hypot(C.x - A.x, C.y - A.y) < 260) C = rayExitPlay(b, A.x, A.y, dx, dy, -90);
-    C.x += dx * 220;
-    C.y += dy * 220;
-    var mx = (A.x + C.x) / 2;
-    var my = (A.y + C.y) / 2;
-    var side = Math.random() < 0.5 ? 1 : -1;
-    var B = {
-      x: Math.max(b.x0 - 40, Math.min(b.x1 + 40, mx + -dy * side * (180 + Math.random() * 140))),
-      y: Math.max(b.y0 - 40, Math.min(b.y1 + 40, my + dx * side * (180 + Math.random() * 140)))
-    };
-    return [A, B, C];
-  }
-
-  function warnWormPath(state, pts, t) {
-    if (!pts || !pts.length) return;
-    var last = pts[pts.length - 1];
-    warnAt(state, { kind: "mark", x: last.x, y: last.y, t: t, max: t, r: 28, dmg: 0, color: "#8a6030" });
-  }
-
-  function dropWormSeg(e) {
+  function dropWormWall(e) {
     if (!e.wormSegs) e.wormSegs = [];
+    var last = e.wormSegs[e.wormSegs.length - 1];
+    if (last && Math.hypot(last.x - e.x, last.y - e.y) < 20) return;
     e.wormSegs.push({
       x: e.x,
       y: e.y,
       rot: e.rot || 0,
-      r: 40 + Math.min(22, e.wormSegs.length * 0.7),
+      r: wormSegRadius(e),
+      wall: true,
       sticky: true,
-      life: 1.4
+      age: 0,
+      life: 7.5 + Math.random() * 2.5,
+      wig: Math.random() * Math.PI * 2,
+      wigAmp: 6 + Math.random() * 6
     });
-  }
-
-  function releaseWormSegs(e) {
-    if (!e.wormSegs) return;
-    for (var i = 0; i < e.wormSegs.length; i++) {
-      e.wormSegs[i].sticky = false;
-      e.wormSegs[i].life = 1.35;
+    if (e.wormSegs.length > 48) {
+      var oldest = e.wormSegs[0];
+      oldest.sticky = false;
+      oldest.wall = false;
+      oldest.life = Math.min(oldest.life || 1, 0.9);
     }
   }
 
@@ -6905,179 +6901,558 @@
     if (!e.wormSegs) return;
     for (var i = e.wormSegs.length - 1; i >= 0; i--) {
       var seg = e.wormSegs[i];
-      if (!seg.sticky) {
+      seg.age = (seg.age || 0) + dt;
+      seg.wig = (seg.wig || 0) + dt * (5.5 + (i % 5) * 0.35);
+      // Visual wiggle perpendicular to body
+      var nx = -Math.sin(seg.rot || 0);
+      var ny = Math.cos(seg.rot || 0);
+      var amp = (seg.wigAmp || 4) * (0.7 + Math.sin(seg.wig + i * 0.4) * 0.3);
+      seg.drawX = seg.x + nx * Math.sin(seg.wig) * amp;
+      seg.drawY = seg.y + ny * Math.sin(seg.wig) * amp;
+      seg.drawR = (seg.r || 28) * (1 + Math.sin(seg.wig * 1.35 + i * 0.2) * 0.07);
+      if (seg.wall && seg.sticky) {
+        var maxLife = seg.life || 8;
+        if (seg.age >= maxLife * 0.72) {
+          seg.sticky = false;
+          seg.wall = false;
+          seg.life = 1.1;
+        }
+      } else {
         seg.life -= dt;
         if (seg.life <= 0) {
           e.wormSegs.splice(i, 1);
           continue;
         }
       }
-      if (e.contactCd <= 0 && Math.hypot(seg.x - state.squad.x, seg.y - state.squad.y) < (seg.r || 28) + 10) {
-        e.contactCd = 0.18;
-        hurtSquadArea(state, seg.x, seg.y, (seg.r || 28) + 8, Math.round(e.def.dmg * 0.85), e.x, e.y);
+      if (Math.random() < 0.01) {
+        state.particles.push({
+          x: (seg.drawX != null ? seg.drawX : seg.x) + (Math.random() - 0.5) * (seg.r || 28) * 0.8,
+          y: (seg.drawY != null ? seg.drawY : seg.y) + (Math.random() - 0.5) * (seg.r || 28) * 0.25,
+          vx: (Math.random() - 0.5) * 28,
+          vy: -12 - Math.random() * 28,
+          life: 0.35 + Math.random() * 0.3,
+          max: 0.65,
+          size: 1.8 + Math.random() * 2.8,
+          color: Math.random() > 0.45 ? "#c4a06a" : "#e8c070",
+          sand: true
+        });
       }
+    }
+  }
+
+  function resolveWormWalls(state, ox, oy) {
+    if (!state.enemies || !state.squad) return;
+    if (state.arklanGullet) return;
+    // Dash atravessa o corpo; andar normal não.
+    if (state.dashActive || (state.dashT || 0) > 0) return;
+    var sx = state.squad.x;
+    var sy = state.squad.y;
+    var hit = null;
+    var i;
+    var s;
+    for (i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (e.hp <= 0 || e.type !== "chefe_arklan" || !e.wormSegs) continue;
+      for (s = 0; s < e.wormSegs.length; s++) {
+        var seg = e.wormSegs[s];
+        if (!seg.wall) continue;
+        var rad = (seg.r || 28) + 14;
+        if (Math.hypot(sx - seg.x, sy - seg.y) < rad) {
+          hit = seg;
+          break;
+        }
+      }
+      if (hit) break;
+    }
+    if (!hit) return;
+    var dx = sx - hit.x;
+    var dy = sy - hit.y;
+    var d = Math.hypot(dx, dy) || 1;
+    var push = (hit.r || 28) + 14;
+    state.squad.x = hit.x + (dx / d) * push;
+    state.squad.y = hit.y + (dy / d) * push;
+    var b = G.playfield(state);
+    state.squad.x = Math.max(b.x0, Math.min(b.x1, state.squad.x));
+    state.squad.y = Math.max(b.y0, Math.min(b.y1, state.squad.y));
+    if (Math.hypot(state.squad.x - ox, state.squad.y - oy) < 0.5) {
+      state.squad.x = ox;
+      state.squad.y = oy;
+      var rdx = ox - hit.x;
+      var rdy = oy - hit.y;
+      var rd = Math.hypot(rdx, rdy) || 1;
+      state.squad.x = hit.x + (rdx / rd) * push;
+      state.squad.y = hit.y + (rdy / rd) * push;
+      state.squad.x = Math.max(b.x0, Math.min(b.x1, state.squad.x));
+      state.squad.y = Math.max(b.y0, Math.min(b.y1, state.squad.y));
     }
   }
 
   function sandBurst(state, x, y, n) {
-    for (var i = 0; i < (n || 16); i++) {
+    n = n || 16;
+    for (var i = 0; i < n; i++) {
       var a = Math.random() * Math.PI * 2;
-      var sp = 50 + Math.random() * 140;
+      var sp = 55 + Math.random() * 200;
+      var warm = Math.random();
       state.particles.push({
-        x: x,
-        y: y,
+        x: x + (Math.random() - 0.5) * 10,
+        y: y + (Math.random() - 0.5) * 8,
         vx: Math.cos(a) * sp,
-        vy: Math.sin(a) * sp - 30,
-        life: 0.35 + Math.random() * 0.25,
-        max: 0.55,
-        size: 3 + Math.random() * 5,
-        color: Math.random() > 0.5 ? "#c4a06a" : "#e8c070"
+        vy: Math.sin(a) * sp - 35 - Math.random() * 55,
+        life: 0.4 + Math.random() * 0.45,
+        max: 0.85,
+        size: 2.2 + Math.random() * 4.8,
+        color: warm > 0.7 ? "#f0d090" : warm > 0.35 ? "#c4a06a" : "#8a6030",
+        sand: true,
+        ang: a
       });
     }
   }
 
+  function sandSpray(state, x, y, ang, n, cone) {
+    cone = cone || 0.7;
+    for (var i = 0; i < (n || 12); i++) {
+      var a = ang + (Math.random() - 0.5) * cone;
+      var sp = 120 + Math.random() * 260;
+      state.particles.push({
+        x: x,
+        y: y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 8,
+        life: 0.28 + Math.random() * 0.32,
+        max: 0.62,
+        size: 2.4 + Math.random() * 4.2,
+        color: Math.random() > 0.55 ? "#f0d090" : "#c4a06a",
+        sand: true,
+        ang: a
+      });
+    }
+  }
+
+  function sandJetSparks(state, x, y, ang, len) {
+    for (var i = 0; i < 7; i++) {
+      var t = 0.08 + Math.random() * 0.9;
+      var px = x + Math.cos(ang) * len * t;
+      var py = y + Math.sin(ang) * len * t;
+      var side = (Math.random() - 0.5) * 55;
+      state.particles.push({
+        x: px + Math.cos(ang + Math.PI / 2) * side * 0.15,
+        y: py + Math.sin(ang + Math.PI / 2) * side * 0.15,
+        vx: Math.cos(ang) * (80 + Math.random() * 140) + (Math.random() - 0.5) * 50,
+        vy: Math.sin(ang) * (80 + Math.random() * 140) + (Math.random() - 0.5) * 50,
+        life: 0.14 + Math.random() * 0.2,
+        max: 0.4,
+        size: 2.2 + Math.random() * 3.8,
+        color: Math.random() > 0.45 ? "#ffe8a8" : "#e8c070",
+        sand: true,
+        ang: ang
+      });
+    }
+  }
+
+  function wormShotgunRange(state) {
+    var b = G.playfield(state);
+    return Math.hypot(b.x1 - b.x0, b.y1 - b.y0) * 1.05;
+  }
+
+  function fireSandGrit(state, e, ang, extra) {
+    extra = extra || {};
+    var spd = (extra.speed || 280) * (0.75 + Math.random() * 0.55);
+    var wob = (Math.random() - 0.5) * (extra.spread || 0.35);
+    var a = ang + wob;
+    enemyFireAng(state, e, a, "sandgrit", {
+      speed: spd,
+      r: 3.5 + Math.random() * 5.5,
+      life: extra.life || 1.15,
+      color: extra.color || (Math.random() > 0.5 ? "#e8c070" : "#c4a06a"),
+      dmg: extra.dmg != null ? extra.dmg : Math.round(e.def.dmg * 0.45)
+    });
+    var p = state.projectiles[state.projectiles.length - 1];
+    if (p) {
+      p.grit = true;
+      p.seed = Math.random() * 100;
+      p.jag = 0.35 + Math.random() * 0.65;
+      p.spin = (Math.random() - 0.5) * 14;
+      p.vx += (Math.random() - 0.5) * 40;
+      p.vy += (Math.random() - 0.5) * 40 - 10;
+    }
+  }
+
+  function spawnSandWave(state, e, ang, half, range, dmg) {
+    if (!state.sandwaves) state.sandwaves = [];
+    state.sandwaves.push({
+      x: e.x,
+      y: e.y,
+      ang: ang,
+      half: half,
+      r: 28,
+      rMax: range,
+      width: 56,
+      t: 1.05,
+      max: 1.05,
+      dmg: dmg,
+      hit: {},
+      fromId: e.id,
+      gritCd: 0
+    });
+    state.shake = Math.max(state.shake || 0, 5);
+  }
+
+  function inSandWaveFront(ux, uy, w) {
+    var dx = ux - w.x;
+    var dy = uy - w.y;
+    var d = Math.hypot(dx, dy);
+    var inner = Math.max(0, w.r - w.width);
+    if (d > w.r + 14 || d < inner - 10) return false;
+    if (d < 6) return true;
+    var a = Math.atan2(dy, dx);
+    var diff = Math.abs(Math.atan2(Math.sin(a - w.ang), Math.cos(a - w.ang)));
+    return diff <= w.half + 0.08;
+  }
+
+  function tickSandWaves(state, dt) {
+    if (!state.sandwaves || !state.sandwaves.length) return;
+    for (var i = state.sandwaves.length - 1; i >= 0; i--) {
+      var w = state.sandwaves[i];
+      w.t -= dt;
+      var k = 1 - Math.max(0, w.t) / w.max;
+      var eased = 1 - (1 - k) * (1 - k);
+      w.r = 28 + (w.rMax - 28) * eased;
+      var ui;
+      for (ui = 0; ui < state.units.length; ui++) {
+        var u = state.units[ui];
+        if (u.hp <= 0 || u.stowed) continue;
+        if (w.hit[u.id]) continue;
+        if (!inSandWaveFront(u.x, u.y, w)) continue;
+        w.hit[u.id] = 1;
+        hurt(state, u, w.dmg, w.x, w.y, false, { ignoreDash: true });
+        sandBurst(state, u.x, u.y, 8);
+      }
+      w.gritCd = (w.gritCd || 0) - dt;
+      if (w.gritCd <= 0) {
+        w.gritCd = 0.045;
+        var host = null;
+        for (var ei = 0; ei < state.enemies.length; ei++) {
+          if (state.enemies[ei].id === w.fromId) host = state.enemies[ei];
+        }
+        var nG = 3;
+        for (var g = 0; g < nG; g++) {
+          var ga = w.ang + (Math.random() - 0.5) * w.half * 2;
+          var gx = w.x + Math.cos(ga) * w.r;
+          var gy = w.y + Math.sin(ga) * w.r;
+          state.particles.push({
+            x: gx,
+            y: gy,
+            vx: Math.cos(ga) * (90 + Math.random() * 140) + (Math.random() - 0.5) * 50,
+            vy: Math.sin(ga) * (90 + Math.random() * 140) + (Math.random() - 0.5) * 50 - 20,
+            life: 0.28 + Math.random() * 0.35,
+            max: 0.65,
+            size: 2 + Math.random() * 4.5,
+            color: Math.random() > 0.55 ? "#f0d090" : "#c4a06a",
+            sand: true,
+            ang: ga
+          });
+          if (host && Math.random() < 0.55) {
+            fireSandGrit(state, host, ga, {
+              speed: 300 + Math.random() * 160,
+              life: 0.7 + Math.random() * 0.4,
+              dmg: Math.round((host.def.dmg || 40) * 0.4),
+              spread: 0.12
+            });
+            var last = state.projectiles[state.projectiles.length - 1];
+            if (last) {
+              last.x = gx;
+              last.y = gy;
+            }
+          }
+        }
+      }
+      if (w.t <= 0) state.sandwaves.splice(i, 1);
+    }
+  }
+
+  function wormSurface(state, e) {
+    var wasBuried = !!e.buried;
+    e.buried = false;
+    e.phased = false;
+    e.stealth = 0;
+    if (wasBuried && state) {
+      e.headFlash = 0.55;
+    }
+  }
+
+  function wormBury(state, e) {
+    if (arguments.length === 1) {
+      e = state;
+      state = null;
+    }
+    var wasOut = !e.buried;
+    e.buried = true;
+    e.phased = true;
+    e.stealth = 0.88;
+    if (wasOut && state) {
+      sandBurst(state, e.x, e.y, 10);
+    }
+  }
+
+  function wormFindUnit(state, id) {
+    if (!id) return null;
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].id === id && state.units[i].hp > 0 && !state.units[i].stowed) return state.units[i];
+    }
+    return null;
+  }
+
+  function countSandstorms(state) {
+    var n = 0;
+    for (var i = 0; i < (state.zones || []).length; i++) {
+      if (state.zones[i].kind === "sandstorm" && !state.zones[i].retiring) n++;
+    }
+    return n;
+  }
+
+  function wormPickPrey(state) {
+    var picks = [];
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.hp <= 0 || u.stowed || u.commander || u.fallen) continue;
+      picks.push(u);
+    }
+    if (!picks.length) return null;
+    return picks[(Math.random() * picks.length) | 0];
+  }
+
+  function wormDevourUnit(state, e, u) {
+    if (!u || u.hp <= 0) return false;
+    var gen = (u.def && u.def.gen != null) ? u.def.gen : 0;
+    var name = (u.def && u.def.name) || "unidade";
+    u.hp = 0;
+    u.noDrop = true;
+    applyWormGrow(e, gen);
+    sandBurst(state, e.x, e.y, 36);
+    sandBurst(state, u.x, u.y, 18);
+    G.burst(state, e.x, e.y, "#ff4a2a", 18, 70);
+    state.floaters.push(G.createFloater(e.x, e.y - 36, name, "#ff5a3a"));
+    G.audio.explosion();
+    return true;
+  }
+
+  function wormTunnelToward(state, e, tx, ty, spd, dt) {
+    wormBury(state, e);
+    var ox = e.x;
+    var oy = e.y;
+    moveTowards(e, tx, ty, spd, dt);
+    var moved = Math.hypot(e.x - ox, e.y - oy);
+    e.rot = Math.atan2(e.y - oy, e.x - ox) || e.rot || 0;
+    e.segAcc = (e.segAcc || 0) + moved;
+    while (e.segAcc >= 24) {
+      e.segAcc -= 24;
+      dropWormWall(e);
+    }
+    if (Math.random() < 0.22) sandBurst(state, e.x, e.y, 1);
+  }
+
   function tickWorm(state, e, target, dt) {
     var rage = G.invasion ? G.invasion.rage(e) : e.hp <= e.maxHp * 0.5;
-    if (G.invasion) G.invasion.enterP2(state, e, "Arklan · tempestade");
+    if (G.invasion) G.invasion.enterP2(state, e, "Arklan · carcaça de ferro");
     if (G.invasion && e.inv && G.invasion.tookP2Hook(e)) {
-      e.stormT = 0.6;
-      e.suckT = 8;
+      e.wormT = 0.55;
+      e.wormGrow = e.wormGrow || 0;
+      e.arklanArmor = true;
+      e.arklanMech = 1;
+      e.arklanSentry = true;
+      e.buried = false;
+      e.phased = false;
+      e.stealth = 0;
+      e.wormAct = "";
+      e.wormSegs = [];
+      e.eyeSpawnT = 1.5;
+      if (G.arklanP2 && G.arklanP2.restoreZoom) G.arklanP2.restoreZoom(state);
     }
-    var p2 = !!(e.invP2);
+    var p2 = !!(e.p2 || e.invP2);
     tickWormSegs(state, e, dt);
-    if (p2) {
-      e.stormT = (e.stormT == null ? 3.2 : e.stormT) - dt;
-      if (e.stormT <= 0) {
-        e.stormT = 4.2;
-        var hole = pickPlay(state, 70);
-        pushZone(state, { kind: "sandstorm", x: hole.x, y: hole.y, r: 70, t: 4.5, max: 4.5, dmg: 10, hurtPlayer: true, pull: 90 });
-      }
-      e.suckT = (e.suckT == null ? 11 : e.suckT) - dt;
-      if (e.suckT <= 0 && e.wormAct !== "suck") {
-        e.suckT = 16;
-        e.wormAct = "suck";
-        e.suckLeft = 4.5;
-        var mid = G.playfield(state);
-        e.x = (mid.x0 + mid.x1) / 2;
-        e.y = (mid.y0 + mid.y1) / 2;
-      }
-    }
-    if (e.wormAct === "suck") {
-      e.suckLeft -= dt;
-      var cx = e.x;
-      var cy = e.y;
-      var dx = cx - state.squad.x;
-      var dy = cy - state.squad.y;
-      var len = Math.hypot(dx, dy) || 1;
-      state.squad.x += (dx / len) * 55 * dt;
-      state.squad.y += (dy / len) * 55 * dt;
-      if (Math.random() < 0.12) {
-        var ang = Math.random() * Math.PI * 2;
-        enemyFireAng(state, e, ang, "bullet", { speed: 180, r: 6, color: "#8a5a28", dmg: Math.round(e.def.dmg * 0.55) });
-      }
-      if (e.suckLeft <= 0) {
-        e.wormAct = "";
-        e.wormT = 1.2;
-      }
+    e.devourGlow = Math.max(0, (e.devourGlow || 0) - dt);
+    e.headFlash = Math.max(0, (e.headFlash || 0) - dt);
+
+    if (p2 && e.arklanArmor) {
+      if (G.arklanP2 && G.arklanP2.tick) G.arklanP2.tick(state, e, target, dt);
       return;
     }
-    e.wormlingT = (e.wormlingT == null ? 2.4 : e.wormlingT) - dt;
-    if (e.wormlingT <= 0) {
-      var worms = 0;
-      for (var wi0 = 0; wi0 < state.enemies.length; wi0++) {
-        if (state.enemies[wi0].hp > 0 && state.enemies[wi0].type === "minhoca_deserto") worms++;
+
+    if (e.wormAct === "chomp") {
+      // 1) approach underground toward predicted squad (locked aim)
+      if ((e.chompApproach || 0) > 0) {
+        e.chompApproach -= dt;
+        wormTunnelToward(state, e, e.chompX, e.chompY, 340, dt);
+        if (Math.random() < 0.35) sandBurst(state, e.chompX, e.chompY, 2);
+        if (e.chompApproach <= 0 || Math.hypot(e.x - e.chompX, e.y - e.chompY) < 36) {
+          e.chompApproach = 0;
+          e.x = e.chompX;
+          e.y = e.chompY;
+          e.chompRumble = 1.35;
+          e.chompRumbleMax = 1.35;
+          wormBury(state, e);
+          warnAt(state, {
+            kind: "mark",
+            x: e.chompX,
+            y: e.chompY,
+            t: 1.35,
+            max: 1.35,
+            r: 62 * wormGrowScale(e),
+            dmg: 0,
+            color: "#ffb020",
+            followSquad: false
+          });
+        }
+        return;
       }
-      e.wormlingT = rage ? 3.2 : 5.0;
-      if (worms < 4) {
-        var hole = pickPlay(state, 50);
-        G.game.spawnAt(state, "minhoca_deserto", hole.x, hole.y, { noDrop: true, buried: true, sandT: 0.7, ownerId: e.id });
-        sandBurst(state, hole.x, hole.y, 10);
-        state.floaters.push(G.createFloater(hole.x, hole.y - 16, "minhoca", "#c4a06a"));
+      // 2) rumble telegraph — mound grows on LOCKED spot (no chase)
+      if ((e.chompRumble || 0) > 0) {
+        e.chompRumble -= dt;
+        e.x += (e.chompX - e.x) * Math.min(1, 5.5 * dt);
+        e.y += (e.chompY - e.y) * Math.min(1, 5.5 * dt);
+        wormBury(state, e);
+        e.rumblePulse = 1 - e.chompRumble / (e.chompRumbleMax || 1.35);
+        e.chompBiteR = 58 * wormGrowScale(e);
+        if (Math.random() < 0.65) sandBurst(state, e.x, e.y, 4);
+        if (e.chompRumble <= 0) {
+          wormSurface(state, e);
+          e.chompBite = 0.32;
+          e.rumblePulse = 0;
+          sandBurst(state, e.x, e.y, 44);
+          G.audio.explosion();
+          var biteR = e.chompBiteR || 58 * wormGrowScale(e);
+          hurtSquadArea(state, e.x, e.y, biteR, Math.round(e.def.dmg * 1.25), e.x, e.y);
+          G.burst(state, e.x, e.y, "#c4a06a", 16, 64);
+        }
+        return;
       }
+      if ((e.chompBite || 0) > 0) {
+        e.chompBite -= dt;
+        e.rot = (e.rot || 0) + dt * 10;
+        if (e.chompBite <= 0) {
+          wormBury(state, e);
+          dropWormWall(e);
+          e.wormAct = "";
+          e.wormT = rage || p2 ? 0.7 : 1.0;
+        }
+        return;
+      }
+      e.wormAct = "";
+      return;
     }
-    if (e.wormAct === "dive") {
-      if ((e.diveHold || 0) > 0) {
-        e.diveHold -= dt;
-        e.buried = true;
-        e.stealth = 0.9;
-        e.rot = (e.rot || 0) + dt * 8;
-        if (e.diveHold <= 0) {
-          e.diveDist = 0;
-          e.segAcc = 0;
+
+    if (e.wormAct === "shotgun") {
+      if ((e.shotApproach || 0) > 0) {
+        e.shotApproach -= dt;
+        wormTunnelToward(state, e, e.shotX, e.shotY, 360, dt);
+        if (Math.random() < 0.3) sandBurst(state, e.shotX, e.shotY, 2);
+        if (e.shotApproach <= 0 || Math.hypot(e.x - e.shotX, e.y - e.shotY) < 30) {
+          e.shotApproach = 0;
+          e.x = e.shotX;
+          e.y = e.shotY;
+          wormBury(state, e);
+          e.shotRumble = 0.65;
+          e.shotRumbleMax = 0.65;
+          var ang0 = Math.atan2(state.squad.y - e.y, state.squad.x - e.x);
+          e.shotAng = ang0;
+          e.rot = ang0;
+          warnAt(state, {
+            kind: "mark",
+            x: e.x,
+            y: e.y,
+            t: 0.65,
+            max: 0.65,
+            r: 40,
+            dmg: 0,
+            color: "#e8c070"
+          });
+          warnAt(state, {
+            kind: "cone",
+            x: e.x,
+            y: e.y,
+            ang: ang0,
+            spread: 1.45,
+            range: wormShotgunRange(state),
+            t: 0.65,
+            max: 0.65,
+            r: 24,
+            dmg: 0,
+            color: "#e8c070"
+          });
+        }
+        return;
+      }
+      if ((e.shotRumble || 0) > 0) {
+        e.shotRumble -= dt;
+        wormBury(state, e);
+        e.rumblePulse = 1 - e.shotRumble / (e.shotRumbleMax || 0.65);
+        e.shotAng = Math.atan2(state.squad.y - e.y, state.squad.x - e.x);
+        e.rot = e.shotAng;
+        if (Math.random() < 0.5) sandBurst(state, e.x, e.y, 3);
+        if (e.shotRumble <= 0) {
+          wormSurface(state, e);
+          e.shotRise = 0.18;
           sandBurst(state, e.x, e.y, 22);
         }
         return;
       }
-      e.stealth = 0.55;
-      e.buried = true;
-      var pts = e.wormPath || [];
-      if (pts.length < 3) {
-        e.wormAct = "";
-        e.buried = false;
-        e.stealth = 0;
+      if ((e.shotRise || 0) > 0) {
+        e.shotRise -= dt;
+        wormSurface(state, e);
+        e.rot = e.shotAng || e.rot;
+        if (e.shotRise <= 0) {
+          var ang = e.shotAng || Math.atan2(state.squad.y - e.y, state.squad.x - e.x);
+          e.rot = ang;
+          e.shotFire = 1.1;
+          e.rumblePulse = 0;
+          var range = wormShotgunRange(state);
+          var half = 1.45;
+          spawnSandWave(state, e, ang, half, range, Math.round(e.def.dmg * 1.2));
+          for (var g0 = 0; g0 < 16; g0++) {
+            fireSandGrit(state, e, ang, {
+              speed: 260 + Math.random() * 180,
+              life: 0.9 + Math.random() * 0.5,
+              dmg: Math.round(e.def.dmg * 0.5),
+              spread: half * 0.95
+            });
+          }
+          sandSpray(state, e.x, e.y, ang, 36, half * 2);
+          sandBurst(state, e.x, e.y, 22);
+          G.audio.explosion();
+        }
         return;
       }
-      var total = e.diveLen || polyLen(pts);
-      var spd = 1020;
-      e.diveDist = (e.diveDist || 0) + spd * dt;
-      var pos = pointOnPoly(pts, Math.min(total, e.diveDist));
-      var moved = Math.hypot(pos.x - e.x, pos.y - e.y);
-      e.x = pos.x;
-      e.y = pos.y;
-      e.rot = pos.ang;
-      e.segAcc = (e.segAcc || 0) + moved;
-      while (e.segAcc >= 28) {
-        e.segAcc -= 28;
-        dropWormSeg(e);
-      }
-      if (p2) {
-        e.eyeShotT = (e.eyeShotT || 0) - dt;
-        if (e.eyeShotT <= 0 && target && e.wormSegs && e.wormSegs.length) {
-          e.eyeShotT = 0.2;
-          var seg = e.wormSegs[(Math.random() * e.wormSegs.length) | 0];
-          var ea = Math.atan2(target.y - seg.y, target.x - seg.x);
-          enemyFireAng(state, e, ea, "bullet", {
-            speed: 260,
-            r: 4,
-            color: "#ffd24a",
-            dmg: Math.round(e.def.dmg * 0.45),
-            ox: seg.x - e.x,
-            oy: seg.y - e.y,
-            muzzle: 0
-          });
+      if ((e.shotFire || 0) > 0) {
+        e.shotFire -= dt;
+        if (e.shotFire <= 0) {
+          wormBury(state, e);
+          dropWormWall(e);
+          e.wormAct = "";
+          e.wormT = rage || p2 ? 0.65 : 0.95;
         }
+        return;
       }
-      if (e.contactCd <= 0 && Math.hypot(e.x - state.squad.x, e.y - state.squad.y) < 52) {
-        e.contactCd = 0.14;
-        hurtSquadArea(state, e.x, e.y, 54, Math.round(e.def.dmg * 0.9), e.x, e.y);
-      }
-      if (e.diveDist >= total) {
-        e.buried = false;
-        e.stealth = 0;
-        e.wormAct = "";
-        e.wormT = rage ? 0.75 : 1.0;
-        releaseWormSegs(e);
-        explode(state, e.x, e.y, 78, Math.round(e.def.dmg * 1.15), "enemy", "#c4a06a");
-        sandBurst(state, e.x, e.y, 28);
-        G.audio.explosion();
-      }
+      e.wormAct = "";
       return;
     }
-    if (e.wormAct === "spin") {
-      var cx = (G.playfield(state).x0 + G.playfield(state).x1) / 2;
-      var cy = (G.playfield(state).y0 + G.playfield(state).y1) / 2;
+
+    if (e.wormAct === "scourge" || e.wormAct === "spin") {
+      var mid = G.playfield(state);
+      var cx = (mid.x0 + mid.x1) / 2;
+      var cy = (mid.y0 + mid.y1) / 2;
       if ((e.spinWind || 0) > 0) {
         e.spinWind -= dt;
-        moveTowards(e, cx, cy, 450, dt);
-        e.rot = (e.rot || 0) + dt * 4.2;
-        if (e.spinWind <= 0 || Math.hypot(e.x - cx, e.y - cy) < 22) {
+        wormTunnelToward(state, e, cx, cy, 520, dt);
+        if (e.spinWind <= 0 || Math.hypot(e.x - cx, e.y - cy) < 28) {
           e.x = cx;
           e.y = cy;
           e.spinWind = 0;
-          e.spinTell = 0.48;
+          wormSurface(state, e);
+          e.spinTell = 0.55;
           e.wormSpinAng = -Math.PI / 2;
           e.wormSpinT = 0;
           e.rot = e.wormSpinAng;
+          sandBurst(state, e.x, e.y, 32);
         }
         return;
       }
@@ -7087,56 +7462,265 @@
         e.y = cy;
         e.wormSpinAng = -Math.PI / 2;
         e.rot = e.wormSpinAng;
+        if (Math.random() < 0.5) sandBurst(state, e.x, e.y, 2);
         if (e.spinTell <= 0) {
-          e.wormSpinT = 7.4;
+          e.wormSpinT = rage || p2 ? 6.2 : 5.4;
           e.wormJetTick = 0;
         }
         return;
       }
       e.x = cx;
       e.y = cy;
+      wormSurface(state, e);
       e.wormSpinT -= dt;
       var dir = e.wormSpinDir || 1;
-      e.wormSpinAng = (e.wormSpinAng || -Math.PI / 2) + dir * 1.26 * dt;
+      e.wormSpinAng = (e.wormSpinAng || -Math.PI / 2) + dir * 1.42 * dt;
       e.rot = e.wormSpinAng;
       var jets = e.wormJets || 1;
       var jlen = wormJetLen(state);
       e.wormJetTick = (e.wormJetTick || 0) - dt;
       if (e.wormJetTick <= 0) {
-        e.wormJetTick = 0.07;
+        e.wormJetTick = 0.055;
         for (var j = 0; j < jets; j++) {
           var ja = e.wormSpinAng + (j ? Math.PI : 0);
-          hurtLane(state, e.x, e.y, ja, jlen, 40, Math.round(e.def.dmg * 0.55));
+          hurtLane(state, e.x, e.y, ja, jlen, 36, Math.round(e.def.dmg * 0.58));
+          sandJetSparks(state, e.x, e.y, ja, jlen);
         }
       }
       if (e.wormSpinT <= 0) {
-        e.wormAct = "";
-        e.wormT = 0.9;
-      }
-      return;
-    }
-    if (e.wormAct === "spikes") {
-      e.spikeWait = (e.spikeWait || 0) - dt;
-      if (e.spikeWait <= 0 && !e.spikeDid) {
-        e.spikeDid = true;
-        var spots = e.spikeSpots || [];
-        for (var p = 0; p < spots.length; p++) {
-          G.game.spawnAt(state, "arklan_spike", spots[p].x, spots[p].y, { noDrop: true, pinOwner: e.id });
-          sandBurst(state, spots[p].x, spots[p].y, 8);
-        }
-      }
-      if (e.spikeWait <= -0.25) {
+        wormBury(state, e);
+        dropWormWall(e);
         e.wormAct = "";
         e.wormT = 1.05;
+        e.wormForceBasic = Math.max(e.wormForceBasic || 0, 2);
       }
       return;
     }
-    e.buried = false;
-    e.stealth = 0;
-    moveTowards(e, target.x, target.y, 66, dt);
+
+    if (e.wormAct === "devour") {
+      if ((e.devourTell || 0) > 0) {
+        e.devourTell -= dt;
+        e.devourGlow = 1.35;
+        wormTunnelToward(state, e, e.devourFromX, e.devourFromY, 360, dt);
+        var tellPrey = wormFindUnit(state, e.devourPreyId);
+        if (tellPrey) {
+          e.devourAimX = tellPrey.x;
+          e.devourAimY = tellPrey.y;
+          e.devourAng = Math.atan2(tellPrey.y - e.y, tellPrey.x - e.x);
+          e.rot = e.devourAng;
+        }
+        if (e.devourTell <= 0) {
+          e.x = e.devourFromX;
+          e.y = e.devourFromY;
+          wormSurface(state, e);
+          e.devourCharge = 0.92;
+          e.devourHit = false;
+          var aimX = e.devourAimX != null ? e.devourAimX : state.squad.x;
+          var aimY = e.devourAimY != null ? e.devourAimY : state.squad.y;
+          var dang = Math.atan2(aimY - e.y, aimX - e.x);
+          e.devourAng = dang;
+          e.rot = dang;
+          e.devourGlow = 1.7;
+          warnAt(state, {
+            kind: "lane",
+            x: e.x,
+            y: e.y,
+            ang: dang,
+            len: 340,
+            w: 36,
+            t: 0.28,
+            max: 0.28,
+            r: 36,
+            dmg: 0,
+            color: "#ff6a3a"
+          });
+          var pname = e.devourPreyName || "alguém";
+          state.floaters.push(G.createFloater(aimX, aimY - 26, pname, "#ff8a50"));
+          sandBurst(state, e.x, e.y, 24);
+        }
+        return;
+      }
+      if ((e.devourCharge || 0) > 0) {
+        e.devourCharge -= dt;
+        e.devourGlow = 1.45;
+        wormSurface(state, e);
+        var chase = wormFindUnit(state, e.devourPreyId);
+        if (chase && !e.devourHit) {
+          var want = Math.atan2(chase.y - e.y, chase.x - e.x);
+          var cur = e.devourAng || 0;
+          var turn = Math.atan2(Math.sin(want - cur), Math.cos(want - cur));
+          e.devourAng = cur + turn * Math.min(1, 2.4 * dt);
+        }
+        var cang = e.devourAng || 0;
+        var cspd = 800;
+        e.x += Math.cos(cang) * cspd * dt;
+        e.y += Math.sin(cang) * cspd * dt;
+        e.rot = cang;
+        dropWormWall(e);
+        sandSpray(state, e.x, e.y, cang + Math.PI, 6, 0.8);
+        var reach = (e.def.size || 74) + 30;
+        var dashing = !!(state.dashActive || (state.dashT || 0) > 0);
+        if (!e.devourHit && Math.hypot(e.x - state.squad.x, e.y - state.squad.y) < reach) {
+          e.devourHit = true;
+          if (dashing) {
+            sandBurst(state, e.x, e.y, 14);
+            G.burst(state, e.x, e.y, "#7dffb0", 10, 48);
+          } else {
+            var prey = chase || wormFindUnit(state, e.devourPreyId) || wormPickPrey(state);
+            if (prey) {
+              wormDevourUnit(state, e, prey);
+            } else {
+              for (var di = 0; di < state.units.length; di++) {
+                var du = state.units[di];
+                if (du.hp <= 0 || du.stowed) continue;
+                hurt(state, du, Math.round(e.def.dmg * 1.6), e.x, e.y, false, { trueDmg: true, ignoreDash: true });
+              }
+              sandBurst(state, e.x, e.y, 22);
+            }
+          }
+          e.devourCharge = Math.min(e.devourCharge, 0.12);
+        }
+        if (e.devourCharge <= 0) {
+          wormBury(state, e);
+          dropWormWall(e);
+          e.wormAct = "";
+          e.wormT = 1.25;
+          e.devourGlow = 0.4;
+          e.devourPreyId = null;
+        }
+        return;
+      }
+      e.wormAct = "";
+      return;
+    }
+
+    if (e.wormAct === "storm") {
+      if ((e.stormTell || 0) > 0) {
+        e.stormTell -= dt;
+        wormBury(state, e);
+        if (e.stormTell <= 0) {
+          e.stormIdx = 0;
+          e.stormPhase = "rumble";
+          e.stormPhaseT = 0.45;
+          var spot0 = (e.stormSpots && e.stormSpots[0]) || { x: e.x, y: e.y };
+          e.x = spot0.x;
+          e.y = spot0.y;
+          warnAt(state, {
+            kind: "mark",
+            x: spot0.x,
+            y: spot0.y,
+            t: 0.45,
+            max: 0.45,
+            r: wormStormRadius(e),
+            dmg: 0,
+            color: "#c4a06a"
+          });
+        }
+        return;
+      }
+      var spots = e.stormSpots || [];
+      if (e.stormPhase === "rumble") {
+        e.stormPhaseT -= dt;
+        wormBury(state, e);
+        e.rumblePulse = 1 - Math.max(0, e.stormPhaseT) / 0.45;
+        if (Math.random() < 0.55) sandBurst(state, e.x, e.y, 4);
+        if (e.stormPhaseT <= 0) {
+          if (countSandstorms(state) < 3) {
+            var sr = wormStormRadius(e);
+            var fat = Math.random() < 0.48;
+            var angW = Math.random() * Math.PI * 2;
+            var spdW = fat ? 28 + Math.random() * 32 : 78 + Math.random() * 55;
+            pushZone(state, {
+              kind: "sandstorm",
+              x: e.x,
+              y: e.y,
+              r: Math.round(sr * (fat ? 1.28 : 0.7)),
+              t: fat ? 7.2 : 5.4,
+              max: fat ? 7.2 : 5.4,
+              dmg: fat ? 8 : 6,
+              hurtPlayer: true,
+              slow: fat ? 0.45 : 0.62,
+              pull: 0,
+              tornado: true,
+              fat: fat,
+              maxSpd: fat ? 68 : 145,
+              vx: Math.cos(angW) * spdW,
+              vy: Math.sin(angW) * spdW,
+              spin: Math.random() < 0.5 ? 1 : -1
+            });
+          }
+          sandBurst(state, e.x, e.y, 24);
+          G.burst(state, e.x, e.y, "#e8c070", 10, 50);
+          e.stormPhase = "move";
+          e.stormPhaseT = 0.35;
+          e.rumblePulse = 0;
+        }
+        return;
+      }
+      if (e.stormPhase === "move") {
+        e.stormPhaseT -= dt;
+        wormBury(state, e);
+        if (e.stormPhaseT <= 0) {
+          e.stormIdx = (e.stormIdx || 0) + 1;
+          if (e.stormIdx >= spots.length) {
+            e.wormAct = "";
+            e.wormT = 1.15;
+            e.wormForceBasic = Math.max(e.wormForceBasic || 0, 2);
+            return;
+          }
+          var nxt = spots[e.stormIdx];
+          e.stormPhase = "tunnel";
+          e.stormPhaseT = 0.55;
+          e.stormNextX = nxt.x;
+          e.stormNextY = nxt.y;
+          warnAt(state, {
+            kind: "mark",
+            x: nxt.x,
+            y: nxt.y,
+            t: 0.55,
+            max: 0.55,
+            r: wormStormRadius(e) * 0.7,
+            dmg: 0,
+            color: "#8a6030"
+          });
+        }
+        return;
+      }
+      if (e.stormPhase === "tunnel") {
+        e.stormPhaseT -= dt;
+        wormTunnelToward(state, e, e.stormNextX, e.stormNextY, 420, dt);
+        if (e.stormPhaseT <= 0 || Math.hypot(e.x - e.stormNextX, e.y - e.stormNextY) < 28) {
+          e.x = e.stormNextX;
+          e.y = e.stormNextY;
+          e.stormPhase = "rumble";
+          e.stormPhaseT = 0.4;
+          warnAt(state, {
+            kind: "mark",
+            x: e.x,
+            y: e.y,
+            t: 0.4,
+            max: 0.4,
+            r: wormStormRadius(e),
+            dmg: 0,
+            color: "#c4a06a"
+          });
+        }
+        return;
+      }
+      e.wormAct = "";
+      return;
+    }
+
+    // Idle: always tunnel underground, leave body-wall
+    wormTunnelToward(state, e, target.x, target.y, rage || p2 ? 118 : 96, dt);
     e.wormT -= dt;
     if (e.wormT > 0) return;
-    var wpool = p2 ? ["dive", "dive", "dive", "spin", "spikes"] : ["dive", "dive", "spin", "spikes"];
+
+    var wpool = ["chomp", "chomp", "shotgun", "shotgun", "scourge", "devour", "storm"];
+    if ((e.wormForceBasic || 0) > 0) {
+      wpool = ["chomp", "chomp", "shotgun", "shotgun"];
+      e.wormForceBasic -= 1;
+    }
     if (e.wormLast) {
       var ww = [];
       for (var wi = 0; wi < wpool.length; wi++) if (wpool[wi] !== e.wormLast) ww.push(wpool[wi]);
@@ -7144,45 +7728,149 @@
     }
     var wact = wpool[(Math.random() * wpool.length) | 0];
     e.wormLast = wact;
-    if (wact === "dive") {
-      var path = planWormDive(state, e, target);
-      e.wormPath = path;
-      e.diveLen = polyLen(path);
-      e.wormAct = "dive";
-      e.diveDist = 0;
-      e.diveHold = p2 ? 0.22 : 0.4;
-      e.segAcc = 0;
-      e.wormSegs = [];
-      e.buried = true;
-      warnWormPath(state, path, 0.55);
-      sandBurst(state, e.x, e.y, 18);
+
+    if (wact === "chomp") {
+      e.wormAct = "chomp";
+      e.chompX = state.squad.x + (state.squad.vx || 0) * 0.35;
+      e.chompY = state.squad.y + (state.squad.vy || 0) * 0.35;
+      e.chompApproach = 0.7;
+      e.chompRumble = 0;
+      e.chompBite = 0;
+      e.chompBiteR = 58 * wormGrowScale(e);
+      warnAt(state, {
+        kind: "mark",
+        x: e.chompX,
+        y: e.chompY,
+        t: 0.7 + 1.35,
+        max: 0.7 + 1.35,
+        r: e.chompBiteR,
+        dmg: 0,
+        color: "#ffb020",
+        followSquad: false
+      });
       return;
     }
-    if (wact === "spin") {
-      e.wormAct = "spin";
-      e.spinWind = 0.48;
+
+    if (wact === "shotgun") {
+      var b = G.playfield(state);
+      var angTo = Math.atan2(state.squad.y - e.y, state.squad.x - e.x);
+      e.shotX = Math.max(b.x0 + 50, Math.min(b.x1 - 50, state.squad.x - Math.cos(angTo) * 110));
+      e.shotY = Math.max(b.y0 + 50, Math.min(b.y1 - 50, state.squad.y - Math.sin(angTo) * 110));
+      e.wormAct = "shotgun";
+      e.shotApproach = 0.7;
+      e.shotRumble = 0;
+      e.shotRise = 0;
+      e.shotFire = 0;
+      warnAt(state, {
+        kind: "mark",
+        x: e.shotX,
+        y: e.shotY,
+        t: 0.7,
+        max: 0.7,
+        r: 34,
+        dmg: 0,
+        color: "#e8c070"
+      });
+      return;
+    }
+
+    if (wact === "scourge") {
+      e.wormAct = "scourge";
+      e.spinWind = 0.7;
       e.spinTell = 0;
       e.wormSpinT = 0;
       e.wormSpinAng = -Math.PI / 2;
       e.wormSpinDir = Math.random() < 0.5 ? -1 : 1;
-      e.wormJets = rage ? 2 : 1;
+      e.wormJets = rage || p2 ? 2 : 1;
       return;
     }
-    var spots = [];
-    for (var sp = 0; sp < 5; sp++) {
-      var angp = (Math.PI * 2 * sp) / 5 + e.phase;
-      var rad = 36 + (sp % 2) * 22;
-      spots.push({
-        x: state.squad.x + Math.cos(angp) * rad,
-        y: state.squad.y + Math.sin(angp) * rad
+
+    if (wact === "devour") {
+      var prey0 = wormPickPrey(state);
+      if (!prey0) {
+        e.wormAct = "chomp";
+        e.chompX = state.squad.x + (state.squad.vx || 0) * 0.35;
+        e.chompY = state.squad.y + (state.squad.vy || 0) * 0.35;
+        e.chompApproach = 0.7;
+        e.chompRumble = 0;
+        e.chompBite = 0;
+        e.chompBiteR = 58 * wormGrowScale(e);
+        warnAt(state, {
+          kind: "mark",
+          x: e.chompX,
+          y: e.chompY,
+          t: 2.05,
+          max: 2.05,
+          r: e.chompBiteR,
+          dmg: 0,
+          color: "#ffb020",
+          followSquad: false
+        });
+        return;
+      }
+      var db = G.playfield(state);
+      var away = Math.atan2(e.y - prey0.y, e.x - prey0.x) + (Math.random() - 0.5) * 0.7;
+      e.devourPreyId = prey0.id;
+      e.devourPreyName = (prey0.def && prey0.def.name) || "unidade";
+      e.devourAimX = prey0.x;
+      e.devourAimY = prey0.y;
+      e.devourFromX = Math.max(db.x0 + 50, Math.min(db.x1 - 50, prey0.x + Math.cos(away) * 170));
+      e.devourFromY = Math.max(db.y0 + 50, Math.min(db.y1 - 50, prey0.y + Math.sin(away) * 170));
+      e.wormAct = "devour";
+      e.devourTell = 0.95;
+      e.devourCharge = 0;
+      e.devourGlow = 1.0;
+      warnAt(state, {
+        kind: "mark",
+        x: e.devourFromX,
+        y: e.devourFromY,
+        t: 0.95,
+        max: 0.95,
+        r: 40,
+        dmg: 0,
+        color: "#ff6a3a"
+      });
+      warnAt(state, {
+        kind: "mark",
+        x: prey0.x,
+        y: prey0.y,
+        t: 0.95,
+        max: 0.95,
+        r: 28,
+        dmg: 0,
+        color: "#ff4a2a"
+      });
+      state.banner = { text: "Olho em " + e.devourPreyName, t: 1.2 };
+      return;
+    }
+
+    // Sandstorm
+    var sb = G.playfield(state);
+    var stormSpots = [];
+    var room = Math.max(0, 3 - countSandstorms(state));
+    var nStorm = Math.min(rage || p2 ? 3 : 2, Math.max(1, room));
+    for (var si = 0; si < nStorm; si++) {
+      stormSpots.push({
+        x: sb.x0 + 70 + Math.random() * Math.max(40, sb.x1 - sb.x0 - 140),
+        y: sb.y0 + 70 + Math.random() * Math.max(40, sb.y1 - sb.y0 - 140)
       });
     }
-    e.wormAct = "spikes";
-    e.spikeSpots = spots;
-    e.spikeWait = 0.55;
-    e.spikeDid = false;
-    for (var sm = 0; sm < spots.length; sm++) {
-      warnAt(state, { kind: "mark", x: spots[sm].x, y: spots[sm].y, t: 0.55, max: 0.55, r: 16, dmg: 0, color: "#6a4a22" });
+    e.stormSpots = stormSpots;
+    e.wormAct = "storm";
+    e.stormTell = 0.45;
+    e.stormPhase = "";
+    e.stormIdx = 0;
+    for (var sm = 0; sm < stormSpots.length; sm++) {
+      warnAt(state, {
+        kind: "mark",
+        x: stormSpots[sm].x,
+        y: stormSpots[sm].y,
+        t: 0.45 + sm * 0.08,
+        max: 0.55,
+        r: 22,
+        dmg: 0,
+        color: "#8a6030"
+      });
     }
   }
 
@@ -7383,6 +8071,7 @@
 
   function tryDash(state) {
     if (state.paused || state.userPaused || state.stageOutro || state.defeat || (G.invasion && G.invasion.cinematic(state))) return false;
+    if (state.arklanGullet || state.arklanSpit) return false; // plane dash is owned by arklan-p2
     if (state.glinderBurn || (state.glinderMaze && state.glinderMaze.phase === "build")) return false;
     if (state.timeLock && state.timeLock.phase !== "slow") return false;
     if ((state.dashCd || 0) > 0) return false;
@@ -7491,6 +8180,13 @@
   function steerSquad(state, dt) {
     if (state.dashCd > 0) state.dashCd = Math.max(0, state.dashCd - dt);
     state.dashStep = null;
+    if (state.arklanGullet) {
+      // Gullet side-scroller owns craft movement (free 2D in tickGullet).
+      state.dashActive = false;
+      state.dashT = 0;
+      state.dashSlideT = 0;
+      return;
+    }
     if (state.stageOutro || (state.timeLock && state.timeLock.phase !== "slow") || (G.invasion && G.invasion.cinematic(state)) || (state.glinderMaze && state.glinderMaze.phase === "build") || state.glinderBurn || state.glinderDeath) {
       state.dashActive = false;
       state.dashT = 0;
@@ -7579,7 +8275,10 @@
 
   function updateSquad(state, dt) {
     gatherAuras(state, dt);
+    var ox = state.squad.x;
+    var oy = state.squad.y;
     steerSquad(state, dt);
+    resolveWormWalls(state, ox, oy);
     if (state.squad.lx == null) {
       state.squad.lx = state.squad.x;
       state.squad.ly = state.squad.y;
@@ -7783,7 +8482,7 @@
     var units = state.units;
     for (var i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
-      if (e.hp <= 0) continue;
+      if (e.hp <= 0 && !(e.arklanBroken && e.type === "chefe_arklan")) continue;
       if (e.fallen) {
         e.vx = e.vy = 0;
         continue;
@@ -7802,6 +8501,7 @@
       if (e.slowT > 0) e.slowT -= dt;
       if (e.drunkT > 0) e.drunkT -= dt;
       if (e.freezeT > 0) e.freezeT -= dt;
+      if (e.stunT > 0) e.stunT -= dt;
       if (e.silenceT > 0) {
         e.silenceT -= dt;
         e.cooldown += dt;
@@ -7846,6 +8546,13 @@
         }
       }
       if (!e.stolen && G.tactics && G.tactics.tickConfuse && G.tactics.tickConfuse(state, e, dt)) continue;
+      if ((e.stunT || 0) > 0 || (e.psiSlam && e.psiSlam.phase)) {
+        e.vx = 0;
+        e.vy = 0;
+        e.cooldown += dt;
+        e.burstCd += dt;
+        continue;
+      }
       var target;
       if (e.stolen) {
         e.stolenT = (e.stolenT || 0) - dt;
@@ -8575,6 +9282,7 @@
       var p = state.projectiles[i];
       if (p.arc || p.orbitBoss) continue;
       if (p.held) continue;
+      if (p.spinSpd) p.spin = (p.spin || 0) + p.spinSpd * dt;
       if (state.timeLock && p.team === "player") continue;
       if (state.timeLock && p.kind !== "timeshot") continue;
       if (p.kind === "dropshot" && p.z != null) {
@@ -8606,7 +9314,7 @@
           var hy = tgt.y - p.y;
           var hl = Math.sqrt(hx * hx + hy * hy) || 1;
           var sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy) || 210;
-          var steer = p.homeId && !p.homeCursor ? 0.2 : 0.16;
+          var steer = p.steer != null ? p.steer : (p.homeId && !p.homeCursor ? 0.2 : 0.16);
           p.vx = p.vx * (1 - steer) + (hx / hl) * sp * steer;
           p.vy = p.vy * (1 - steer) + (hy / hl) * sp * steer;
         }
@@ -8948,6 +9656,11 @@
         p.vy -= 28 * dt;
         p.vx *= Math.max(0.2, 1 - dt * 0.55);
       }
+      if (p.sand) {
+        p.vy += 95 * dt;
+        p.vx *= Math.max(0.15, 1 - dt * 1.1);
+        p.ang = Math.atan2(p.vy, p.vx);
+      }
       if (p.life <= 0) state.particles.splice(i, 1);
     }
     for (var j = state.floaters.length - 1; j >= 0; j--) {
@@ -9215,6 +9928,28 @@
         tickGlinderFlash(state, dt);
         return;
       }
+      if (state.arklanGullet) {
+        updateSquad(state, dt);
+        if (G.arklanP2 && G.arklanP2.tickGullet) G.arklanP2.tickGullet(state, dt);
+        updateFx(state, dt);
+        if (state.vfx) {
+          for (var agv = 0; agv < state.vfx.length; agv++) state.vfx[agv].t -= dt;
+          state.vfx = state.vfx.filter(function (fx) { return fx.t > 0; });
+        }
+        state.shake *= Math.max(0, 1 - dt * 2.2);
+        return;
+      }
+      if (state.arklanSpit) {
+        updateSquad(state, dt);
+        if (G.arklanP2 && G.arklanP2.tickSpit) G.arklanP2.tickSpit(state, dt);
+        updateFx(state, dt);
+        if (state.vfx) {
+          for (var asv = 0; asv < state.vfx.length; asv++) state.vfx[asv].t -= dt;
+          state.vfx = state.vfx.filter(function (fx) { return fx.t > 0; });
+        }
+        state.shake *= Math.max(0, 1 - dt * 2.2);
+        return;
+      }
       if (G.invasion && G.invasion.cinematic(state)) {
         G.invasion.tickCutscene(state, dt);
         updateFx(state, dt);
@@ -9266,6 +10001,7 @@
       tickGlinderRub(state, dt);
       if (G.tactics && G.tactics.shieldPhysics) G.tactics.shieldPhysics(state);
       updateProjectiles(state, dt);
+      tickSandWaves(state, dt);
       updateMines(state, dt);
       updateWarnings(state, dt);
       updateDrops(state, dt);
@@ -9277,7 +10013,9 @@
       state.units = state.units.filter(function (u) {
         return u.hp > 0 || u.commander;
       });
-      state.enemies = state.enemies.filter(function (e) { return e.hp > 0; });
+      state.enemies = state.enemies.filter(function (e) {
+        return e.hp > 0 || e.arklanBroken || e.immortal || e.glinderDying;
+      });
       activesOf(state);
     },
     dist: dist,
@@ -9286,6 +10024,10 @@
     enemyInPullField: enemyInPullField,
     flameAt: flameAt,
     explode: explode,
+    killEnemy: killEnemy,
+    hurtSquadArea: hurtSquadArea,
+    warnAt: warnAt,
+    hurtLane: hurtLane,
     dmgMul: dmgMul,
     fireMul: fireMul,
     activesOf: activesOf,
@@ -9304,5 +10046,13 @@
     endGlinderNight: endGlinderNight,
     rubGlinderFire: rubGlinderFire,
     dashCd: function () { return DASH_CD; }
+  };
+
+  G._arklanP2Api = {
+    warnAt: warnAt,
+    hurtLane: hurtLane,
+    hurt: hurt,
+    hurtSquadArea: hurtSquadArea,
+    killEnemy: killEnemy
   };
 })(window.TFAG = window.TFAG || {});

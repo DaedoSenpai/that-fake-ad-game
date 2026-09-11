@@ -14,7 +14,40 @@
       hp: 46, dmg: 9, range: 140, fire: 0.85, speed: 152, size: 12,
       color: "#9ad4ff", accent: "#d7f1ff", projectile: "bullet", role: "recruit",
       blurb: "A base do esquadrão. Tiro reto, sem especialidade.",
-      merge: ["fuzileiro", "pistoleiro", "batedor"]
+      merge: ["fuzileiro", "pistoleiro", "batedor", "psiquico"]
+    }),
+    psiquico: u({
+      kind: "psiquico", name: "Psíquico", short: "PSI", gen: 1,
+      hp: 58, dmg: 12, range: 185, fire: 1.0, speed: 148, size: 12,
+      color: "#b08cff", accent: "#f0e8ff", projectile: "bullet", role: "psychic",
+      blurb: "Soldado com implante psíquico. Balas curvam de leve nos inimigos.",
+      active: { id: "psych_slam", name: "Martelo mental", cd: 12, desc: "Joga um dispositivo na mira. Levanta inimigos e bate no chão: pouco dano, atordoa." },
+      merge: ["escolhido"]
+    }),
+    escolhido: u({
+      kind: "escolhido", name: "Escolhido", short: "ESC", gen: 2,
+      hp: 78, dmg: 15, range: 205, fire: 1.2, speed: 152, size: 13,
+      color: "#d4c090", accent: "#ffe8a8", projectile: "laser", role: "chosen",
+      blurb: "Paródia espacial com blaster. Tiros laser. A ativa vira um stormtrooper: cadência absurda, mira péssima.",
+      active: { id: "stormtrooper", name: "Stormtrooper", cd: 14, desc: "Por 6s dispara feito louco, mas a mira fica uma bosta." },
+      merge: ["jedi"]
+    }),
+    jedi: u({
+      kind: "jedi", name: "Jedi", short: "JED", gen: 3,
+      hp: 165, dmg: 36, range: 115, fire: 1.05, speed: 168, size: 14,
+      color: "#8a6a3a", accent: "#7affc8", projectile: "none", role: "jedi",
+      blurb: "Melee com sabre de energia. Salta no inimigo e corta de perto. Tem bastante vida.",
+      active: { id: "saber_throw", name: "Sabre bumerangue", cd: 11, desc: "Arremessa o sabre: causa dano no caminho e volta pra mão." },
+      merge: ["mestre"]
+    }),
+    mestre: u({
+      kind: "mestre", name: "Mestre", short: "MST", gen: 4,
+      hp: 230, dmg: 48, range: 130, fire: 1.15, speed: 172, size: 15,
+      color: "#5a3a78", accent: "#e8b0ff", projectile: "none", role: "jedi",
+      unique: true,
+      blurb: "Versão superior do Jedi. Menu radial com empurrão, puxão, sabre bumerangue e giro de sabre.",
+      active: { id: "force_menu", name: "Arsenal da Força", cd: 0, desc: "Segura o direito: menu radial. Cada poder tem recarga própria." },
+      merge: []
     }),
     fuzileiro: u({
       kind: "fuzileiro", name: "Fuzileiro", short: "FUZ", gen: 1,
@@ -440,6 +473,7 @@
   G.unitStatsLine = function (def) {
     if (def.role === "warlord") return def.hp + " HP · " + def.dmg + " corte · alcance " + def.range;
     if (def.role === "paladin") return def.hp + " HP · " + def.dmg + " impacto · alcance " + def.range;
+    if (def.role === "jedi") return def.hp + " HP · " + def.dmg + " sabre · alcance " + def.range;
     if (def.role === "reaper") return def.hp + " HP · " + def.dmg + " corte · alcance " + def.range + " · aoe " + (def.aoe || 60);
     if (def.role === "colossus") return def.hp + " HP · " + def.dmg + " impacto · aoe " + (def.aoe || 250);
     if (def.projectile === "none") return def.hp + " HP · suporte · não atira";
@@ -449,7 +483,8 @@
 
   G.unitSticker = function (kind) {
     var map = {
-      recruta: "🪖", fuzileiro: "🔫", pistoleiro: "🩺", batedor: "👟",
+      recruta: "🪖", fuzileiro: "🔫", pistoleiro: "🩺", batedor: "👟", psiquico: "🧠",
+      escolhido: "✦", jedi: "⚔", mestre: "✴",
       sniper: "🎯", metralhador: "🌪", caminhao: "🚚", medico: "✚",
       dualista: "🔫", engenheiro: "🔧", infiltrador: "🕶", mensageiro: "📨",
       droneiro: "🛸", ponta_lanca: "⚔", ceifador: "☽", phalanx: "🛡", warlord: "🪓", anti_material: "🔭", observador: "👁", lanca_chamas: "🔥",
@@ -513,7 +548,11 @@
     airstrike: { icon: "💣", color: "#5ad0c8", detail: "Desenha uma linha. Explosões caem no caminho." },
     carpetbomb: { icon: "✈", color: "#2ad8ff", detail: "Bombas caem sem parar sob a mira." },
     archive: { icon: "⭐", color: "#ffd24a", detail: "O esquadrão pega o reforço caído e vira arquivo. R abre a lista: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Colosso custa 100." },
-    guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito e abre um menu radial no clique. Cima: aura em volta do comandante — cura 2% da vida máxima por segundo durante 5s (15s de recarga). Direita: airstrike com fogo no chão (20s). Esquerda: recruta nasce perto do comandante — máx. 2 por fase (30s). Solta na fatia pra disparar no centro do menu; volta pro centro pra cancelar." }
+    guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito e abre um menu radial no clique. Cima: aura em volta do comandante — cura 2% da vida máxima por segundo durante 5s (15s de recarga). Direita: airstrike com fogo no chão (20s). Esquerda: recruta nasce perto do comandante — máx. 2 por fase (30s). Solta na fatia pra disparar no centro do menu; volta pro centro pra cancelar." },
+    psych_slam: { icon: "🔮", color: "#b08cff", detail: "Dispositivo na mira. Levanta inimigos próximos e esmaga no chão: pouco dano, atordoa por ~1,4s. Chefes levam stun curto." },
+    stormtrooper: { icon: "💥", color: "#d4c090", detail: "Por 6s a cadência explode, mas cada tiro sai com mira horrível — clássico stormtrooper." },
+    saber_throw: { icon: "⚔", color: "#7affc8", detail: "Arremessa o sabre até a mira. Corta no caminho de ida e na volta." },
+    force_menu: { icon: "◎", color: "#e8b0ff", detail: "Segura o direito: menu radial. Empurrão, puxão, sabre e giro têm recarga individual (como a guerrilha do comandante). Centro cancela." }
   };
 
   G.activeMeta = function (id) {
@@ -565,7 +604,8 @@
       grenade: "granada",
       crate: "caixote",
       missile: "míssil",
-      laser: "laser"
+      laser: "laser",
+      saber: "sabre"
     };
     return map[p] || p || "bala";
   }
@@ -597,12 +637,12 @@
     var rows = [
       G.unitTierLabel(def) + (def.role === "commander" ? " · não ocupa o limite" : ""),
       "HP " + def.hp,
-      def.role === "warlord" ? "Dano " + def.dmg + " (machado)" : def.role === "paladin" ? "Dano " + def.dmg + " (lança)" : def.role === "reaper" ? "Dano " + def.dmg + " (círculo)" : def.role === "colossus" ? "Dano " + def.dmg + " (melee)" : def.projectile === "none" ? "Dano — (suporte)" : "Dano " + def.dmg,
-      def.role === "warlord" || def.role === "paladin" || def.role === "reaper" || def.role === "colossus" ? "Alcance " + def.range : def.projectile === "none" ? "Alcance —" : (def.infiniteRange ? "Alcance ∞" : "Alcance " + def.range),
+      def.role === "warlord" ? "Dano " + def.dmg + " (machado)" : def.role === "paladin" ? "Dano " + def.dmg + " (lança)" : def.role === "jedi" ? "Dano " + def.dmg + " (sabre)" : def.role === "reaper" ? "Dano " + def.dmg + " (círculo)" : def.role === "colossus" ? "Dano " + def.dmg + " (melee)" : def.projectile === "none" ? "Dano — (suporte)" : "Dano " + def.dmg,
+      def.role === "warlord" || def.role === "paladin" || def.role === "jedi" || def.role === "reaper" || def.role === "colossus" ? "Alcance " + def.range : def.projectile === "none" ? "Alcance —" : (def.infiniteRange ? "Alcance ∞" : "Alcance " + def.range),
       def.role === "reaper" ? "AoE " + (def.aoe || 60) : def.role === "colossus" ? "AoE " + (def.aoe || 250) : null,
       def.fire ? "Cadência " + def.fire.toFixed(2) + "/s" : "Cadência —",
       "Velocidade " + def.speed,
-      def.role === "warlord" ? "Arma: machados gêmeos" : def.role === "paladin" ? "Arma: lança" : def.role === "reaper" ? "Arma: foice" : def.role === "colossus" ? "Arma: punho, escudo e slam" : "Arma: " + projLabel(def.projectile)
+      def.role === "warlord" ? "Arma: machados gêmeos" : def.role === "paladin" ? "Arma: lança" : def.role === "jedi" ? "Arma: sabre de energia" : def.role === "reaper" ? "Arma: foice" : def.role === "colossus" ? "Arma: punho, escudo e slam" : "Arma: " + projLabel(def.projectile)
     ];
     rows = rows.filter(function (line) { return !!line; });
     if (def.flying) rows.push("Aérea");
@@ -621,6 +661,10 @@
     fuzileiro: { id: "focus", name: "Modo foco", desc: "Cadência alta e tiro preciso na mira. Enquanto atira, o esquadrão fica 30% mais lento." },
     pistoleiro: { id: "hitheal", name: "Kit no acerto", desc: "Acerto pode soltar um kit de vida no chão. O esquadrão se cura ao passar." },
     batedor: { id: "scoutgun", name: "Passo leve", desc: "O mais rápido do começo. A disparada atravessa inimigos e causa dano de contato." },
+    psiquico: { id: "softseek", name: "Munição sintonizada", desc: "Balas teleguiadas leves: curvam no inimigo mais perto da mira, sem perseguir agressivo." },
+    escolhido: { id: "blaster", name: "Blaster", desc: "Tiros laser rápidos. A ativa troca precisão por volume — e a mira piora pra valer." },
+    jedi: { id: "sabercut", name: "Corte de sabre", desc: "Salta no inimigo mais perto e corta de perto. Muita vida pra um melee." },
+    mestre: { id: "forcemaster", name: "Domínio", desc: "Como o Jedi, com mais peso. A ativa abre o arsenal da Força num menu radial." },
     sniper: { id: "rangedmg", name: "Punição de perto", desc: "Alcance infinito. A bala atravessa a tela na linha da mira. Dano sobe com a distância; de perto, fraqueja." },
     metralhador: { id: "recoil", name: "Coice", desc: "Cinco tiros em leque na mira. O recuo empurra o esquadrão pro lado oposto." },
     caminhao: { id: "bumper", name: "Bolha de comando", desc: "Escudo em volta do grupo (7 pontos). Segura o esquadrão dentro, empurra inimigo. Contato físico e projétil gastam o escudo. Recarrega 1 ponto a cada 5s e volta inteiro em 10s se quebrar. Merges da linha têm 10 pontos." },

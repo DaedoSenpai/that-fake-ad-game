@@ -205,8 +205,9 @@
         if (G.combat && G.combat.ensureHive) G.combat.ensureHive(state);
       }
       if (type === "chefe_arklan" && !(extra && extra.noLink)) {
+        state.desertZoom = 0.68;
         state.camZoomTo = 0.68;
-        state.banner = { text: "A areia se abre", t: 2.2 };
+        state.banner = { text: "O deserto engole", t: 2.2 };
       }
       return e;
     },
@@ -275,10 +276,18 @@
       state.archiveMenu = false;
       state.vfx = [];
       state.firewaves = [];
+      state.sandwaves = [];
+      state.arklanSeals = [];
+      state.arklanCage = null;
+      state.arklanHeat = 0;
       state.cmdOrders = { crate: 0, recruit: 0, strike: 0 };
       state.cmdRecruitUsed = 0;
       state.guerrillaDraw = null;
       state.guerrillaMenu = null;
+      state.forceMenu = null;
+      state.forceOrders = { push: 0, pull: 0, saber: 0, spin: 0 };
+      state.forceWaves = [];
+      state.forceWells = [];
       state.cmdStrikes = [];
       state.units.push(G.createPlayerUnit(state.squad.x, state.squad.y, "comandante", state.run, perm));
       for (var i = 0; i < count; i++) {
@@ -329,6 +338,10 @@
       state.squad.ly = state.squad.y;
       state.zones = [];
       state.firewaves = [];
+      state.sandwaves = [];
+      state.arklanSeals = [];
+      state.arklanCage = null;
+      state.arklanHeat = 0;
       state.minions = [];
       state.drones = [];
       state.deploys = [];
@@ -344,6 +357,9 @@
       state.cmdRecruitUsed = 0;
       state.guerrillaDraw = null;
       state.guerrillaMenu = null;
+      state.forceMenu = null;
+      state.forceWaves = [];
+      state.forceWells = [];
       state.cmdStrikes = [];
       state.keys = state.keys || {};
       for (var r = 0; r < state.units.length; r++) {
@@ -416,10 +432,14 @@
       if (!state.defeat) G.audio.sync(state, dt);
       if (state.defeat) return "play";
 
-      if (!state.spawnQueue.length && !state.waitingClear && !state.stageOutro && !state.bossCutscene && !state.glinderDeath) {
+      if (!state.spawnQueue.length && !state.waitingClear && !state.stageOutro && !state.bossCutscene && !state.glinderDeath && !state.arklanGullet && !state.arklanSpit) {
         var hostilesLeft = 0;
         for (var he = 0; he < state.enemies.length; he++) {
-          if (state.enemies[he].hp > 0 && !state.enemies[he].stolen && !state.enemies[he].scenery) hostilesLeft++;
+          var enLeft = state.enemies[he];
+          if (enLeft.stolen || enLeft.scenery) continue;
+          // Arklan P2 broken / Glinder dying still count as active fight
+          if (enLeft.arklanBroken || enLeft.glinderDying) hostilesLeft++;
+          else if (enLeft.hp > 0) hostilesLeft++;
         }
         if (hostilesLeft === 0) {
         state.waitingClear = true;
@@ -443,6 +463,7 @@
             state.stageOutro = { phase: "loot", t: 0 };
             state.vacuumLoot = true;
             state.guerrillaMenu = null;
+            state.forceMenu = null;
             state.held = null;
             state.mergeHint = null;
             if (state.drops) {
@@ -507,6 +528,7 @@
       }
       if (state.glinderBurn && !state.glinderAshDefeat) return "play";
       if (state.glinderDeath) return "play";
+      if (state.arklanSpit) return "play";
       if (!cmdAlive || state.units.length === 0) return "dead";
       return "play";
     }

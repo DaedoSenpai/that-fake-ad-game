@@ -1337,6 +1337,10 @@ h2 {
   max-width: min(92vw, 480px);
 }
 
+#active-bar.hidden {
+  display: none;
+}
+
 #buff-tray {
   position: absolute;
   right: 12px;
@@ -1544,6 +1548,10 @@ h2 {
 .active-slot.guerrilla {
   width: 58px;
   min-height: 50px;
+}
+
+.active-slot.guerrilla.force {
+  width: 72px;
 }
 
 .active-slot.guerrilla.cd::after {

@@ -196,7 +196,7 @@
       e.hpBars = 1;
       e.flash = Math.max(e.flash || 0, 0.55);
       if (state) state.bossShown = 1;
-      var text = label || (e.type === "chefe_comandante" ? "Kaska perde a carapaça" : (e.type === "chefe_vulto" ? "Glinder · a lua queima" : "Segunda fase"));
+      var text = label || (e.type === "chefe_comandante" ? "Kaska perde a carapaça" : (e.type === "chefe_vulto" ? "Glinder · a lua queima" : (e.type === "chefe_arklan" ? "Arklan · carcaça de ferro" : "Segunda fase")));
       G.burst(state, e.x, e.y, "#ffe08a", 22, 150);
       G.burst(state, e.x, e.y, e.def.color || "#ff6a3a", 18, 120);
       if (state) state.shake = Math.max(state.shake || 0, 10);
@@ -230,6 +230,7 @@
       state.booms = [];
       state.zones = [];
       state.firewaves = [];
+      state.sandwaves = [];
       state.minions = [];
       state.drones = [];
       state.deploys = [];
@@ -244,6 +245,7 @@
       state.bombPending = null;
       state.guerrillaDraw = null;
       state.guerrillaMenu = null;
+      state.forceMenu = null;
       state.hook = null;
       state.waitingClear = false;
       for (var u = 0; u < (state.units || []).length; u++) {
@@ -318,12 +320,17 @@
       if (!cs) return;
       var e = this.findCutsceneBoss(state, cs);
       var spec = this.specFor(cs.type);
-      if (spec.onEnd) spec.onEnd(state, e, cs);
+      try {
+        if (spec.onEnd) spec.onEnd(state, e, cs);
+      } catch (err) {
+        if (typeof console !== "undefined" && console.warn) console.warn("cutscene onEnd", cs.type, err);
+      }
       if (e) e.immortal = false;
       state.bossCutscene = null;
       if (state.defeat) return;
       state.camLook = cs.prevLook || null;
-      var z = cs.prevZoom;
+      // keepZoom wins (Arklan P2 must stay at desert zoom-out)
+      var z = cs.keepZoom != null ? cs.keepZoom : cs.prevZoom;
       if (!(z > 0) || !isFinite(z)) z = 1;
       else z = Math.max(0.15, Math.min(8, z));
       state.camZoomTo = z;
@@ -851,6 +858,672 @@
           }
           state.glinderHeat = 0.38;
           state.camZoomTo = 1;
+        }
+      },
+      chefe_arklan: {
+        dur: 12.8,
+        zoom: 0.68,
+        onStart: function (state, e, cs) {
+          cs.keepZoom = state.desertZoom > 0 ? state.desertZoom : (state.camZoomTo > 0 ? state.camZoomTo : 0.68);
+          state.desertZoom = cs.keepZoom;
+          var b = G.playfield(state);
+          cs.cx = (b.x0 + b.x1) / 2;
+          cs.cy = (b.y0 + b.y1) / 2;
+          cs.fromX = e && isFinite(e.x) ? e.x : cs.cx;
+          cs.fromY = e && isFinite(e.y) ? e.y : cs.cy;
+          cs.debris = [];
+          cs.scraps = [];
+          cs.corners = [];
+          cs.rings = [];
+          cs.flash = 0;
+          cs.feast = false;
+          cs.mutated = false;
+          cs.sealed = false;
+          cs.scream = false;
+          cs.nextDebris = 0.05;
+          cs.mawFace = 0;
+          cs.rays = [];
+          state.arklanSeals = [];
+          state.arklanCage = null;
+          state.arklanHeat = 0.12;
+          state.banner = { text: "", t: 0 };
+          if (e) {
+            e.vx = e.vy = 0;
+            e.arklanMech = 0;
+            e.arklanArmor = false;
+            e.mawOpen = 0;
+            e.devourGlow = 0.6;
+            e.rumblePulse = 0.25;
+            e.wormAct = "";
+            e.zDraw = 0;
+            e.buried = false;
+            e.phased = false;
+            e.stealth = 0;
+            e.headFlash = 0.5;
+            e.rot = cs.mawFace;
+            if (e.wormSegs && e.wormSegs.length) {
+              var si;
+              for (si = 0; si < e.wormSegs.length; si++) {
+                cs.scraps.push({
+                  x: e.wormSegs[si].x,
+                  y: e.wormSegs[si].y,
+                  vx: 0,
+                  vy: 0,
+                  kind: "flesh",
+                  r: (e.wormSegs[si].r || 28) * 0.55,
+                  life: 2.8,
+                  spin: Math.random() * Math.PI * 2
+                });
+              }
+              e.wormSegs = [];
+            }
+          }
+          // Pre-seed military feast: tanks, trucks, gullet craft, soldiers
+          (function seedFeast() {
+            var kinds = ["tank", "truck", "craft", "soldier", "soldier", "tank", "truck", "soldier", "craft", "soldier"];
+            var ki;
+            for (ki = 0; ki < kinds.length; ki++) {
+              var ang0 = (ki / kinds.length) * Math.PI * 2 + Math.random() * 0.4;
+              var rad0 = 160 + Math.random() * 220;
+              var kk = kinds[ki];
+              var rr =
+                kk === "tank" ? 22 + Math.random() * 8 :
+                kk === "truck" ? 18 + Math.random() * 6 :
+                kk === "craft" ? 20 + Math.random() * 6 :
+                8 + Math.random() * 3;
+              cs.debris.push({
+                x: cs.fromX + Math.cos(ang0) * rad0,
+                y: cs.fromY + Math.sin(ang0) * rad0,
+                vx: 0,
+                vy: 0,
+                kind: kk,
+                r: rr,
+                r0: rr,
+                life: 6.5 + Math.random(),
+                spin: Math.random() * Math.PI * 2,
+                z: 0.35 + Math.random() * 0.65
+              });
+            }
+          })();
+          state.camLook = { x: cs.fromX, y: cs.fromY };
+          state.shake = Math.max(state.shake || 0, 8);
+          G.burst(state, cs.fromX, cs.fromY, "#c4a06a", 20, 120);
+          G.burst(state, cs.fromX, cs.fromY, "#ff6a3a", 12, 90);
+          if (G.audio && G.audio.explosion) G.audio.explosion();
+        },
+        tick: function (state, e, cs, dt) {
+          var t = cs.t;
+          if (!e || e.hp <= 0) {
+            state.camLook = { x: cs.cx, y: cs.cy };
+            return;
+          }
+          var b = G.playfield(state);
+          var feastEnd = 5.1;
+          var morphEnd = 8.2;
+          var sealEnd = 10.0;
+          var screamAt = 10.75;
+          var k;
+          var i;
+
+          function pullScrap(list, spd, eatR, vacuum) {
+            var mouthX = e.x + Math.cos(e.rot || 0) * 36;
+            var mouthY = e.y + Math.sin(e.rot || 0) * 36;
+            for (i = list.length - 1; i >= 0; i--) {
+              var d = list[i];
+              d.life -= dt;
+              d.spin = (d.spin || 0) + dt * (3.5 + spd * 0.008);
+              var dx = mouthX - d.x;
+              var dy = mouthY - d.y;
+              var dist = Math.hypot(dx, dy) || 1;
+              var tx = -dy / dist;
+              var ty = dx / dist;
+              // Stronger radial suck; orbit fades as vacuum / close range
+              var pull = spd * (0.85 + Math.min(2.2, 140 / dist));
+              if (vacuum) pull *= 2.4;
+              var orbit = vacuum ? 8 : Math.min(70, 18 + dist * 0.12) * Math.min(1, dist / 160);
+              d.vx = (d.vx || 0) * (vacuum ? 0.72 : 0.82) + (dx / dist) * pull * dt + tx * orbit * dt;
+              d.vy = (d.vy || 0) * (vacuum ? 0.72 : 0.82) + (dy / dist) * pull * dt + ty * orbit * dt;
+              // Hard snap when close so nothing stalls outside the maw
+              if (dist < (vacuum ? 140 : 70)) {
+                d.x += dx * Math.min(1, dt * (vacuum ? 8 : 4));
+                d.y += dy * Math.min(1, dt * (vacuum ? 8 : 4));
+              } else {
+                d.x += d.vx * dt;
+                d.y += d.vy * dt;
+              }
+              dist = Math.hypot(mouthX - d.x, mouthY - d.y) || 1;
+              if (dist < 100) d.r = (d.r0 || d.r) * Math.max(0.18, dist / 100);
+              var eaten = dist < eatR || (vacuum && dist < eatR * 2.2) || d.life <= 0;
+              if (eaten) {
+                var wasBig = d.kind === "tank" || d.kind === "truck" || d.kind === "craft";
+                // Never leave leftovers floating — yank into maw if still far
+                if (dist >= eatR * 1.8) {
+                  d.x = mouthX;
+                  d.y = mouthY;
+                  dist = 0;
+                }
+                list.splice(i, 1);
+                e.devourGlow = Math.max(e.devourGlow || 0, wasBig ? 1.6 : 1.25);
+                e.rumblePulse = Math.min(1, (e.rumblePulse || 0) + (wasBig ? 0.16 : 0.07));
+                if ((e.mawOpen || 0) > 0.15 || vacuum || dist < eatR) {
+                  e.mawOpen = Math.min(1, Math.max(e.mawOpen || 0, 0.25) + (wasBig ? 0.08 : 0.035));
+                }
+                state.shake = Math.max(state.shake || 0, wasBig ? 9 : 4);
+                if (wasBig) {
+                  G.burst(state, mouthX, mouthY, "#a8b8c8", 10, 55);
+                  G.burst(state, mouthX, mouthY, "#ff8a40", 6, 40);
+                  if (G.audio && G.audio.thud) G.audio.thud();
+                } else if (Math.random() < 0.45) {
+                  G.burst(state, mouthX, mouthY, d.kind === "soldier" ? "#c4a06a" : "#e8c070", 4, 30);
+                }
+              }
+            }
+          }
+
+          function vacuumAll(force) {
+            pullScrap(cs.debris, force ? 900 : 620, 36, true);
+            pullScrap(cs.scraps, force ? 850 : 560, 40, true);
+            if (force) {
+              // Nothing left floating after morph seals shut
+              if ((cs.debris || []).length || (cs.scraps || []).length) {
+                var mouthX = e.x + Math.cos(e.rot || 0) * 36;
+                var mouthY = e.y + Math.sin(e.rot || 0) * 36;
+                var left = (cs.debris || []).length + (cs.scraps || []).length;
+                cs.debris = [];
+                cs.scraps = [];
+                if (left > 0) {
+                  e.devourGlow = Math.max(e.devourGlow || 0, 1.5);
+                  state.shake = Math.max(state.shake || 0, 8);
+                  G.burst(state, mouthX, mouthY, "#a8b8c8", 12, 60);
+                  G.burst(state, mouthX, mouthY, "#ff8a40", 8, 45);
+                }
+              }
+            }
+          }
+
+          // 1) Rage + military feast
+          if (t < feastEnd) {
+            k = t / feastEnd;
+            e.buried = false;
+            e.phased = false;
+            e.stealth = 0;
+            e.arklanMech = 0;
+            if (t < 0.55) e.mawOpen = Math.min(1, t / 0.55);
+            else if (t < feastEnd - 0.65) e.mawOpen = 1;
+            else e.mawOpen = Math.max(0.35, (feastEnd - t) / 0.65); // keep maw ajar while finishing swallows
+            cs.mawFace = (cs.mawFace || 0) + dt * (0.5 + k * 0.4);
+            e.rot = cs.mawFace;
+            e.x = cs.fromX + Math.sin(t * 2.2) * 3;
+            e.y = cs.fromY + Math.cos(t * 1.8) * 2;
+            e.devourGlow = 0.55 + e.mawOpen * 0.75;
+            e.rumblePulse = 0.2 + e.mawOpen * 0.5;
+            state.arklanHeat = Math.min(0.55, 0.1 + k * 0.4);
+            state.camLook = { x: e.x + Math.cos(e.rot) * 48, y: e.y + Math.sin(e.rot) * 48 };
+            state.camZoomTo = cs.keepZoom || 0.68;
+            state.shake = Math.max(state.shake || 0, 3 + e.mawOpen * 5);
+            cs.nextDebris -= dt;
+            var feastVacuum = t > feastEnd - 1.1;
+            // Stop spawning near the end so leftovers can be swallowed
+            if (cs.nextDebris <= 0 && e.mawOpen > 0.3 && !feastVacuum) {
+              cs.nextDebris = 0.085 + Math.random() * 0.05;
+              var face = e.rot || 0;
+              var cone = face + (Math.random() - 0.5) * 1.65;
+              var rad = 120 + Math.random() * Math.max(60, Math.min(b.x1 - b.x0, b.y1 - b.y0) * 0.42);
+              var roll = Math.random();
+              var kind =
+                roll < 0.12 ? "tank" :
+                roll < 0.24 ? "truck" :
+                roll < 0.34 ? "craft" :
+                roll < 0.55 ? "soldier" :
+                roll < 0.78 ? "scrap" : "sand";
+              var rr =
+                kind === "tank" ? 20 + Math.random() * 10 :
+                kind === "truck" ? 16 + Math.random() * 8 :
+                kind === "craft" ? 18 + Math.random() * 7 :
+                kind === "soldier" ? 7 + Math.random() * 3 :
+                kind === "scrap" ? 5 + Math.random() * 7 :
+                2.5 + Math.random() * 3;
+              cs.debris.push({
+                x: e.x + Math.cos(cone) * rad,
+                y: e.y + Math.sin(cone) * rad,
+                vx: 0,
+                vy: 0,
+                kind: kind,
+                r: rr,
+                r0: rr,
+                life: 3.6 + Math.random(),
+                spin: Math.random() * Math.PI * 2,
+                z: 0.3 + Math.random() * 0.7
+              });
+            }
+            if (feastVacuum) {
+              vacuumAll(false);
+            } else {
+              pullScrap(cs.debris, 420 + k * 320, 34, false);
+              pullScrap(cs.scraps, 360, 38, false);
+            }
+            if (t > 0.4 && !cs.feast) {
+              cs.feast = true;
+            }
+            if (e.mawOpen > 0.4 && Math.random() < 0.65) {
+              var fa = e.rot || 0;
+              var fr = 50 + Math.random() * 100;
+              state.particles.push({
+                x: e.x + Math.cos(fa) * fr + (Math.random() - 0.5) * 34,
+                y: e.y + Math.sin(fa) * fr + (Math.random() - 0.5) * 34,
+                vx: -Math.cos(fa) * (100 + Math.random() * 90),
+                vy: -Math.sin(fa) * (100 + Math.random() * 90),
+                life: 0.35 + Math.random() * 0.28,
+                max: 0.65,
+                size: 1.6 + Math.random() * 2.6,
+                color: Math.random() > 0.45 ? "#e8c070" : "#c4a06a",
+                sand: true
+              });
+            }
+            // Maw light rays
+            if (Math.random() < 0.08) {
+              cs.rays.push({
+                ang: (e.rot || 0) + (Math.random() - 0.5) * 0.9,
+                life: 0.45 + Math.random() * 0.35,
+                max: 0.7,
+                w: 8 + Math.random() * 14
+              });
+            }
+            for (i = (cs.rays || []).length - 1; i >= 0; i--) {
+              cs.rays[i].life -= dt;
+              if (cs.rays[i].life <= 0) cs.rays.splice(i, 1);
+            }
+            return;
+          }
+
+          e.mawOpen = Math.max(0, (e.mawOpen || 0) - dt * 2.2);
+          cs.rays = [];
+
+          // 2) Mutation: metal armor erupts from within
+          if (t < morphEnd) {
+            k = (t - feastEnd) / (morphEnd - feastEnd);
+            var ease = k * k * (3 - 2 * k);
+            e.x += (cs.cx - e.x) * Math.min(1, dt * 1.6);
+            e.y += (cs.cy - e.y) * Math.min(1, dt * 1.6);
+            e.rot += dt * (1.2 + ease * 3.5);
+            e.arklanMech = Math.min(1, ease);
+            // Keep a slight maw opening until leftovers are gone
+            if ((cs.debris && cs.debris.length) || (cs.scraps && cs.scraps.length)) {
+              e.mawOpen = Math.max(e.mawOpen || 0, 0.45);
+              vacuumAll(k > 0.55);
+            } else {
+              e.mawOpen = 0;
+            }
+            e.devourGlow = 0.7 - ease * 0.25;
+            e.rumblePulse = 0.35 + Math.sin(t * 10) * 0.15;
+            e.flash = Math.max(e.flash || 0, 0.08 + ease * 0.15);
+            state.arklanHeat = 0.4 + ease * 0.45;
+            state.camLook = { x: e.x, y: e.y };
+            state.camZoomTo = cs.keepZoom || 0.68;
+            state.shake = Math.max(state.shake || 0, 5 + ease * 5);
+            cs.flash = Math.max(0, (cs.flash || 0) - dt);
+            if (Math.random() < 0.35 + ease * 0.3) {
+              var pa = Math.random() * Math.PI * 2;
+              var pr = 16 + Math.random() * 36;
+              state.particles.push({
+                x: e.x + Math.cos(pa) * pr,
+                y: e.y + Math.sin(pa) * pr,
+                vx: Math.cos(pa) * (30 + Math.random() * 60),
+                vy: Math.sin(pa) * (30 + Math.random() * 60) - 10,
+                life: 0.28 + Math.random() * 0.3,
+                max: 0.55,
+                size: 1.4 + Math.random() * 2.2,
+                color: Math.random() > 0.4 ? "#c8d4e0" : "#e8a050",
+                sand: true
+              });
+            }
+            if (ease > 0.32 && !cs.mutated) {
+              cs.mutated = true;
+              cs.flash = 0.4;
+              vacuumAll(true);
+              G.burst(state, e.x, e.y, "#d0dde8", 22, 140);
+              G.burst(state, e.x, e.y, "#ff8a40", 14, 110);
+              G.burst(state, e.x, e.y, "#6a7888", 12, 90);
+              state.shake = Math.max(state.shake || 0, 12);
+              if (G.audio && G.audio.explosion) G.audio.explosion();
+            }
+            if (ease > 0.72 && Math.random() < 0.06) cs.flash = Math.max(cs.flash, 0.1);
+            return;
+          }
+
+          // Ensure no feast leftovers survive into the seal beat
+          vacuumAll(true);
+          e.arklanMech = 1;
+          e.arklanArmor = true;
+          e.mawOpen = 0;
+
+          // 3) Seal the four corners + raise perimeter walls
+          if (t < sealEnd) {
+            k = (t - morphEnd) / (sealEnd - morphEnd);
+            e.x += (cs.cx - e.x) * Math.min(1, dt * 4);
+            e.y += (cs.cy - e.y) * Math.min(1, dt * 4);
+            e.rot += dt * 0.9;
+            e.rumblePulse = 0.2 + k * 0.35;
+            state.camLook = { x: cs.cx, y: cs.cy };
+            state.camZoomTo = cs.keepZoom || 0.68;
+            if (!cs.sealed) {
+              cs.sealed = true;
+              var inset = 14;
+              var mf = G.visibleWorldField(state, inset);
+              var spots = [
+                { x: mf.x0, y: mf.y0 },
+                { x: mf.x1, y: mf.y0 },
+                { x: mf.x1, y: mf.y1 },
+                { x: mf.x0, y: mf.y1 }
+              ];
+              for (i = 0; i < 4; i++) {
+                cs.corners.push({
+                  x: spots[i].x,
+                  y: spots[i].y,
+                  grow: 0,
+                  delay: i * 0.12,
+                  ang: Math.atan2(spots[i].y - cs.cy, spots[i].x - cs.cx)
+                });
+              }
+              state.arklanCage = {
+                inset: inset,
+                x0: mf.x0,
+                y0: mf.y0,
+                x1: mf.x1,
+                y1: mf.y1,
+                wall: 0
+              };
+              state.arklanSeals = cs.corners;
+              if (G.audio && G.audio.thud) G.audio.thud();
+              else if (G.audio && G.audio.hit) G.audio.hit();
+            }
+            if (G.syncArklanCage) G.syncArklanCage(state);
+            for (i = 0; i < cs.corners.length; i++) {
+              var c = cs.corners[i];
+              if (t - morphEnd < c.delay) continue;
+              c.grow = Math.min(1, c.grow + dt * 1.7);
+              if (c.grow > 0.2 && !c.burst) {
+                c.burst = true;
+                G.burst(state, c.x, c.y, "#8a9aaa", 10, 60);
+                G.burst(state, c.x, c.y, "#c4a06a", 7, 45);
+                state.shake = Math.max(state.shake || 0, 7);
+                if (G.audio && G.audio.thud) G.audio.thud();
+              }
+            }
+            if (state.arklanCage) {
+              state.arklanCage.wall = Math.min(1, k * 1.35);
+            }
+            state.arklanSeals = cs.corners;
+            state.arklanHeat = 0.65;
+            return;
+          }
+
+          // 4) Center roar — P2 begins
+          e.x = cs.cx;
+          e.y = cs.cy;
+          e.buried = false;
+          e.phased = false;
+          e.stealth = 0;
+          e.zDraw = 6 + Math.sin(t * 12) * 3;
+          e.rot += dt * (cs.scream ? 2.4 : 0.6);
+          state.camLook = { x: cs.cx, y: cs.cy };
+          state.camZoomTo = cs.keepZoom || 0.68;
+          if (G.syncArklanCage) G.syncArklanCage(state);
+          for (i = 0; i < cs.corners.length; i++) cs.corners[i].grow = 1;
+          state.arklanSeals = cs.corners;
+          if (state.arklanCage) state.arklanCage.wall = 1;
+          if (t >= screamAt && !cs.scream) {
+            cs.scream = true;
+            cs.flash = 0.55;
+            e.headFlash = 0.8;
+            e.devourGlow = 1.5;
+            state.shake = Math.max(state.shake || 0, 18);
+            state.arklanHeat = 1;
+            G.burst(state, e.x, e.y, "#ffe08a", 36, 220);
+            G.burst(state, e.x, e.y, "#c8d4e0", 24, 170);
+            G.burst(state, e.x, e.y, "#ff5a2a", 18, 140);
+            if (G.audio && G.audio.explosion) G.audio.explosion();
+            state.banner = { text: "ARKLAN · CARCAÇA DE FERRO", t: 2.8 };
+            var ri;
+            for (ri = 0; ri < 5; ri++) {
+              cs.rings.push({ r: 10, max: 60 + ri * 42, t: -0.1 * ri, life: 0.6 });
+            }
+          }
+          for (i = 0; i < cs.rings.length; i++) cs.rings[i].t += dt;
+          cs.flash = Math.max(0, (cs.flash || 0) - dt);
+        },
+        draw: function (ctx, state, e, cs) {
+          var t = cs.t || 0;
+          var dur = cs.dur || 12.8;
+          var u = Math.min(1, t / 0.4);
+          var out = t > dur - 0.45 ? Math.min(1, (dur - t) / 0.45) : 1;
+          var a = Math.min(u, out) * 0.62;
+          var heat = Math.min(1, state.arklanHeat || 0);
+          var cx = cs.cx || state.W / 2;
+          var cy = cs.cy || state.H / 2;
+          ctx.save();
+          var g = ctx.createRadialGradient(cx, cy, 28, cx, cy, Math.max(state.W, state.H) * 0.72);
+          g.addColorStop(0, "rgba(90, 50, 18, 0)");
+          g.addColorStop(0.35, "rgba(50, 28, 10, " + (a * 0.2 + heat * 0.12) + ")");
+          g.addColorStop(0.7, "rgba(18, 14, 12, " + (a * 0.48) + ")");
+          g.addColorStop(1, "rgba(4, 6, 10, " + (a * 0.82) + ")");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, state.W, state.H);
+          if (t < 5.1 && e) {
+            // Maw throat glow (screen wash toward boss)
+            var mawK = Math.min(1, (e.mawOpen || 0));
+            var mg = ctx.createRadialGradient(e.x, e.y, 20, e.x, e.y, 220);
+            mg.addColorStop(0, "rgba(255, 120, 40, " + (0.12 * mawK) + ")");
+            mg.addColorStop(0.45, "rgba(180, 60, 20, " + (0.08 * mawK) + ")");
+            mg.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = mg;
+            ctx.fillRect(0, 0, state.W, state.H);
+          }
+          if (t > 5.1 && t < 8.6) {
+            var mk = Math.min(1, (t - 5.1) / 1.2) * Math.min(1, (8.6 - t) / 0.8);
+            ctx.fillStyle = "rgba(180, 200, 220, " + (0.07 * mk) + ")";
+            ctx.fillRect(0, 0, state.W, state.H);
+          }
+          if ((cs.flash || 0) > 0) {
+            ctx.fillStyle = "rgba(255, 244, 220, " + Math.min(0.55, cs.flash * 1.2) + ")";
+            ctx.fillRect(0, 0, state.W, state.H);
+          }
+          if (cs.scream) {
+            var sk = Math.max(0, 1 - (t - 10.75) * 1.8);
+            ctx.fillStyle = "rgba(255, 230, 180, " + (0.14 * sk) + ")";
+            ctx.fillRect(0, 0, state.W, state.H);
+          }
+          ctx.restore();
+
+          ctx.save();
+          G.applyCamera(ctx, state);
+
+          // Maw light shafts during feast
+          if (e && t < 5.1 && (cs.rays || []).length) {
+            var ri;
+            for (ri = 0; ri < cs.rays.length; ri++) {
+              var ray = cs.rays[ri];
+              var rk = Math.max(0, ray.life / (ray.max || 0.7));
+              ctx.save();
+              ctx.translate(e.x, e.y);
+              ctx.rotate(ray.ang);
+              ctx.globalCompositeOperation = "lighter";
+              var rg = ctx.createLinearGradient(20, 0, 200, 0);
+              rg.addColorStop(0, "rgba(255, 200, 120, " + (0.22 * rk) + ")");
+              rg.addColorStop(1, "rgba(255, 140, 40, 0)");
+              ctx.fillStyle = rg;
+              ctx.beginPath();
+              ctx.moveTo(24, -ray.w * 0.15);
+              ctx.lineTo(210, -ray.w);
+              ctx.lineTo(210, ray.w);
+              ctx.lineTo(24, ray.w * 0.15);
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          function drawFeastDebris(d) {
+            var s = d.r || 8;
+            var z = d.z != null ? d.z : 1;
+            ctx.save();
+            ctx.translate(d.x, d.y);
+            ctx.rotate(d.spin || 0);
+            ctx.scale(z, z);
+            // ground shadow
+            ctx.fillStyle = "rgba(20, 10, 4, 0.28)";
+            ctx.beginPath();
+            ctx.ellipse(2, s * 0.55, s * 0.9, s * 0.28, 0, 0, Math.PI * 2);
+            ctx.fill();
+            if (d.kind === "tank") {
+              ctx.fillStyle = "#3a4a38";
+              ctx.fillRect(-s * 1.1, -s * 0.45, s * 2.2, s * 0.9);
+              ctx.fillStyle = "#5a6a50";
+              ctx.fillRect(-s * 0.35, -s * 0.85, s * 0.7, s * 0.45);
+              ctx.fillStyle = "#2a3028";
+              ctx.fillRect(-s * 1.15, s * 0.25, s * 2.3, s * 0.35);
+              ctx.fillStyle = "#8a9a78";
+              ctx.fillRect(s * 0.2, -s * 0.7, s * 1.1, s * 0.18);
+              ctx.strokeStyle = "rgba(200, 220, 180, 0.35)";
+              ctx.lineWidth = 1;
+              ctx.strokeRect(-s * 1.1, -s * 0.45, s * 2.2, s * 0.9);
+            } else if (d.kind === "truck") {
+              ctx.fillStyle = "#4a3a28";
+              ctx.fillRect(-s, -s * 0.4, s * 1.3, s * 0.75);
+              ctx.fillStyle = "#6a5840";
+              ctx.fillRect(s * 0.2, -s * 0.55, s * 0.9, s * 0.95);
+              ctx.fillStyle = "#1a2830";
+              ctx.beginPath();
+              ctx.arc(-s * 0.55, s * 0.4, s * 0.28, 0, Math.PI * 2);
+              ctx.arc(s * 0.55, s * 0.4, s * 0.28, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = "#7af0ff";
+              ctx.globalAlpha = 0.5;
+              ctx.fillRect(s * 0.45, -s * 0.4, s * 0.35, s * 0.28);
+              ctx.globalAlpha = 1;
+            } else if (d.kind === "craft") {
+              var hg = ctx.createLinearGradient(-s, 0, s, 0);
+              hg.addColorStop(0, "#2a3038");
+              hg.addColorStop(0.5, "#6a7888");
+              hg.addColorStop(1, "#c8d4e0");
+              ctx.fillStyle = hg;
+              ctx.beginPath();
+              ctx.moveTo(s * 1.3, 0);
+              ctx.lineTo(s * 0.3, -s * 0.55);
+              ctx.lineTo(-s, -s * 0.4);
+              ctx.lineTo(-s * 1.2, 0);
+              ctx.lineTo(-s, s * 0.4);
+              ctx.lineTo(s * 0.3, s * 0.55);
+              ctx.closePath();
+              ctx.fill();
+              ctx.fillStyle = "#7af0ff";
+              ctx.globalCompositeOperation = "lighter";
+              ctx.beginPath();
+              ctx.ellipse(s * 0.55, 0, s * 0.28, s * 0.2, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.globalCompositeOperation = "source-over";
+              ctx.strokeStyle = "#e8f0f8";
+              ctx.lineWidth = 1.2;
+              ctx.stroke();
+            } else if (d.kind === "soldier") {
+              ctx.fillStyle = "#c4a06a";
+              ctx.beginPath();
+              ctx.arc(0, -s * 0.35, s * 0.38, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = "#5a6a40";
+              ctx.fillRect(-s * 0.35, -s * 0.05, s * 0.7, s * 0.85);
+              ctx.fillStyle = "#ffd24a";
+              ctx.fillRect(-s * 0.28, -s * 0.55, s * 0.56, s * 0.18);
+              ctx.strokeStyle = "#2a2010";
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(s * 0.3, s * 0.1);
+              ctx.lineTo(s * 0.95, -s * 0.15);
+              ctx.stroke();
+            } else if (d.kind === "scrap") {
+              ctx.fillStyle = "#5a6878";
+              ctx.fillRect(-s, -s * 0.4, s * 2, s * 0.8);
+              ctx.fillStyle = "#b0c0d0";
+              ctx.fillRect(-s * 0.55, -s * 0.2, s * 1.1, s * 0.28);
+              ctx.strokeStyle = "rgba(220, 230, 240, 0.45)";
+              ctx.lineWidth = 1;
+              ctx.strokeRect(-s, -s * 0.4, s * 2, s * 0.8);
+            } else {
+              var sg = ctx.createRadialGradient(0, 0, 0.5, 0, 0, s || 3);
+              sg.addColorStop(0, "rgba(255, 230, 160, 0.9)");
+              sg.addColorStop(1, "rgba(180, 130, 60, 0.15)");
+              ctx.fillStyle = sg;
+              ctx.beginPath();
+              ctx.arc(0, 0, s || 3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+
+          // Draw far (small z) first for depth
+          var sorted = (cs.debris || []).slice().sort(function (a, b) {
+            return (a.z || 1) - (b.z || 1);
+          });
+          var di;
+          for (di = 0; di < sorted.length; di++) drawFeastDebris(sorted[di]);
+          for (di = 0; di < (cs.scraps || []).length; di++) {
+            var sc = cs.scraps[di];
+            ctx.save();
+            ctx.translate(sc.x, sc.y);
+            ctx.rotate(sc.spin || 0);
+            ctx.fillStyle = "rgba(20, 10, 4, 0.25)";
+            ctx.beginPath();
+            ctx.ellipse(3, (sc.r || 16) * 0.35, (sc.r || 16) * 0.85, (sc.r || 16) * 0.28, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "rgba(150, 110, 55, 0.78)";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, (sc.r || 16) * 0.9, (sc.r || 16) * 0.42, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+          for (di = 0; di < (cs.rings || []).length; di++) {
+            var rg = cs.rings[di];
+            if (rg.t < 0) continue;
+            var kk = Math.min(1, rg.t / (rg.life || 0.55));
+            ctx.strokeStyle = "rgba(220, 230, 240, " + (0.65 * (1 - kk)) + ")";
+            ctx.lineWidth = 2.5 + (1 - kk) * 7;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 14 + kk * (rg.max || 100), 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          if (G.drawArklanSeals) G.drawArklanSeals(ctx, state, cs.corners || state.arklanSeals);
+        },
+        onEnd: function (state, e, cs) {
+          if (e) {
+            var b = G.playfield(state);
+            e.x = (b.x0 + b.x1) / 2;
+            e.y = (b.y0 + b.y1) / 2;
+            e.zDraw = 0;
+            e.arklanMech = 1;
+            e.arklanArmor = true;
+            e.buried = false;
+            e.phased = false;
+            e.stealth = 0;
+            e.wormAct = "";
+            e.wormSegs = [];
+            e.wormT = 0.9;
+            e.mawOpen = 0;
+            e.devourGlow = 0.35;
+            e.rumblePulse = 0;
+            e.arklanSentry = true;
+          }
+          if (state.arklanSeals) {
+            var i;
+            for (i = 0; i < state.arklanSeals.length; i++) state.arklanSeals[i].grow = 1;
+          }
+          if (state.arklanCage) state.arklanCage.wall = 1;
+          if (G.syncArklanCage) G.syncArklanCage(state);
+          state.arklanHeat = 0.22;
+          var keepZ = (cs && cs.keepZoom) || state.desertZoom || 0.68;
+          state.desertZoom = keepZ;
+          state.camZoomTo = keepZ;
+          state.banner = { text: "", t: 0 };
         }
       },
       beeprincess: {

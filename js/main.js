@@ -1408,9 +1408,14 @@
     state.pointer.down = true;
     if (state.pointer.touch) {
       state.pointer.moveSquad = true;
-      var b = G.playfield(state);
-      state.squad.x = Math.max(b.x0, Math.min(b.x1, p.x));
-      state.squad.y = Math.max(b.y0, Math.min(b.y1, p.y));
+      if (state.arklanGullet && (state.arklanGullet.phase === "scroll" || state.arklanGullet.phase === "heart" || state.arklanGullet.phase === "valve")) {
+        state.squad.x = Math.max(40, Math.min(state.W - 40, p.x));
+        state.squad.y = Math.max(56, Math.min(state.H - 56, p.y));
+      } else {
+        var b = G.playfield(state);
+        state.squad.x = Math.max(b.x0, Math.min(b.x1, p.x));
+        state.squad.y = Math.max(b.y0, Math.min(b.y1, p.y));
+      }
     } else {
       state.pointer.moveSquad = false;
       if (G.tactics) G.tactics.onFireDown(state);
@@ -1429,6 +1434,17 @@
       return;
     }
     if (!state.pointer.down || state.mode !== "play" || state.paused || state.stageOutro || (G.invasion && G.invasion.cinematic(state)) || state.timeLock) return;
+    if (state.arklanGullet) {
+      var gul = state.arklanGullet;
+      if (gul.phase !== "scroll" && gul.phase !== "heart" && gul.phase !== "valve") return;
+      // Gullet uses screen-space craft; keep pointer world coords for steerGulletCraft
+      ev.preventDefault();
+      if (state.pointer.moveSquad) {
+        state.pointer.x = p.x;
+        state.pointer.y = p.y;
+      }
+      return;
+    }
     ev.preventDefault();
     if (state.pointer.moveSquad) {
       var b = G.playfield(state);
@@ -1499,7 +1515,9 @@
     var rowB = document.getElementById("boss-row-b");
     var pips = document.getElementById("souls-pips");
     function livingBoss(e) {
-      return e && e.def && e.def.boss && e.hp > 0 && !e.fake && !e.glinderDying && !e.fallen;
+      if (!e || !e.def || !e.def.boss || e.fake || e.glinderDying || e.fallen) return false;
+      if (e.arklanBroken || e.immortal) return true;
+      return e.hp > 0;
     }
     function easeBar(key, frac) {
       var cur = state[key];
@@ -1531,7 +1549,50 @@
     }
     if (core) boss = core;
     var duo = !!(queen && king);
-    if (duo) {
+    if (state.arklanGullet) {
+      // Gullet owns the boss bar — don't keep Arklan's empty carcass HUD up
+      var gul = state.arklanGullet;
+      var gulTarget = null;
+      var gulName = "";
+      var gulTitle = "";
+      if (gul.phase === "death_cin") {
+        bossHud.classList.add("hidden");
+        bossHud.classList.remove("p2", "duo");
+        if (rowB) rowB.classList.add("hidden");
+        state._hudBossA = null;
+        state._hudBossB = null;
+        if (pips) pips.classList.add("hidden");
+      } else if ((gul.phase === "heart" || gul.phase === "heart_cin") && gul.heart) {
+        gulTarget = gul.heart;
+        gulName = gul.heart.name || "Coração";
+        gulTitle = gul.heart.title || "Núcleo no fundo da goela";
+      } else if ((gul.phase === "valve" || gul.phase === "miniboss" || gul.phase === "valve_cin") && gul.valve) {
+        gulTarget = gul.valve;
+        gulName = gul.valve.name || "Válvula";
+        gulTitle = gul.valve.title || "Barreira de carne e aço";
+      }
+      if (gulTarget) {
+        bossHud.classList.remove("hidden", "duo");
+        bossHud.classList.add("p2");
+        if (rowB) rowB.classList.add("hidden");
+        if (rowA) {
+          rowA.classList.remove("queen", "king");
+        }
+        document.getElementById("boss-name").textContent = gulName;
+        document.getElementById("boss-title").textContent = gulTitle;
+        paintTrack("souls-fill", "souls-delay", Math.max(0, gulTarget.hp / gulTarget.maxHp), "bossShown", state._hudBossA !== gulTarget);
+        state._hudBossA = gulTarget;
+        state._hudBossB = null;
+        if (pips) pips.classList.add("hidden");
+      } else {
+        bossHud.classList.add("hidden");
+        bossHud.classList.remove("p2", "duo");
+        if (rowB) rowB.classList.add("hidden");
+        state._hudBossA = null;
+        state._hudBossB = null;
+        if (pips) pips.classList.add("hidden");
+      }
+    } else if (duo) {
       bossHud.classList.remove("hidden", "p2");
       bossHud.classList.add("duo");
       if (rowB) rowB.classList.remove("hidden");
@@ -1574,7 +1635,10 @@
       var bars = hiveHud ? 1 : Math.max(1, boss.hpBars || 1);
       if (boss.p2 || boss.invP2) bars = 1;
       var per = 1 / bars;
-      var frac = Math.max(0, boss.hp / boss.maxHp);
+      var frac = boss.arklanBroken ? 0 : Math.max(0, boss.hp / boss.maxHp);
+      if (boss.type === "chefe_arklan" && boss.arklanBroken) {
+        document.getElementById("boss-title").textContent = "Carcaça quebrada";
+      }
       var barI = Math.max(0, Math.min(bars - 1, Math.floor((frac - 1e-6) / per)));
       var local = bars === 1 ? frac : Math.max(0, Math.min(1, (frac - barI * per) / per));
       paintTrack("souls-fill", "souls-delay", local, "bossShown", state._hudBossA !== boss);
@@ -1603,6 +1667,15 @@
     }
     var bar = document.getElementById("active-bar");
     if (!bar) return;
+    // Gullet plane has its own EX/card HUD — hide commander actives
+    if (state.arklanGullet || state.arklanSpit) {
+      bar.classList.add("hidden");
+      bar.innerHTML = "";
+      syncDossier(state);
+      syncBuffTray(state);
+      return;
+    }
+    bar.classList.remove("hidden");
     bar.innerHTML = "";
     var dashStuck = G.combat.dashLocked && G.combat.dashLocked(state);
     var dashReady = (state.dashCd || 0) <= 0 && !dashStuck;
@@ -1635,13 +1708,14 @@
       slot.type = "button";
       var aid = act[s].def.active.id;
       var guer = aid === "guerrilla" && G.tactics && G.tactics.guerrillaHud ? G.tactics.guerrillaHud(state) : null;
-      var ready = guer ? guer.anyReady : act[s].activeCd <= 0 && !act[s].activeHeld;
+      var force = aid === "force_menu" && G.tactics && G.tactics.forceHud ? G.tactics.forceHud(state) : null;
+      var ready = guer ? guer.anyReady : force ? force.anyReady : act[s].activeCd <= 0 && !act[s].activeHeld;
       var meta = G.activeMeta(aid);
       var cdMax = act[s].def.active.cd || 1;
       var frac = act[s].activeHeld ? 8 : ready ? 100 : Math.max(0, 1 - act[s].activeCd / cdMax) * 100;
       var n = act[s].stackN || 1;
       var sel = s === (state.skillSlot | 0);
-      slot.className = "active-slot" + (guer ? " guerrilla" : "") + (ready ? " ready" : " cd") + (sel ? " selected" : "");
+      slot.className = "active-slot" + (guer || force ? " guerrilla" : "") + (force ? " force" : "") + (ready ? " ready" : " cd") + (sel ? " selected" : "");
       slot.style.setProperty("--cd", frac + "%");
       slot.title = act[s].def.active.name + " — " + (meta.detail || act[s].def.active.desc);
       if (guer) {
@@ -1659,6 +1733,22 @@
             pip(guer.crate, guer.crateMax) + "✚</i>" +
             pip(guer.recruit, guer.recruitMax, guer.recruitsLeft > 0) + "○</i>" +
             pip(guer.strike, guer.strikeMax) + "△</i>" +
+          "</span>";
+      } else if (force) {
+        function fpip(cd, max) {
+          var on = cd <= 0;
+          var pf = on ? 100 : Math.max(0, 1 - cd / max) * 100;
+          return "<i class=\"" + (on ? "ready" : "cd") + "\" style=\"--cd:" + pf + "%\">";
+        }
+        slot.innerHTML =
+          "<span class=\"key\">" + (s + 1) + "</span>" +
+          "<span class=\"ico\">" + (G.activeIconHtml ? G.activeIconHtml(aid) : meta.icon) + "</span>" +
+          "<span class=\"nm\">Força</span>" +
+          "<span class=\"g-pips\">" +
+            fpip(force.push, force.pushMax) + "⇛</i>" +
+            fpip(force.pull, force.pullMax) + "⇚</i>" +
+            fpip(force.saber, force.saberMax) + "⚔</i>" +
+            fpip(force.spin, force.spinMax) + "✴</i>" +
           "</span>";
       } else {
         var nm = act[s].def.active.name;
@@ -1947,7 +2037,17 @@
       if (state.units[u].commander) cmdDraw = state.units[u];
     }
 
-    if (worldA > 0.02) {
+    if (state.arklanGullet && G.arklanP2 && G.arklanP2.drawGullet) {
+      // Screen-space gullet — keep DPR scale so it fills the whole canvas
+      ctx.save();
+      var dprG = canvas.width / Math.max(1, state.W);
+      ctx.setTransform(dprG, 0, 0, dprG, 0, 0);
+      if (state.shake > 0.4) {
+        ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
+      }
+      try { G.arklanP2.drawGullet(ctx, state); } catch (eg) {}
+      ctx.restore();
+    } else if (worldA > 0.02) {
       ctx.save();
       ctx.globalAlpha = worldA;
       if (state.warnings) {
@@ -2032,7 +2132,9 @@
       ctx.fillStyle = "rgba(12, 4, 8, " + Math.min(0.92, state.vultoBlind * 0.38) + ")";
       ctx.fillRect(0, 0, state.W, state.H);
     }
-    if (cmdDraw) G.drawPlayerUnit(ctx, cmdDraw, state.time);
+    if (cmdDraw && !state.arklanGullet && !(state.arklanSpit && state.arklanSpit.beat !== "die")) {
+      G.drawPlayerUnit(ctx, cmdDraw, state.time);
+    }
     if ((state.vultoDark || 0) > 0.15 || (state.vultoBlind || 0) > 0) drawAim();
 
     if (state.run && state.run.smokeT > 0 && worldA > 0.02) {
@@ -2192,6 +2294,21 @@
           ctx.fill();
         }
         ctx.restore();
+      } else if (pt.sand) {
+        ctx.save();
+        ctx.translate(pt.x, pt.y);
+        ctx.rotate(pt.ang != null ? pt.ang : Math.atan2(pt.vy || 0, pt.vx || 1));
+        var sa = Math.max(0, pt.life / (pt.max || 1));
+        ctx.globalAlpha = sa * 0.92;
+        ctx.fillStyle = pt.color || "#c4a06a";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, pt.size * 1.65, pt.size * 0.42, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 236, 190, " + (0.45 * sa) + ")";
+        ctx.beginPath();
+        ctx.ellipse(pt.size * 0.25, -pt.size * 0.08, pt.size * 0.7, pt.size * 0.18, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
       } else {
         ctx.beginPath();
         ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
@@ -2235,6 +2352,8 @@
       ctx.restore();
     }
     if (state.banner && state.banner.t > 0 && !state.defeat) {
+      var gulCin = state.arklanGullet && (state.arklanGullet.phase === "cin" || state.arklanGullet.phase === "enter" || state.arklanGullet.phase === "findShip" || state.arklanGullet.phase === "valve_cin" || state.arklanGullet.phase === "heart_cin");
+      if (!gulCin) {
       var ba = Math.min(1, state.banner.t);
       ctx.save();
       ctx.globalAlpha = ba;
@@ -2250,6 +2369,7 @@
       ctx.fillStyle = "#ffd24a";
       ctx.fillText(state.banner.text, state.W / 2, state.H / 2);
       ctx.restore();
+      }
     }
     if ((state.glinderNovaT || 0) > 0 && !state.defeat) {
       var nt = state.glinderNovaT;

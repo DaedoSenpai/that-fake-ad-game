@@ -20,7 +20,7 @@ Estilo de character-select **Metal Slug / SNK Neo Geo**. Não inventar anime, re
 
 ## Classificar humano vs veículo pelo `role` (não pelo nome)
 
-**Humano** (bust 3/4): recruit, rifle, pistol, scout, sniper, mg, medic, dual, stealth, courier, spear, reaper, paladin, warlord, observer, flamer, grenadier, surgeon, chaplain, outlaw, tesla, assassin, radio, inferno, missile, commander — e o ramo “else” (pernas + visor + rifle). Tesla/míssil são humanoides de traje triangular.
+**Humano** (bust 3/4): recruit, rifle, pistol, scout, sniper, mg, medic, dual, stealth, courier, spear, reaper, paladin, warlord, observer, flamer, grenadier, surgeon, chaplain, outlaw, tesla, assassin, radio, inferno, missile, commander, psychic, chosen, jedi — e o ramo “else” (pernas + visor + rifle). Tesla/míssil são humanoides de traje triangular.
 
 **Veículo** (close cômico da máquina, sem soldado): truck, bunker, tank, minitank, colossus, drone, heli, gunship, miner, engineer. Inclui `droneiro`, `recon`, `helicoptero`, `bombardeiro`, `gunship`, `caminhao`, `oficina`, `quartel`, `tanque`, `minitanque`, `torreta`, `colosso`, `engenheiro`, `mineiro`.
 

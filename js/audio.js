@@ -115,6 +115,35 @@
       });
     },
 
+    saber: function () {
+      this.play(function (ctx) {
+        tone(ctx, 880, 0.12, "sawtooth", 0.045, 240);
+        tone(ctx, 1480, 0.1, "square", 0.028, 520);
+        tone(ctx, 220, 0.08, "triangle", 0.02, 90);
+      });
+    },
+
+    saberHum: function () {
+      this.play(function (ctx) {
+        tone(ctx, 620, 0.16, "sawtooth", 0.032, 480);
+        tone(ctx, 1240, 0.14, "triangle", 0.02, 900);
+      });
+    },
+
+    forcePush: function () {
+      this.play(function (ctx) {
+        tone(ctx, 180, 0.22, "sawtooth", 0.055, 55);
+        tone(ctx, 420, 0.16, "triangle", 0.035, 120);
+      });
+    },
+
+    forcePull: function () {
+      this.play(function (ctx) {
+        tone(ctx, 90, 0.2, "sine", 0.04, 260);
+        tone(ctx, 340, 0.18, "triangle", 0.03, 720);
+      });
+    },
+
     toss: function () {
       this.play(function (ctx) {
         tone(ctx, 420, 0.12, "square", 0.028, 160);
@@ -236,7 +265,10 @@
       var list = state.enemies || [];
       for (var i = 0; i < list.length; i++) {
         var e = list[i];
-        if (!e || e.hp <= 0 || e.fake) continue;
+        if (!e || e.fake) continue;
+        // Keep boss theme while Arklan is broken / gullet / Glinder death sequence
+        var stillFighting = e.hp > 0 || e.arklanBroken || e.immortal || e.glinderDying || e.mazeHide;
+        if (!stillFighting) continue;
         if (!e.def || !e.def.boss) continue;
         var p = BOSS_PRIO[e.type] || 0;
         if (p > best) {
@@ -244,6 +276,8 @@
           type = e.type;
         }
       }
+      if (state.arklanGullet && !type) type = "chefe_arklan";
+      if (state.arklanSpit && !type) type = "chefe_arklan";
       if (type) return "boss-" + type;
       return "stage-" + ((state.stageIndex | 0) + 1);
     },
