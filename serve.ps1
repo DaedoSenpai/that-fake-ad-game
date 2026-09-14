@@ -16,18 +16,57 @@ function ConvertTo-UnixPath([string]$Path) {
   return ($Path -replace "\\", "/").Trim("/")
 }
 
+function Get-PathHead([string]$RelPath) {
+  $n = ConvertTo-UnixPath $RelPath
+  if (-not $n) { return "" }
+  return ($n -split "/")[0]
+}
+
+$JunkDirs = @(".cursor", ".vscode", ".idea", ".github")
+$JunkFiles = @(".DS_Store", "Thumbs.db", "desktop.ini")
+
 function Test-SkipPath([string]$RelPath) {
   $n = ConvertTo-UnixPath $RelPath
-  if ($n -match "(^|/)\.git(/|$)") { return $true }
-  if ($n -match "(^|/)\.cursor(/|$)") { return $true }
+  $head = Get-PathHead $n
+  if ($head -eq ".git") { return $true }
+  if ($JunkDirs -contains $head) { return $true }
+  if ($head -eq "node_modules") { return $true }
+  $leaf = ($n -split "/")[-1]
+  if ($JunkFiles -contains $leaf) { return $true }
   return $false
 }
 
 function Test-UpdateSkipPath([string]$RelPath) {
   if (Test-SkipPath $RelPath) { return $true }
-  $n = ConvertTo-UnixPath $RelPath
-  if ($n -match "(^|/)data(/|$)") { return $true }
+  $head = Get-PathHead $RelPath
+  if ($head -eq "data") { return $true }
   return $false
+}
+
+function Test-DevTree {
+  return Test-Path -LiteralPath (Join-Path $Root ".git")
+}
+
+function Remove-UpdateJunk {
+  $cleaned = New-Object System.Collections.ArrayList
+  if (Test-DevTree) { return @($cleaned) }
+  foreach ($name in $JunkDirs) {
+    $p = Join-Path $Root $name
+    if (-not (Test-Path -LiteralPath $p)) { continue }
+    try {
+      Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction Stop
+      [void]$cleaned.Add("$name/")
+    } catch { }
+  }
+  foreach ($name in $JunkFiles) {
+    $p = Join-Path $Root $name
+    if (-not (Test-Path -LiteralPath $p)) { continue }
+    try {
+      Remove-Item -LiteralPath $p -Force -ErrorAction Stop
+      [void]$cleaned.Add($name)
+    } catch { }
+  }
+  return @($cleaned)
 }
 
 function Get-LocalPath([string]$RelPath) {
@@ -148,6 +187,7 @@ function Get-RemoteCommitTime([string]$RelPath) {
 }
 
 function Get-UpdatePlan {
+  $cleaned = @(Remove-UpdateJunk)
   $treeUrl = "https://api.github.com/repos/$Owner/$Repo/git/trees/${Branch}?recursive=1"
   $tree = Invoke-GitHubGet $treeUrl
   if ($tree.truncated) { throw "A arvore do GitHub veio cortada. O repo ficou grande demais pro updater." }
@@ -205,6 +245,7 @@ function Get-UpdatePlan {
     migrate = $migrate.ToArray()
     keepLocal = @()
     missing = $missing.ToArray()
+    cleaned = $cleaned
   }
 }
 
@@ -242,7 +283,7 @@ function Apply-UpdateFromZip {
     Expand-Archive -LiteralPath $tmpZip -DestinationPath $tmpDir -Force
     $src = Get-ChildItem -LiteralPath $tmpDir -Directory | Select-Object -First 1
     if (-not $src) { throw "Zip do GitHub veio vazio." }
-    Get-ChildItem -LiteralPath $src.FullName -Recurse -File | ForEach-Object {
+      Get-ChildItem -LiteralPath $src.FullName -Recurse -File -Force | ForEach-Object {
       $rel = $_.FullName.Substring($src.FullName.Length).TrimStart("\", "/")
       $unix = ConvertTo-UnixPath $rel
       if (Test-UpdateSkipPath $unix) { return }
@@ -262,6 +303,7 @@ function Apply-UpdateFromZip {
 }
 
 function Apply-UpdatePlan($Plan) {
+  $cleaned = @(Remove-UpdateJunk)
   $updated = New-Object System.Collections.ArrayList
   $migrated = New-Object System.Collections.ArrayList
   $failed = New-Object System.Collections.ArrayList
@@ -316,6 +358,7 @@ function Apply-UpdatePlan($Plan) {
     failed = $failed.ToArray()
     keepLocal = @()
     same = $Plan.same
+    cleaned = $cleaned
   }
 }
 

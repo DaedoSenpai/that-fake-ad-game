@@ -49,13 +49,13 @@
 
     allySections: function () {
       var groups = [
-        { id: "cmd", title: "Comando", jump: "CMD", hint: "Não ocupa vaga e não entra na pirâmide.", tone: "cmd", kinds: [] },
-        { id: "base", title: "Recruta", jump: "REC", hint: "A semente. Dois iguais abrem o Tier 1.", tone: "t1", kinds: [] },
-        { id: "t1", title: "Tier 1", jump: "T1", hint: "Primeira promoção: fuzil, pistola, batedor ou psíquico.", tone: "t2", kinds: [] },
-        { id: "t2", title: "Tier 2", jump: "T2", hint: "O meio baixo da pirâmide. Já muda o kit.", tone: "t3", kinds: [] },
-        { id: "t3", title: "Tier 3", jump: "T3", hint: "Especialistas. A linha ganha identidade.", tone: "t4", kinds: [] },
-        { id: "t4", title: "Tier 4", jump: "T4", hint: "Ápice de cada ramo — vários são únicos.", tone: "t5", kinds: [] },
-        { id: "t5", title: "Tier 5", jump: "T5", hint: "O Colosso. Um só, caro, o esquadrão inteiro gira em volta.", tone: "t5", kinds: [] }
+        { id: "cmd", title: "Comando", jump: "CMD", tone: "cmd", kinds: [] },
+        { id: "base", title: "Recruta", jump: "REC", tone: "t1", kinds: [] },
+        { id: "t1", title: "Tier 1", jump: "T1", tone: "t2", kinds: [] },
+        { id: "t2", title: "Tier 2", jump: "T2", tone: "t3", kinds: [] },
+        { id: "t3", title: "Tier 3", jump: "T3", tone: "t4", kinds: [] },
+        { id: "t4", title: "Tier 4", jump: "T4", tone: "t5", kinds: [] },
+        { id: "t5", title: "Tier 5", jump: "T5", tone: "t5", kinds: [] }
       ];
       var byId = {};
       groups.forEach(function (g) { byId[g.id] = g; });
@@ -76,53 +76,26 @@
     },
 
     enemySections: function () {
-      var lists = [
-        {
-          id: "swarm", title: "Enxame", jump: "Enxame", hint: "A massa da colmeia. Fracos sozinhos, ruins em grupo.", tone: "swarm",
-          kinds: ["infantaria", "corredor", "atirador", "drone", "kamikaze", "medico", "fragmento", "larva", "sombra", "sniper", "parasita", "criomante"]
-        },
-        {
-          id: "heavy", title: "Couraça", jump: "Couraça", hint: "Bicho que demora pra cair ou pune de longe.", tone: "heavy",
-          kinds: ["escudeiro", "tanque", "artilharia", "ninho"]
-        },
-        {
-          id: "invasion", title: "Tropa da invasão", jump: "Invasão", hint: "O espelho hostil do esquadrão. Vem com o Irwin.", tone: "invasion",
-          kinds: ["fuzileiro_alien", "batedor_alien", "pistoleiro_alien", "fuzileiro_elite", "fuzileiro_veterano", "pistoleiro_elite", "medico_alien", "batedor_elite", "infiltrador_alien"]
-        },
-        {
-          id: "hive", title: "Corte da colmeia", jump: "Colmeia", hint: "Abelhas da rainha e do rei. Merge entre elas.", tone: "hive",
-          kinds: ["hive_bee", "elite_bee", "royal_bee", "mini_beemote", "abelha_enfermeira", "abelha_arquiteta"]
-        },
-        {
-          id: "arena", title: "Arena", jump: "Arena", hint: "Não é a linha de frente: totem, sentry, prisma.", tone: "arena",
-          kinds: ["fogueira", "kaska_sentry", "dobrador_luz"]
-        },
-        {
-          id: "mini", title: "Minibosses", jump: "Mini", hint: "Pesa igual chefe, mas não fecha a fase.", tone: "mini",
-          kinds: ["formiga_leao", "besouro_bombardeiro", "louva_deus"]
-        },
-        {
-          id: "boss", title: "Chefes", jump: "Chefes", hint: "Quem segura a fase. Um de cada mapa.", tone: "boss",
-          kinds: ["chefe_invasao", "chefe_comandante", "chefe_vulto", "chefe_megatanque", "chefe_beeking", "beeprincess", "chefe_arklan", "chefe_fortaleza", "chefe_espectro", "chefe_final"]
-        }
+      var miniType = {
+        formiga_leao: true,
+        besouro_bombardeiro: true,
+        louva_deus: true
+      };
+      var groups = [
+        { id: "foe", title: "Inimigos", jump: "Tropa", tone: "foe", kinds: [] },
+        { id: "mini", title: "Mini bosses", jump: "Mini", tone: "mini", kinds: [] },
+        { id: "boss", title: "Bosses", jump: "Chefes", tone: "boss", kinds: [] }
       ];
-      var used = {};
-      lists.forEach(function (sec) {
-        sec.kinds = sec.kinds.filter(function (k) {
-          var d = G.ENEMY_DEFS[k];
-          if (!d || d.codexHide) return false;
-          used[k] = true;
-          return true;
-        });
-      });
-      var extra = Object.keys(G.ENEMY_DEFS).filter(function (k) {
+      Object.keys(G.ENEMY_DEFS).forEach(function (k) {
         var d = G.ENEMY_DEFS[k];
-        return d && !d.codexHide && !used[k];
+        if (!d || d.codexHide) return;
+        var kind = String(d.kind || "");
+        var shelf = 0;
+        if (miniType[k] || (d.boss && kind.indexOf("mini_") === 0)) shelf = 1;
+        else if (d.boss) shelf = 2;
+        groups[shelf].kinds.push(k);
       });
-      if (extra.length) {
-        lists.push({ id: "other", title: "Outros", hint: "Ainda não encaixou nas prateleiras.", tone: "arena", kinds: extra });
-      }
-      return lists.filter(function (sec) { return sec.kinds.length; });
+      return groups.filter(function (g) { return g.kinds.length; });
     }
   };
 })(window.TFAG = window.TFAG || {});

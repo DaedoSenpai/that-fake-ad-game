@@ -1,7 +1,11 @@
 .DS_Store
 Thumbs.db
+desktop.ini
 *.log
 *.update-tmp
 /data/
+.cursor/
+.vscode/
+.idea/
 Bosses Novos e Mudanças.md
 unidades-balance.md

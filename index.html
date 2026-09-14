@@ -115,7 +115,7 @@
             <li>Em <strong>Opções</strong> (menu ou pausa): <strong>Auto mira</strong> trava e atira sozinho no inimigo mais perto; <strong>Auto uso de skill</strong> gasta a ativa quando ela sai da recarga. Você continua andando no WASD.</li>
             <li>O <strong>compêndio</strong> anota unidades aliadas quando você faz merge e inimigo no primeiro abate.</li>
             <li>São 3 perfis de save. O progresso é o mesmo no Jogar.bat e no index.html. Se o esquadrão cair durante uma run, as moedas adquiridas na run vão para o cofre.</li>
-            <li>No <strong>QG</strong> (menu) você compra bônus permanentes: formação inicial, um estilo de luta, saque no fim da fase, especialização do quartel por linha de soldado, o kit A/B do radial do comandante e uns truques só dele.</li>
+            <li>No <strong>QG</strong> (menu) você compra bônus permanentes. <strong>Operação</strong> é começo e saque. <strong>Quartel</strong> especializa a linha do esquadrão. <strong>Comando</strong> é o radial do herói (cada fatia A ou B) e os truques só dele.</li>
           </ul>
           <button id="btn-how-back" class="btn primary" type="button">Voltar</button>
         </section>
@@ -157,6 +157,7 @@
           <div id="hq-tabs" class="hq-tabs">
             <button type="button" class="hq-tab-btn on" data-hq-tab="operacao">Operação</button>
             <button type="button" class="hq-tab-btn" data-hq-tab="quartel">Quartel</button>
+            <button type="button" class="hq-tab-btn" data-hq-tab="comando">Comando</button>
           </div>
           <div id="hq-board" class="hq-board"></div>
           <button id="btn-refund" class="btn" type="button">Reembolsar QG</button>
@@ -174,11 +175,12 @@
         </section>
 
         <section id="screen-codex" class="screen hidden wide tablet-screen">
+          <p class="kicker">arquivo de campo</p>
           <h2>Compêndio</h2>
           <p class="tagline" id="codex-stats"></p>
           <div class="codex-tabs">
-            <button id="codex-ally" class="btn" type="button">Aliados</button>
-            <button id="codex-enemy" class="btn" type="button">Inimigos</button>
+            <button id="codex-ally" class="codex-tab-btn on" type="button">Aliados</button>
+            <button id="codex-enemy" class="codex-tab-btn" type="button">Inimigos</button>
           </div>
           <div id="codex-jump" class="codex-jump"></div>
           <div id="codex-book" class="codex-book"></div>
@@ -278,6 +280,20 @@
           <div class="cog g1" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><i></i></div>
           <div class="cog g2" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><i></i></div>
           <div class="cog g3" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><i></i></div>
+        </div>
+        <div class="fx-tablet">
+          <div class="tab-floor"></div>
+          <div class="tab-stage">
+            <div class="tab-body">
+              <span class="tab-cam"></span>
+              <div class="tab-glass">
+                <p class="tab-kicker">arquivo de campo</p>
+                <p class="tab-title">COMPÊNDIO</p>
+                <span class="tab-scan"></span>
+              </div>
+              <span class="tab-home"></span>
+            </div>
+          </div>
         </div>
         <div class="fx-cape">
           <div class="cape-floor"></div>

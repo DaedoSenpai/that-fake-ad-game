@@ -549,7 +549,7 @@
     airstrike: { icon: "💣", color: "#5ad0c8", detail: "Desenha uma linha. Explosões caem no caminho." },
     carpetbomb: { icon: "✈", color: "#2ad8ff", detail: "Bombas caem sem parar sob a mira." },
     archive: { icon: "⭐", color: "#ffd24a", detail: "O esquadrão pega o reforço caído e vira arquivo. R abre a lista: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Colosso custa 100." },
-    guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito: menu radial. Cima, direita e esquerda têm recarga própria. O QG (aba Quartel → Comando) troca cada fatia entre A e B. Centro cancela." },
+    guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito: menu radial. Cima, direita e esquerda têm recarga própria. O QG (aba Comando) troca cada fatia entre A e B. Centro cancela." },
     psych_slam: { icon: "🔮", color: "#b08cff", detail: "Dispositivo na mira. Levanta inimigos próximos e esmaga no chão: pouco dano, atordoa por ~1,4s. Chefes levam stun curto." },
     stormtrooper: { icon: "💥", color: "#d4c090", detail: "Por 6s a cadência explode, mas cada tiro sai com mira horrível — clássico stormtrooper." },
     saber_throw: { icon: "⚔", color: "#7affc8", detail: "Arremessa o sabre até a mira. Lâmina larga: corta no caminho de ida e na volta." },

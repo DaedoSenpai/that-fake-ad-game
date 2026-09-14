@@ -134,9 +134,53 @@
     return String(p || "").replace(/\\/g, "/").replace(/^\/+/, "");
   }
 
+  var JUNK_DIRS = [".cursor", ".vscode", ".idea", ".github"];
+  var JUNK_FILES = [".DS_Store", "Thumbs.db", "desktop.ini"];
+
+  function pathHead(p) {
+    var n = unixPath(p);
+    var i = n.indexOf("/");
+    return i < 0 ? n : n.slice(0, i);
+  }
+
   function skipPath(p) {
     var n = unixPath(p);
-    return /(^|\/)\.git(\/|$)/.test(n) || /(^|\/)\.cursor(\/|$)/.test(n) || /(^|\/)data(\/|$)/.test(n);
+    var head = pathHead(n);
+    if (head === ".git" || head === "node_modules") return true;
+    if (JUNK_DIRS.indexOf(head) >= 0) return true;
+    var leaf = n.split("/").pop();
+    if (JUNK_FILES.indexOf(leaf) >= 0) return true;
+    return /(^|\/)data(\/|$)/.test(n);
+  }
+
+  function isDevTree(root) {
+    return root.getDirectoryHandle(".git").then(function () {
+      return true;
+    }).catch(function () {
+      return false;
+    });
+  }
+
+  function removeEntry(root, name, recursive) {
+    return root.removeEntry(name, { recursive: !!recursive }).then(function () {
+      return recursive ? name + "/" : name;
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function cleanJunk(root) {
+    return isDevTree(root).then(function (dev) {
+      if (dev) return [];
+      var jobs = JUNK_DIRS.map(function (name) {
+        return removeEntry(root, name, true);
+      }).concat(JUNK_FILES.map(function (name) {
+        return removeEntry(root, name, false);
+      }));
+      return Promise.all(jobs).then(function (rows) {
+        return rows.filter(Boolean);
+      });
+    });
   }
 
   function legacyAliases(rel) {
@@ -237,7 +281,8 @@
   }
 
   function buildPlanFromHandle(root) {
-    return githubGet("https://api.github.com/repos/" + OWNER + "/" + REPO + "/git/trees/" + BRANCH + "?recursive=1").then(function (tree) {
+    return cleanJunk(root).then(function (cleaned) {
+      return githubGet("https://api.github.com/repos/" + OWNER + "/" + REPO + "/git/trees/" + BRANCH + "?recursive=1").then(function (tree) {
       if (tree.truncated) throw new Error("A arvore do GitHub veio cortada.");
       var entries = (tree.tree || []).filter(function (entry) {
         return entry.type === "blob" && !skipPath(entry.path);
@@ -258,7 +303,8 @@
             download: download,
             migrate: migrate,
             keepLocal: [],
-            missing: missing
+            missing: missing,
+            cleaned: cleaned
           };
         }
         var entry = entries[i++];
@@ -284,6 +330,7 @@
       }
 
       return next();
+      });
     });
   }
 
@@ -342,6 +389,7 @@
   }
 
   function applyPlanToHandle(root, plan) {
+    return cleanJunk(root).then(function (cleaned) {
     var moved = asList(plan.migrate);
     var files = asList(plan.download).slice();
     var updated = [];
@@ -373,7 +421,8 @@
             migrated: migrated,
             failed: failed,
             keepLocal: [],
-            same: plan.same || 0
+            same: plan.same || 0,
+            cleaned: cleaned
           };
         });
       }
@@ -393,6 +442,7 @@
     }
 
     return nextMove();
+    });
   }
 
   function pickGameFolder() {
@@ -442,12 +492,14 @@
     var download = asList(plan.download);
     var migrate = asList(plan.migrate);
     var keep = asList(plan.keepLocal);
+    var cleaned = asList(plan.cleaned);
     var rows = [
       ["Iguais", String(plan.same || 0)],
       ["Mais novos no GitHub", String(download.length)],
       ["Imagens da pasta antiga", String(migrate.length)]
     ];
     if (keep.length) rows.push(["Mantidos nesta máquina", String(keep.length)]);
+    if (cleaned.length) rows.push(["Lixo removido", cleaned.join(", ")]);
     if (download.length || migrate.length) {
       showStatus("Atualização disponível", "O GitHub tem arquivos novos. Se a sua pasta ainda for a antiga (sem aliados/inimigos/cenarios), eu reorganizo as imagens. O save não mexe.", rows.concat(
         download.slice(0, 6).map(function (item) {
@@ -476,11 +528,13 @@
     var updated = asList(result.updated);
     var migrated = asList(result.migrated);
     var failed = asList(result.failed);
+    var cleaned = asList(result.cleaned);
     var rows = [
       ["Baixados", String(updated.length)],
       ["Imagens reorganizadas", String(migrated.length)],
       ["Falharam", String(failed.length)]
     ];
+    if (cleaned.length) rows.push(["Lixo removido", cleaned.join(", ")]);
     updated.slice(0, 6).forEach(function (p) {
       rows.push(["Novo", typeof p === "string" ? p : p.path]);
     });

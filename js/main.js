@@ -411,7 +411,7 @@
         fundedLine;
       col.appendChild(head);
       var list = document.createElement("div");
-      list.className = "hq-nodes";
+      list.className = "hq-nodes" + (wing.id === "cmd-radial" ? " radial-map" : "");
       wing.items.forEach(function (item) {
         var lv = G.save.data.perm[item.id] | 0;
         var kit = !!item.kit;
@@ -426,7 +426,8 @@
         btn.className = [
           "hq-node",
           item.capstone ? "capstone" : "",
-          kit ? "kit" : "",
+          kit ? "kit kit-" + item.kit : "",
+          item.place ? "place-" + item.place : "",
           usingB ? "kit-b" : "",
           item.school ? "school school-" + item.id : "",
           isFunded ? "funded" : "",
@@ -453,7 +454,7 @@
         var desc = G.upgrades.itemDesc ? G.upgrades.itemDesc(item, lv, maxed) : (maxed ? item.desc(Math.max(0, item.max - 1)) : item.desc(lv));
         var hint = locked && G.upgrades.itemLockHint ? G.upgrades.itemLockHint(item) : "";
         if (hint && desc.indexOf(hint) < 0) desc += (desc ? " " : "") + hint;
-        var rankTxt = kit ? (usingB ? "B" : "A") : (lv + "/" + item.max);
+        var rankTxt = kit ? (usingB ? "kit B" : "kit A") : (lv + "/" + item.max);
         var priceTxt = kit ? (lv <= 0 ? String(cost) : "TROCAR") : (maxed ? "NO PONTO" : (locked ? "TRAVADO" : cost));
         btn.innerHTML =
           badges +
@@ -470,6 +471,13 @@
         };
         list.appendChild(btn);
       });
+      if (wing.id === "cmd-radial") {
+        var hub = document.createElement("div");
+        hub.className = "hq-radial-hub";
+        hub.setAttribute("aria-hidden", "true");
+        hub.innerHTML = "<b>DIREITO</b><small>segura</small>";
+        list.appendChild(hub);
+      }
       col.appendChild(list);
       board.appendChild(col);
     });
@@ -1250,12 +1258,13 @@
     var c = G.codex.counts();
     document.getElementById("codex-stats").textContent =
       "Aliados " + c.units + "/" + c.unitMax + " · Inimigos " + c.enemies + "/" + c.enemyMax;
-    document.getElementById("codex-ally").classList.toggle("primary", codexTab === "ally");
-    document.getElementById("codex-enemy").classList.toggle("primary", codexTab === "enemy");
+    document.getElementById("codex-ally").classList.toggle("on", codexTab === "ally");
+    document.getElementById("codex-enemy").classList.toggle("on", codexTab === "enemy");
     var book = document.getElementById("codex-book");
     var jump = document.getElementById("codex-jump");
     book.innerHTML = "";
     jump.innerHTML = "";
+    jump.classList.toggle("is-slim", codexTab === "enemy");
     var ally = codexTab === "ally";
     var sections = ally ? G.codex.allySections() : G.codex.enemySections();
     var team = ally ? "player" : "enemy";
@@ -1267,7 +1276,7 @@
       var chip = document.createElement("button");
       chip.type = "button";
       chip.className = "codex-jump-btn";
-        chip.textContent = sec.jump || sec.title;
+      chip.textContent = (sec.jump || sec.title) + " " + knownN + "/" + sec.kinds.length;
       chip.onclick = function () {
         G.audio.ui();
         var el = document.getElementById("codex-sec-" + sec.id);
@@ -1281,9 +1290,8 @@
       var head = document.createElement("header");
       head.className = "codex-sec-head";
       head.innerHTML =
-        "<div><p class=\"kicker\">" + sec.title + "</p>" +
-        (sec.hint ? "<p class=\"codex-sec-hint\">" + sec.hint + "</p>" : "") +
-        "</div><span class=\"codex-sec-count\">" + knownN + "/" + sec.kinds.length + "</span>";
+        "<p class=\"kicker\">" + sec.title + "</p>" +
+        "<span class=\"codex-sec-count\">" + knownN + "/" + sec.kinds.length + "</span>";
       var grid = document.createElement("div");
       grid.className = "codex-grid";
       sec.kinds.forEach(function (key) {
@@ -1292,18 +1300,32 @@
         var known = ally ? G.codex.hasUnit(key) : G.codex.hasEnemy(key);
         var btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "codex-item" + (known ? "" : " locked") + (def.boss ? " boss" : "");
-        if (known) {
-          btn.innerHTML = "<span class=\"codex-item-name\">" + def.name + "</span>" +
-            (def.title ? "<span class=\"codex-item-sub\">" + def.title + "</span>" : "");
-        } else {
-          btn.textContent = "???";
+        btn.className = "codex-item" +
+          (known ? "" : " locked") +
+          (sec.id === "boss" ? " boss" : "") +
+          (sec.id === "mini" ? " mini" : "");
+        var art = document.createElement("canvas");
+        art.className = "codex-thumb";
+        art.width = 96;
+        art.height = 104;
+        art.setAttribute("aria-hidden", "true");
+        var name = document.createElement("span");
+        name.className = "codex-item-name";
+        name.textContent = known ? def.name : "???";
+        btn.appendChild(art);
+        btn.appendChild(name);
+        if (known && def.title) {
+          var sub = document.createElement("span");
+          sub.className = "codex-item-sub";
+          sub.textContent = def.title;
+          btn.appendChild(sub);
         }
         btn.onclick = function () {
           G.audio.ui();
           openCodexSheet(team, key, known);
         };
         grid.appendChild(btn);
+        if (G.drawPortrait) G.drawPortrait(art, team, key, !known);
       });
       wrap.appendChild(head);
       wrap.appendChild(grid);
@@ -1398,6 +1420,9 @@
     } else if (kind === "gears") {
       lead = 480;
       wind = "wind";
+    } else if (kind === "tablet") {
+      lead = 620;
+      wind = "lift";
     }
     layer.className = "fx-" + kind + (wind ? " " + wind : "");
     if (lead) {
@@ -2771,8 +2796,10 @@
   document.getElementById("btn-codex").onclick = function () {
     if (state.fxLock || state.starting) return;
     G.audio.ui();
-    renderCodex();
-    showScreen("codex");
+    playMenuFx("tablet", 720, function () {
+      renderCodex();
+      showScreen("codex");
+    });
   };
   document.getElementById("btn-codex-back").onclick = function () {
     G.audio.ui();

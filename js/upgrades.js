@@ -596,54 +596,75 @@
       ]
     },
     {
-      id: "comando",
-      board: "quartel",
-      kicker: "Herói",
-      title: "Comando",
-      stamp: "COMANDO",
-      blurb: "Radial do comandante e unique.",
+      id: "cmd-radial",
+      board: "comando",
+      kicker: "Radial",
+      title: "Menu direito",
+      stamp: "RADIAL",
+      blurb: "Segura o direito no combate. Cada fatia tem kit A (padrão) e B — comprar troca os dois.",
       items: [
         {
           id: "cmdUp",
           kit: "up",
-          title: "Cima",
+          title: "Cima · cura ou grito",
           max: 2,
           cost: function (lv) { return lv ? 0 : 1600; },
           desc: function (lv) {
             var now = (lv | 0) === 1 ? "B" : "A";
-            return "Agora: " + now + ". A · Aura: cura 2%/s, 5s. B · Grito: +20% dano e cadência, 5s.";
+            return "Agora: kit " + now + ". A · Aura: cura 2%/s, 5s. B · Grito: +20% dano e cadência, 5s.";
           }
         },
         {
           id: "cmdStrike",
           kit: "strike",
-          title: "Direita",
+          title: "Direita · bombardeio",
           max: 2,
           cost: function (lv) { return lv ? 0 : 1800; },
           desc: function (lv) {
             var now = (lv | 0) === 1 ? "B" : "A";
-            return "Agora: " + now + ". A · Airstrike com fogo no chão. B · Cluster: 5 bombas, sem fogo, recarga menor.";
+            return "Agora: kit " + now + ". A · Airstrike com fogo no chão. B · Cluster: 5 bombas, sem fogo, recarga menor.";
           }
         },
         {
           id: "cmdRecruit",
           kit: "recruit",
-          title: "Esquerda",
+          title: "Esquerda · recruta ou arquivo",
           max: 2,
           cost: function (lv) { return lv ? 0 : 1600; },
           desc: function (lv) {
             var now = (lv | 0) === 1 ? "B" : "A";
-            return "Agora: " + now + ". A · Recruta no comandante. B · +2 arquivos. Mesma recarga.";
+            return "Agora: kit " + now + ". A · Recruta no comandante. B · +2 arquivos. Mesma recarga.";
           }
         },
         {
           id: "guerrilhaEnsaiada",
+          place: "cd",
           title: "Guerrilha ensaiada",
           max: 2,
           cost: function (lv) { return [1400, 2800][lv]; },
           desc: function (lv) {
             if (lv >= 1) return "Radial −22% recarga. Recruta: 3 por fase.";
             return "Radial −12% recarga.";
+          }
+        }
+      ]
+    },
+    {
+      id: "cmd-hero",
+      board: "comando",
+      kicker: "Unique",
+      title: "Comandante",
+      stamp: "HERÓI",
+      blurb: "Laser, arquivos e o que só o herói faz — fora do menu radial.",
+      items: [
+        {
+          id: "marcaComando",
+          title: "Marca de comando",
+          max: 2,
+          cost: function (lv) { return [1100, 2400][lv]; },
+          desc: function (lv) {
+            if (lv >= 1) return "Laser pega de mais longe. Alvo marcado: +16% dano. Esquadrão mira nele.";
+            return "Laser pega de mais longe. Alvo marcado: +8% dano.";
           }
         },
         {
@@ -660,23 +681,13 @@
           }
         },
         {
-          id: "marcaComando",
-          title: "Marca de comando",
-          max: 2,
-          cost: function (lv) { return [1100, 2400][lv]; },
-          desc: function (lv) {
-            if (lv >= 1) return "Laser pega de mais longe. Alvo marcado: +16% dano. Esquadrão mira nele.";
-            return "Laser pega de mais longe. Alvo marcado: +8% dano.";
-          }
-        },
-        {
           id: "segundoFolego",
           title: "Segundo fôlego",
           max: 1,
           capstone: true,
           cost: function () { return 3600; },
           lock: function () { return (permOf().guerrilhaEnsaiada | 0) < 1; },
-          lockHint: function () { return "Precisa de Guerrilha ensaiada."; },
+          lockHint: function () { return "Precisa de Guerrilha ensaiada (aba Radial)."; },
           desc: function () { return "1× por fase: se o comandante cair abaixo de 20% de vida, cura e fica 1s imune."; }
         },
         {
@@ -692,7 +703,7 @@
           },
           lockHint: function () {
             if (maxInvasionOf() < 4) return "Invasão 4.";
-            return "Supressão ou Raide no nível 2.";
+            return "Supressão ou Raide no nível 2 (aba Quartel).";
           },
           desc: function () { return "Inferno e Míssil: até 2 no campo."; }
         }
