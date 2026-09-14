@@ -29,17 +29,30 @@
           </div>
           <button id="btn-pause" type="button">Pausa</button>
         </div>
-        <div class="hp-wrap">
+        <div class="hp-wrap" id="hp-wrap">
           <div class="hp-label">Esquadrão</div>
-          <div class="hp-bar"><div id="hp-fill"></div></div>
+          <div class="hp-bar">
+            <i class="hp-cap l" aria-hidden="true"></i>
+            <div class="hp-track">
+              <div id="hp-delay"></div>
+              <div id="hp-fill"></div>
+              <span class="hp-gloss"></span>
+            </div>
+            <i class="hp-cap r" aria-hidden="true"></i>
+          </div>
         </div>
         <div id="boss-hud" class="hidden">
           <div id="boss-row-a" class="boss-row">
             <p class="boss-name" id="boss-name">MARECHAL DUSK</p>
             <p class="boss-title" id="boss-title">O Carrasco da Linha</p>
             <div class="souls-track">
-              <div id="souls-delay"></div>
-              <div id="souls-fill"></div>
+              <i class="souls-cap l" aria-hidden="true"></i>
+              <div class="souls-inner">
+                <div id="souls-delay"></div>
+                <div id="souls-fill"></div>
+                <span class="souls-gloss"></span>
+              </div>
+              <i class="souls-cap r" aria-hidden="true"></i>
             </div>
             <div id="souls-pips" class="souls-pips hidden"></div>
           </div>
@@ -47,13 +60,17 @@
             <p class="boss-name" id="boss-name-b"></p>
             <p class="boss-title" id="boss-title-b"></p>
             <div class="souls-track">
-              <div id="souls-delay-b"></div>
-              <div id="souls-fill-b"></div>
+              <i class="souls-cap l" aria-hidden="true"></i>
+              <div class="souls-inner">
+                <div id="souls-delay-b"></div>
+                <div id="souls-fill-b"></div>
+                <span class="souls-gloss"></span>
+              </div>
+              <i class="souls-cap r" aria-hidden="true"></i>
             </div>
           </div>
         </div>
         <div id="active-bar"></div>
-        <div id="dossier" class="hidden" aria-label="Dossiê da run"></div>
         <div id="buff-tray" class="hidden" aria-label="Buffs ativos"></div>
       </div>
 
@@ -71,6 +88,7 @@
           <button id="btn-shop" class="btn" type="button">QG</button>
           <button id="btn-codex" class="btn" type="button">Compêndio</button>
           <button id="btn-how" class="btn" type="button">Como jogar</button>
+          <button id="btn-options" class="btn" type="button">Opções</button>
           <button id="btn-update" class="btn" type="button">Verificar atualizações</button>
           <button id="btn-ifcara" class="btn ifcara-btn hidden" type="button">Debug Hu3 Mode</button>
           <p id="update-hint" class="update-hint"></p>
@@ -89,22 +107,57 @@
             <li><strong>Andar</strong> é WASD ou as setas. <strong>Shift</strong> dá um ímpeto curto — só pra sair da frente, não é skill de classe.</li>
             <li><strong>Mouse</strong> aponta. Segura o <strong>esquerdo</strong> pra atirar.</li>
             <li>A <strong>passiva</strong> já vem ligada: é o jeito da unidade atirar ou o efeito que ela faz sozinha. A <strong>ativa</strong> fica na barra. <strong>1 a 9</strong> escolhe a skill, <strong>direito</strong> habilidades são usadas na mira.</li>
-            <li>O <strong>comandante</strong> não ocupa vaga. O laser marca quem você aponta. O esquadrão pega o reforço caído e vira arquivo. <strong>R</strong> abre o quadro da formação e os arquivos: arrasta dois iguais no quadro pra merge, 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. O Colosso custa <strong>100 arquivos</strong>. Com a ativa dele, segura o <strong>direito</strong>: menu radial — cima aura de cura em volta do comandante (2% da vida máxima por segundo, 5s), direita airstrike, esquerda recruta perto do comandante. Solta na fatia; volta ao centro pra cancelar.</li>
-            <li>Duas unidades iguais se juntam no quadro do <strong>R</strong>: arrasta uma em cima da outra pra confirmar o merge. Vale no máximo <strong>2 de cada tipo</strong> (fuzileiro, batedor, anti-matéria etc.). <strong>Míssil, Inferno e Colosso</strong> são únicos — só 1. Recruta não tem esse teto.</li>
+            <li>O <strong>comandante</strong> não ocupa vaga. O laser marca quem você aponta. O esquadrão pega o reforço caído e vira arquivo. <strong>R</strong> abre o quadro da formação e os arquivos: arrasta dois iguais no quadro pra merge, 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. O Colosso custa <strong>100 arquivos</strong> (o Quartel de Blindados no QG pode baixar isso). Com a ativa dele, segura o <strong>direito</strong>: menu radial de 3 fatias. O QG troca cada uma (cura ou grito, airstrike ou cluster, recruta ou arquivos). Solta na fatia; volta ao centro pra cancelar.</li>
+            <li>Duas unidades iguais se juntam no quadro do <strong>R</strong>: arrasta uma em cima da outra pra confirmar o merge. Vale no máximo <strong>2 de cada tipo</strong> (fuzileiro, batedor, anti-matéria etc.). <strong>Míssil, Inferno e Colosso</strong> são únicos — só 1. Recruta não tem esse teto. Uma licença no QG deixa Inferno e Míssil em dupla.</li>
             <li>Cabe <strong>5</strong> soldados (o QG pode abrir uma 6ª vaga). O comandante não ocupa vaga.</li>
-            <li>No fim da fase caem 3 <strong>arquivos</strong>: doutrina comum, confidencial e (se o esquadrão pedir) máximo. Pegar de novo a mesma confidencial vira posto II. O dossiê da run fica na esquerda.</li>
-            <li><strong>Esc</strong> pausa. Na pausa, passa o mouse em alguém pra ler o que ele faz.</li>
+            <li>No fim da fase caem 3 <strong>arquivos</strong>: doutrina comum, confidencial e (se o esquadrão pedir) máximo. Pegar de novo a mesma confidencial vira posto II. As cartas da campanha ficam no <strong>Esc</strong>.</li>
+            <li><strong>Esc</strong> pausa. Lá você vê as cartas que pegou. Na pausa, passa o mouse em alguém pra ler o que ele faz.</li>
+            <li>Em <strong>Opções</strong> (menu ou pausa): <strong>Auto mira</strong> trava e atira sozinho no inimigo mais perto; <strong>Auto uso de skill</strong> gasta a ativa quando ela sai da recarga. Você continua andando no WASD.</li>
             <li>O <strong>compêndio</strong> anota unidades aliadas quando você faz merge e inimigo no primeiro abate.</li>
             <li>São 3 perfis de save. O progresso é o mesmo no Jogar.bat e no index.html. Se o esquadrão cair durante uma run, as moedas adquiridas na run vão para o cofre.</li>
-            <li>No <strong>QG</strong> (menu) você compra bônus permanentes: começa a campanha mais forte, escolhe um estilo de luta e ganha mais moeda / cartas melhores no fim da fase.</li>
+            <li>No <strong>QG</strong> (menu) você compra bônus permanentes: formação inicial, um estilo de luta, saque no fim da fase, especialização do quartel por linha de soldado, o kit A/B do radial do comandante e uns truques só dele.</li>
           </ul>
           <button id="btn-how-back" class="btn primary" type="button">Voltar</button>
+        </section>
+
+        <section id="screen-options" class="screen hidden">
+          <p class="kicker">oficina · calibração</p>
+          <h2>Opções</h2>
+          <p class="tagline">Ajustes deste perfil. Valem na hora, inclusive no meio da luta.</p>
+          <div class="opt-list">
+            <label class="opt-switch">
+              <input id="opt-auto-aim" type="checkbox" />
+              <span class="opt-track" aria-hidden="true"></span>
+              <span class="opt-copy">
+                <b>Auto mira</b>
+                <small>O esquadrão trava no inimigo mais perto e dispara o básico sozinho. WASD continua com você.</small>
+              </span>
+            </label>
+            <label class="opt-switch">
+              <input id="opt-auto-skill" type="checkbox" />
+              <span class="opt-track" aria-hidden="true"></span>
+              <span class="opt-copy">
+                <b>Auto uso de skill</b>
+                <small>Gasta a ativa assim que sai da recarga, na mira automática ou no cursor.</small>
+              </span>
+            </label>
+          </div>
+          <label class="vol-line">
+            <span>Volume</span>
+            <input id="vol-slider-options" type="range" min="0" max="100" step="1" value="80" aria-label="Volume" />
+            <span id="vol-pct-options">80%</span>
+          </label>
+          <button id="btn-options-back" class="btn primary" type="button">Voltar</button>
         </section>
 
         <section id="screen-shop" class="screen wide hq-screen hidden">
           <p class="kicker">Quartel-general · permanente</p>
           <h2>QG</h2>
           <p class="tagline" id="shop-vault">Cofre: 0</p>
+          <div id="hq-tabs" class="hq-tabs">
+            <button type="button" class="hq-tab-btn on" data-hq-tab="operacao">Operação</button>
+            <button type="button" class="hq-tab-btn" data-hq-tab="quartel">Quartel</button>
+          </div>
           <div id="hq-board" class="hq-board"></div>
           <button id="btn-refund" class="btn" type="button">Reembolsar QG</button>
           <button id="btn-shop-back" class="btn" type="button">Voltar</button>
@@ -120,14 +173,15 @@
           </div>
         </section>
 
-        <section id="screen-codex" class="screen hidden wide">
+        <section id="screen-codex" class="screen hidden wide tablet-screen">
           <h2>Compêndio</h2>
           <p class="tagline" id="codex-stats"></p>
           <div class="codex-tabs">
             <button id="codex-ally" class="btn" type="button">Aliados</button>
             <button id="codex-enemy" class="btn" type="button">Inimigos</button>
           </div>
-          <div id="codex-grid" class="codex-grid"></div>
+          <div id="codex-jump" class="codex-jump"></div>
+          <div id="codex-book" class="codex-book"></div>
           <button id="btn-codex-back" class="btn primary" type="button">Voltar</button>
         </section>
 
@@ -200,6 +254,46 @@
         </section>
       </div>
 
+      <div id="fx-layer" class="hidden" aria-hidden="true">
+        <div class="fx-doors">
+          <div class="fx-door fx-door-l">
+            <div class="fx-door-plate">
+              <span class="fx-door-num">QG-01</span>
+              <span class="fx-door-piston"></span>
+            </div>
+          </div>
+          <div class="fx-door fx-door-r">
+            <div class="fx-door-plate">
+              <span class="fx-door-num">QG-02</span>
+              <span class="fx-door-piston"></span>
+            </div>
+          </div>
+          <div class="fx-seam"></div>
+          <div class="fx-spark"></div>
+        </div>
+        <div class="fx-gears">
+          <div class="gear-veil"></div>
+          <div class="gear-hatch l"></div>
+          <div class="gear-hatch r"></div>
+          <div class="cog g1" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><i></i></div>
+          <div class="cog g2" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><i></i></div>
+          <div class="cog g3" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><i></i></div>
+        </div>
+        <div class="fx-cape">
+          <div class="cape-floor"></div>
+          <div class="cape-cmd">
+            <div class="cape-cloth"></div>
+            <div class="cape-body">
+              <span class="cape-sash"></span>
+              <span class="cape-helm"></span>
+              <span class="cape-visor"></span>
+              <span class="cape-star"></span>
+              <span class="cape-gun"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="archive-modal" class="hidden">
         <div class="merge-panel archive-panel">
           <p class="kicker">comandante</p>
@@ -263,16 +357,40 @@
 
       <div id="pause-modal" class="hidden">
         <div class="merge-panel pause-panel">
-          <p class="kicker">tática</p>
+          <p class="kicker">Esc</p>
           <h2>Pausado</h2>
-          <p class="tagline">WASD anda, esquerdo atira. 1 a 9 pega a skill, direito usa. Esc volta.</p>
+          <p class="tagline">Passe o mouse em alguém no campo pra ler o que ele faz.</p>
+          <div class="pause-doss">
+            <p class="kicker">Cartas desta campanha</p>
+            <div id="pause-dossier" class="pause-dossier"></div>
+          </div>
+          <div class="opt-list compact">
+            <label class="opt-switch">
+              <input id="opt-auto-aim-pause" type="checkbox" />
+              <span class="opt-track" aria-hidden="true"></span>
+              <span class="opt-copy">
+                <b>Auto mira</b>
+                <small>Trava e atira sozinho no inimigo mais perto.</small>
+              </span>
+            </label>
+            <label class="opt-switch">
+              <input id="opt-auto-skill-pause" type="checkbox" />
+              <span class="opt-track" aria-hidden="true"></span>
+              <span class="opt-copy">
+                <b>Auto uso de skill</b>
+                <small>Gasta a ativa quando ela sai da recarga.</small>
+              </span>
+            </label>
+          </div>
           <label class="vol-line">
             <span>Volume</span>
             <input id="vol-slider-pause" type="range" min="0" max="100" step="1" value="80" aria-label="Volume" />
             <span id="vol-pct-pause">80%</span>
           </label>
-          <button id="btn-resume" class="btn primary" type="button">Continuar</button>
-          <button id="btn-pause-menu" class="btn" type="button">Sair pro menu</button>
+          <div class="pause-actions">
+            <button id="btn-resume" class="btn primary" type="button">Continuar</button>
+            <button id="btn-pause-menu" class="btn" type="button">Sair pro menu</button>
+          </div>
         </div>
       </div>
 

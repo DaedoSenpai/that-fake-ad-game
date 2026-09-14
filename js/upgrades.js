@@ -65,7 +65,11 @@
     },
     { id: "knockback", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.knockback) ? "Impacto II" : "Impacto"; },
-      desc: function (run) { return rankOf(run.knockback) ? "O empurrão fica pesado." : "Acerto empurra o inimigo."; },
+      desc: function (run) {
+        return rankOf(run.knockback)
+          ? "O empurrão fica pesado."
+          : "Acerto empurra o inimigo. Em fogo, napalm e buraco negro, puxa pra dentro.";
+      },
       apply: function (run) { bump(run, "knockback", 2); }
     },
     { id: "berserk", rarity: "confidencial", ranks: 2,
@@ -126,36 +130,132 @@
     }
   ];
 
-  function schoolTax(id) {
-    var p = G.save && G.save.data && G.save.data.perm;
-    if (!p) return 1;
-    var schools = ["choque", "disparo", "mobilidade"];
+  var DOCTRINE_IDS = ["choque", "disparo", "mobilidade"];
+  var QUARTEL_IDS = ["otica", "supressao", "blindados", "triagem", "raide", "forca"];
+  var QUARTEL_KINDS = {
+    otica: ["sniper", "observador", "anti_material", "designado"],
+    supressao: ["metralhador", "giratoria", "lanca_chamas", "canhoneiro", "inferno", "missil"],
+    blindados: ["caminhao", "minitanque", "quartel", "oficina", "tanque", "colosso"],
+    triagem: ["pistoleiro", "medico", "cirurgiao", "capelao", "socorrista"],
+    raide: ["batedor", "infiltrador", "assassino", "sabotador", "fantasma", "fora_da_lei", "saqueador"],
+    forca: ["psiquico", "escolhido", "jedi", "mestre"]
+  };
+  var QUARTEL_EARLY = {
+    otica: ["recruta", "fuzileiro", "sniper", "observador", "anti_material"],
+    supressao: ["recruta", "fuzileiro", "metralhador", "giratoria", "lanca_chamas"],
+    blindados: ["recruta", "fuzileiro", "caminhao", "minitanque", "tanque"],
+    triagem: ["recruta", "pistoleiro", "medico", "cirurgiao", "cirurgiao"],
+    raide: ["recruta", "batedor", "infiltrador", "assassino", "assassino"],
+    forca: ["recruta", "psiquico", "escolhido", "jedi", "jedi"]
+  };
+  var QUARTEL_NAME = {
+    otica: "Ótica",
+    supressao: "Supressão",
+    blindados: "Blindados",
+    triagem: "Triagem",
+    raide: "Raide",
+    forca: "Força"
+  };
+
+  function permOf() {
+    return (G.save && G.save.data && G.save.data.perm) || {};
+  }
+
+  function maxInvasionOf() {
+    return (G.save && G.save.data && G.save.data.maxInvasion) | 0;
+  }
+
+  function fundedOf(ids) {
+    var p = permOf();
     var funded = "";
     var best = 0;
     var i;
-    for (i = 0; i < schools.length; i++) {
-      var lv = p[schools[i]] | 0;
+    for (i = 0; i < ids.length; i++) {
+      var lv = p[ids[i]] | 0;
       if (lv > best) {
         best = lv;
-        funded = schools[i];
+        funded = ids[i];
       }
     }
+    return funded;
+  }
+
+  function schoolTax(id) {
+    var funded = fundedOf(DOCTRINE_IDS);
+    if (!funded || funded === id) return 1;
+    return 1.6;
+  }
+
+  function quartelTax(id) {
+    var funded = fundedOf(QUARTEL_IDS);
     if (!funded || funded === id) return 1;
     return 1.6;
   }
 
   function schoolCost(id, lv) {
-    var base = [420, 980, 2100][lv] || 2100;
+    var base = [420, 980, 2100, 4200][lv] || 4200;
     return Math.round(base * schoolTax(id));
+  }
+
+  function quartelCost(id, lv) {
+    var base = [480, 1100, 2400][lv] || 2400;
+    return Math.round(base * quartelTax(id));
+  }
+
+  function quartelCount() {
+    var p = permOf();
+    var n = 0;
+    var i;
+    for (i = 0; i < QUARTEL_IDS.length; i++) if ((p[QUARTEL_IDS[i]] | 0) > 0) n++;
+    return n;
+  }
+
+  function quartelSlotLocked(id) {
+    var p = permOf();
+    if ((p[id] | 0) > 0) return false;
+    var n = quartelCount();
+    var inv = maxInvasionOf();
+    if (n >= 2) return inv < 5;
+    if (n >= 1) return inv < 3;
+    return false;
+  }
+
+  function quartelLockHint(id) {
+    if (!quartelSlotLocked(id)) return "";
+    if (quartelCount() >= 2) return "Invasão 5.";
+    return "Invasão 3.";
+  }
+
+  function taxNote(item) {
+    if (!item.school) return "";
+    var tax = item.schoolSet === "quartel" ? quartelTax(item.id) : schoolTax(item.id);
+    if (tax > 1) return " +60%.";
+    return "";
+  }
+
+  function kindInLine(kind, spec) {
+    var list = QUARTEL_KINDS[spec];
+    return !!(list && list.indexOf(kind) >= 0);
+  }
+
+  function lineLvForKind(kind, spec) {
+    if (!kindInLine(kind, spec)) return 0;
+    return permOf()[spec] | 0;
+  }
+
+  function lineLvForUnit(u, spec) {
+    if (!u) return 0;
+    return lineLvForKind(u.kind || (u.def && u.def.kind), spec);
   }
 
   G.PERM_WINGS = [
     {
       id: "formacao",
+      board: "operacao",
       kicker: "Começo",
       title: "Formação",
       stamp: "FORMAÇÃO",
-      blurb: "Com quantos soldados você começa e em que nível.",
+      blurb: "Começo da campanha.",
       items: [
         {
           id: "extraStart",
@@ -164,7 +264,7 @@
           cost: function (lv) { return 250 * Math.pow(2, lv); },
           desc: function (lv) {
             var n = lv + 1;
-            return "Começa a campanha com " + n + (n === 1 ? " recruta a mais." : " recrutas a mais.");
+            return "+" + n + (n === 1 ? " recruta" : " recrutas") + " no começo.";
           }
         },
         {
@@ -173,8 +273,23 @@
           max: 4,
           cost: function (lv) { return [550, 1200, 2600, 4800][lv]; },
           desc: function (lv) {
-            var kind = G.EARLY_KINDS[Math.min(G.EARLY_KINDS.length - 1, lv + 1)];
-            return "O primeiro soldado já entra como " + G.UNIT_DEFS[kind].name + ", sem merge.";
+            var list = (G.upgrades && G.upgrades.earlyKinds) ? G.upgrades.earlyKinds() : G.EARLY_KINDS;
+            var kind = list[Math.min(list.length - 1, lv + 1)];
+            var nome = G.UNIT_DEFS[kind] ? G.UNIT_DEFS[kind].name : kind;
+            var q = G.upgrades && G.upgrades.fundedQuartel && G.upgrades.fundedQuartel();
+            var extra = q ? " Linha: " + (QUARTEL_NAME[q] || q) + "." : "";
+            return "O 1º soldado entra como " + nome + "." + extra;
+          }
+        },
+        {
+          id: "segundoVeterano",
+          title: "Segundo veterano",
+          max: 1,
+          cost: function () { return 2200; },
+          lock: function () { return (permOf().earlyTier | 0) < 1; },
+          lockHint: function () { return "Precisa de Soldado já promovido."; },
+          desc: function () {
+            return "O 2º soldado entra um nível abaixo do 1º.";
           }
         },
         {
@@ -182,7 +297,17 @@
           title: "6ª vaga",
           max: 1,
           cost: function () { return 2800; },
-          desc: function () { return "Cabe 6 soldados no campo. O comandante continua sem ocupar vaga."; }
+          desc: function () { return "6 soldados no campo."; }
+        },
+        {
+          id: "pocketArquivo",
+          title: "Arquivo no bolso",
+          max: 2,
+          cost: function (lv) { return [1600, 3400][lv]; },
+          desc: function (lv) {
+            var n = lv + 1;
+            return "+" + n + (n === 1 ? " arquivo" : " arquivos") + " no começo de cada fase.";
+          }
         },
         {
           id: "startArquivo",
@@ -190,81 +315,108 @@
           max: 1,
           capstone: true,
           cost: function () { return 2400; },
-          desc: function () { return "Começa a campanha com 1 arquivo (o recurso do R, pra convocar e mergear)."; }
+          lock: function () {
+            var p = permOf();
+            return (p.extraStart | 0) + (p.earlyTier | 0) + (p.maxUnits | 0) < 3;
+          },
+          lockHint: function () { return "Sobe Recruta extra, Soldado já promovido ou 6ª vaga."; },
+          desc: function () { return "Começa com 1 arquivo."; }
         }
       ]
     },
     {
       id: "doutrina",
+      board: "operacao",
       kicker: "Estilo",
       title: "Doutrina",
       stamp: "DOUTRINA",
-      blurb: "A primeira que você comprar é a sua. As outras duas ficam 60% mais caras.",
+      blurb: "A primeira é a sua. As outras +60%. Nv 4 só na sua.",
       items: [
         {
           id: "choque",
           title: "Choque",
           school: true,
-          max: 3,
+          max: 4,
           cost: function (lv) { return schoolCost("choque", lv); },
+          lock: function (lv) { return lv >= 3 && fundedOf(DOCTRINE_IDS) !== "choque"; },
+          lockHint: function () { return "Nv 4 só no seu estilo."; },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = schoolTax("choque") > 1 ? " 60% mais caro (você já tem outro estilo)." : "";
-            if (n >= 3) return "+18% de vida e toma 15% menos dano. Começa a campanha regenerando vida. Sem bônus de dano." + tax;
-            return "+" + (n * 6) + "% de vida e toma " + (n * 5) + "% menos dano. Não aumenta dano." + tax;
+            var tax = taxNote({ school: true, id: "choque" });
+            if (n >= 4) return "+24% vida, −20% dano recebido. Regenera. +8% escudo." + tax;
+            if (n >= 3) return "+18% vida, −15% dano recebido. Regenera no começo." + tax;
+            return "+" + (n * 6) + "% vida, −" + (n * 5) + "% dano recebido." + tax;
           }
         },
         {
           id: "disparo",
           title: "Disparo",
           school: true,
-          max: 3,
+          max: 4,
           cost: function (lv) { return schoolCost("disparo", lv); },
+          lock: function (lv) { return lv >= 3 && fundedOf(DOCTRINE_IDS) !== "disparo"; },
+          lockHint: function () { return "Nv 4 só no seu estilo."; },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = schoolTax("disparo") > 1 ? " 60% mais caro (você já tem outro estilo)." : "";
-            if (n >= 3) return "+21% de dano e +24% de cadência. No fim da fase, a carta amarela tende a ser de tiro (perfuração, ricochete…)." + tax;
-            return "+" + (n * 7) + "% de dano e +" + (n * 8) + "% na velocidade de tiro." + tax;
+            var tax = taxNote({ school: true, id: "disparo" });
+            if (n >= 4) return "+28% dano, +32% cadência. Carta amarela de tiro quase sempre." + tax;
+            if (n >= 3) return "+21% dano, +24% cadência. Carta amarela tende a ser de tiro." + tax;
+            return "+" + (n * 7) + "% dano, +" + (n * 8) + "% cadência." + tax;
           }
         },
         {
           id: "mobilidade",
           title: "Mobilidade",
           school: true,
-          max: 3,
+          max: 4,
           cost: function (lv) { return schoolCost("mobilidade", lv); },
+          lock: function (lv) { return lv >= 3 && fundedOf(DOCTRINE_IDS) !== "mobilidade"; },
+          lockHint: function () { return "Nv 4 só no seu estilo."; },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = schoolTax("mobilidade") > 1 ? " 60% mais caro (você já tem outro estilo)." : "";
-            if (n >= 3) return "+24% de velocidade, ímã forte e mais unidade caindo no chão. Começa já puxando loot e 12% mais rápido." + tax;
-            return "+" + (n * 8) + "% de velocidade, puxa loot de mais longe e inimigo solta unidade um pouco mais." + tax;
+            var tax = taxNote({ school: true, id: "mobilidade" });
+            if (n >= 4) return "+32% velocidade. Ímã forte. Mais reforço no chão. Começa +12% rápido." + tax;
+            if (n >= 3) return "+24% velocidade. Ímã forte. Começa +12% rápido e puxando loot." + tax;
+            return "+" + (n * 8) + "% velocidade. Puxa loot de mais longe. Mais reforço no chão." + tax;
           }
         },
         {
           id: "manualCampo",
           title: "Manual de campo",
-          max: 1,
+          max: 2,
           capstone: true,
-          cost: function () { return 2800; },
-          desc: function () {
+          cost: function (lv) { return [2800, 4200][lv]; },
+          lock: function (lv) {
+            var school = fundedOf(DOCTRINE_IDS);
+            if (!school) return true;
+            if (lv >= 1) return (permOf()[school] | 0) < 3;
+            return false;
+          },
+          lockHint: function () {
+            if (!fundedOf(DOCTRINE_IDS)) return "Compra um estilo.";
+            return "Estilo no nível 3.";
+          },
+          desc: function (lv) {
             var school = G.upgrades.fundedSchool && G.upgrades.fundedSchool();
             var hint = {
-              choque: "Choque: começa com Impacto (empurra o inimigo).",
-              disparo: "Disparo: começa com Perfuração (o tiro atravessa).",
-              mobilidade: "Mobilidade: começa com Munição gelada (deixa lento)."
+              choque: "Começa com Impacto.",
+              disparo: "Começa com Perfuração.",
+              mobilidade: "Começa com Munição gelada."
             }[school];
-            if (hint) return hint + " Pegar de novo no fim da fase vira posto II.";
-            return "Compra um estilo primeiro. Toda campanha já começa com a carta amarela dele no dossiê: Choque empurra, Disparo perfura, Mobilidade gela.";
+            if (!hint) return "Começa com a carta amarela do seu estilo.";
+            if (lv >= 1) return hint.replace(".", " II.");
+            return hint + " Nv 2: posto II.";
           }
         }
       ]
     },
     {
       id: "intel",
+      board: "operacao",
       kicker: "Saque",
       title: "Inteligência",
       stamp: "INTEL",
-      blurb: "Mais moeda, troca de carta no fim da fase e carta vermelha melhor.",
+      blurb: "Moeda, reroll e carta do fim da fase.",
       items: [
         {
           id: "rerolls",
@@ -273,7 +425,7 @@
           cost: function (lv) { return [1800, 6500][lv]; },
           desc: function (lv) {
             var n = lv + 1;
-            return "No fim da fase você pode trocar as 3 cartas " + n + (n === 1 ? " vez" : " vezes") + " de graça.";
+            return "+" + n + (n === 1 ? " troca" : " trocas") + " grátis no fim da fase.";
           }
         },
         {
@@ -283,7 +435,7 @@
           cost: function (lv) { return Math.round(240 * (lv + 1) * (1 + lv * 0.35)); },
           desc: function (lv) {
             var n = lv + 1;
-            return "Inimigo solta +" + (n * 12) + "% de moedas. No começo de cada fase você ganha +" + (n * 20) + " moedas.";
+            return "+" + (n * 12) + "% moedas. +" + (n * 20) + " moedas no começo de cada fase.";
           }
         },
         {
@@ -293,11 +445,34 @@
           cost: function (lv) { return Math.round(270 * (lv + 1) * (1 + lv * 0.35)); },
           desc: function (lv) {
             var n = lv + 1;
-            var text = "Unidade que o inimigo solta nasce um nível acima com mais frequência.";
-            if (n >= 4) text += " A carta vermelha do fim da fase também combina mais com o esquadrão.";
-            else if (n >= 3) text += " A carta vermelha aparece um pouco mais.";
+            var text = "Reforço nasce um nível acima mais vezes.";
+            if (n >= 4) text += " Carta vermelha combina com o esquadrão.";
+            else if (n >= 3) text += " Carta vermelha aparece mais.";
             return text;
           }
+        },
+        {
+          id: "saqueInvasao",
+          title: "Saque de invasão",
+          max: 3,
+          cost: function (lv) { return [900, 2100, 3800][lv]; },
+          desc: function (lv) {
+            var n = lv + 1;
+            return "Na invasão: +" + (n * 12) + "% no Cofre. +" + (n * 25) + " moedas e +" + n + " arquivo" + (n === 1 ? "" : "s") + " por fase.";
+          }
+        },
+        {
+          id: "dossieInicial",
+          title: "Dossiê inicial",
+          max: 1,
+          capstone: true,
+          cost: function () { return 3000; },
+          lock: function () {
+            var p = permOf();
+            return (p.rerolls | 0) + (p.luck | 0) + (p.briefing | 0) < 2;
+          },
+          lockHint: function () { return "Sobe Troca extra, Reforço melhor ou Carta vermelha certa."; },
+          desc: function () { return "Começa com 1 carta amarela extra."; }
         },
         {
           id: "briefing",
@@ -305,7 +480,221 @@
           max: 1,
           capstone: true,
           cost: function () { return 3200; },
-          desc: function () { return "No fim da fase, a carta vermelha (Máximo) vem a que mais combina com quem você tem. Médico no campo? Tende a vir carta de médico."; }
+          lock: function () {
+            var p = permOf();
+            return (p.gold | 0) + (p.luck | 0) + (p.rerolls | 0) < 3;
+          },
+          lockHint: function () { return "Sobe Mais moedas, Reforço melhor ou Troca extra."; },
+          desc: function () { return "A carta vermelha combina com o esquadrão."; }
+        }
+      ]
+    },
+    {
+      id: "quartel",
+      board: "quartel",
+      kicker: "Linha",
+      title: "Quartel",
+      stamp: "QUARTEL",
+      blurb: "A primeira é a sua. 2ª: Invasão 3. 3ª: Invasão 5. Outras +60%.",
+      items: [
+        {
+          id: "otica",
+          title: "Ótica",
+          school: true,
+          schoolSet: "quartel",
+          max: 3,
+          cost: function (lv) { return quartelCost("otica", lv); },
+          lock: function (lv) { return lv < 1 && quartelSlotLocked("otica"); },
+          lockHint: function () { return quartelLockHint("otica"); },
+          desc: function (lv) {
+            var n = lv + 1;
+            var tax = taxNote({ school: true, schoolSet: "quartel", id: "otica" });
+            if (n >= 3) return "Linha: +18% dano. Marca dura mais. Formação inicial: Ótica." + tax;
+            return "Sniper, observador, designado, antimaterial: +" + (n * 6) + "% dano. Marca dura mais." + tax;
+          }
+        },
+        {
+          id: "supressao",
+          title: "Supressão",
+          school: true,
+          schoolSet: "quartel",
+          max: 3,
+          cost: function (lv) { return quartelCost("supressao", lv); },
+          lock: function (lv) { return lv < 1 && quartelSlotLocked("supressao"); },
+          lockHint: function () { return quartelLockHint("supressao"); },
+          desc: function (lv) {
+            var n = lv + 1;
+            var tax = taxNote({ school: true, schoolSet: "quartel", id: "supressao" });
+            if (n >= 3) return "Linha: +18% cadência, +12% dano. Giratória esquenta mais rápido. Inferno/Míssil: 12 arquivos. Formação inicial: Supressão." + tax;
+            return "Metralhador, giratória, lança-chamas, canhoneiro: +" + (n * 6) + "% cadência, +" + (n * 4) + "% dano." + tax;
+          }
+        },
+        {
+          id: "blindados",
+          title: "Blindados",
+          school: true,
+          schoolSet: "quartel",
+          max: 3,
+          cost: function (lv) { return quartelCost("blindados", lv); },
+          lock: function (lv) { return lv < 1 && quartelSlotLocked("blindados"); },
+          lockHint: function () { return quartelLockHint("blindados"); },
+          desc: function (lv) {
+            var n = lv + 1;
+            var tax = taxNote({ school: true, schoolSet: "quartel", id: "blindados" });
+            if (n >= 3) return "Linha: +15% vida, −12% dano recebido. Quartel spawna mais rápido. Colosso: 80 arquivos. Formação inicial: Blindados." + tax;
+            return "Caminhão, mini-tanque, tanque, quartel, oficina: +" + (n * 5) + "% vida, −" + (n * 4) + "% dano recebido." + tax;
+          }
+        },
+        {
+          id: "triagem",
+          title: "Triagem",
+          school: true,
+          schoolSet: "quartel",
+          max: 3,
+          cost: function (lv) { return quartelCost("triagem", lv); },
+          lock: function (lv) { return lv < 1 && quartelSlotLocked("triagem"); },
+          lockHint: function () { return quartelLockHint("triagem"); },
+          desc: function (lv) {
+            var n = lv + 1;
+            var tax = taxNote({ school: true, schoolSet: "quartel", id: "triagem" });
+            if (n >= 3) return "Linha médica: kit e âncora mais fortes. Kit +1 pacote. Formação inicial: pistoleiro." + tax;
+            return "Médico, cirurgião, capelão, socorrista: kit e âncora +" + (n * 8) + "%." + tax;
+          }
+        },
+        {
+          id: "raide",
+          title: "Raide",
+          school: true,
+          schoolSet: "quartel",
+          max: 3,
+          cost: function (lv) { return quartelCost("raide", lv); },
+          lock: function (lv) { return lv < 1 && quartelSlotLocked("raide"); },
+          lockHint: function () { return quartelLockHint("raide"); },
+          desc: function (lv) {
+            var n = lv + 1;
+            var tax = taxNote({ school: true, schoolSet: "quartel", id: "raide" });
+            if (n >= 3) return "Linha: +21% dano. Fumaça +20% duração. Formação inicial: Raide." + tax;
+            return "Batedor, infiltrador, assassino, fora-da-lei: +" + (n * 7) + "% dano." + tax;
+          }
+        },
+        {
+          id: "forca",
+          title: "Força",
+          school: true,
+          schoolSet: "quartel",
+          max: 3,
+          cost: function (lv) { return quartelCost("forca", lv); },
+          lock: function (lv) { return lv < 1 && quartelSlotLocked("forca"); },
+          lockHint: function () { return quartelLockHint("forca"); },
+          desc: function (lv) {
+            var n = lv + 1;
+            var tax = taxNote({ school: true, schoolSet: "quartel", id: "forca" });
+            if (n >= 3) return "Linha: +18% dano. Menu da força −24% recarga. Mestre: 12 arquivos. Formação inicial: Força." + tax;
+            return "Psíquico, escolhido, jedi, mestre: +" + (n * 6) + "% dano. Menu da força −" + (n * 8) + "% recarga." + tax;
+          }
+        }
+      ]
+    },
+    {
+      id: "comando",
+      board: "quartel",
+      kicker: "Herói",
+      title: "Comando",
+      stamp: "COMANDO",
+      blurb: "Radial do comandante e unique.",
+      items: [
+        {
+          id: "cmdUp",
+          kit: "up",
+          title: "Cima",
+          max: 2,
+          cost: function (lv) { return lv ? 0 : 1600; },
+          desc: function (lv) {
+            var now = (lv | 0) === 1 ? "B" : "A";
+            return "Agora: " + now + ". A · Aura: cura 2%/s, 5s. B · Grito: +20% dano e cadência, 5s.";
+          }
+        },
+        {
+          id: "cmdStrike",
+          kit: "strike",
+          title: "Direita",
+          max: 2,
+          cost: function (lv) { return lv ? 0 : 1800; },
+          desc: function (lv) {
+            var now = (lv | 0) === 1 ? "B" : "A";
+            return "Agora: " + now + ". A · Airstrike com fogo no chão. B · Cluster: 5 bombas, sem fogo, recarga menor.";
+          }
+        },
+        {
+          id: "cmdRecruit",
+          kit: "recruit",
+          title: "Esquerda",
+          max: 2,
+          cost: function (lv) { return lv ? 0 : 1600; },
+          desc: function (lv) {
+            var now = (lv | 0) === 1 ? "B" : "A";
+            return "Agora: " + now + ". A · Recruta no comandante. B · +2 arquivos. Mesma recarga.";
+          }
+        },
+        {
+          id: "guerrilhaEnsaiada",
+          title: "Guerrilha ensaiada",
+          max: 2,
+          cost: function (lv) { return [1400, 2800][lv]; },
+          desc: function (lv) {
+            if (lv >= 1) return "Radial −22% recarga. Recruta: 3 por fase.";
+            return "Radial −12% recarga.";
+          }
+        },
+        {
+          id: "arquivista",
+          title: "Arquivista",
+          max: 3,
+          cost: function (lv) { return [900, 1800, 3200][lv]; },
+          desc: function (lv) {
+            var n = lv + 1;
+            var text = "+" + (n * 4) + "% chance de reforço.";
+            if (n >= 2) text += " +1 arquivo no começo.";
+            if (n >= 3) text += " 12% da baixa virar arquivo.";
+            return text;
+          }
+        },
+        {
+          id: "marcaComando",
+          title: "Marca de comando",
+          max: 2,
+          cost: function (lv) { return [1100, 2400][lv]; },
+          desc: function (lv) {
+            if (lv >= 1) return "Laser pega de mais longe. Alvo marcado: +16% dano. Esquadrão mira nele.";
+            return "Laser pega de mais longe. Alvo marcado: +8% dano.";
+          }
+        },
+        {
+          id: "segundoFolego",
+          title: "Segundo fôlego",
+          max: 1,
+          capstone: true,
+          cost: function () { return 3600; },
+          lock: function () { return (permOf().guerrilhaEnsaiada | 0) < 1; },
+          lockHint: function () { return "Precisa de Guerrilha ensaiada."; },
+          desc: function () { return "1× por fase: se o comandante cair abaixo de 20% de vida, cura e fica 1s imune."; }
+        },
+        {
+          id: "duplaUnique",
+          title: "Licença de unique",
+          max: 1,
+          capstone: true,
+          cost: function () { return 4800; },
+          lock: function () {
+            var p = permOf();
+            if (maxInvasionOf() < 4) return true;
+            return (p.supressao | 0) < 2 && (p.raide | 0) < 2;
+          },
+          lockHint: function () {
+            if (maxInvasionOf() < 4) return "Invasão 4.";
+            return "Supressão ou Raide no nível 2.";
+          },
+          desc: function () { return "Inferno e Míssil: até 2 no campo."; }
         }
       ]
     }
@@ -414,27 +803,233 @@
     return null;
   }
 
+  function grantCard(state, id) {
+    var card = G.upgrades.cardById(id);
+    if (!card || !state || !state.run) return false;
+    card.apply(state.run, state);
+    if (!state.run.taken) state.run.taken = {};
+    state.run.taken[id] = (state.run.taken[id] | 0) + 1;
+    var rank = card.ranks ? rankOf(state.run[id]) : (state.run.taken[id] | 0);
+    if (!state.run.dossier) state.run.dossier = [];
+    var found = false;
+    var i;
+    for (i = 0; i < state.run.dossier.length; i++) {
+      if (state.run.dossier[i].id === id) {
+        state.run.dossier[i].rank = rank;
+        found = true;
+        break;
+      }
+    }
+    if (!found) state.run.dossier.push({ id: id, rank: rank });
+    return true;
+  }
+
   G.upgrades = {
     rank: rankOf,
     bump: bump,
     schoolTax: schoolTax,
+    quartelTax: quartelTax,
+    shopBoard: "operacao",
 
     fundedSchool: function () {
-      var p = G.save && G.save.data && G.save.data.perm;
-      if (!p) return "";
-      var schools = ["choque", "disparo", "mobilidade"];
-      var funded = "";
+      return fundedOf(DOCTRINE_IDS);
+    },
+    fundedQuartel: function () {
+      return fundedOf(QUARTEL_IDS);
+    },
+    quartelName: function (id) {
+      return QUARTEL_NAME[id] || id;
+    },
+    earlyKinds: function () {
+      var q = fundedOf(QUARTEL_IDS);
+      if (q && QUARTEL_EARLY[q] && (permOf()[q] | 0) >= 1) return QUARTEL_EARLY[q];
+      return G.EARLY_KINDS;
+    },
+    lineLv: function (spec) {
+      return permOf()[spec] | 0;
+    },
+    lineLvFor: function (u, spec) {
+      return lineLvForUnit(u, spec);
+    },
+    lineLvForKind: function (kind, spec) {
+      return lineLvForKind(kind, spec);
+    },
+    kindInLine: function (kind, spec) {
+      return kindInLine(kind, spec);
+    },
+    itemTax: function (item) {
+      if (!item || !item.school) return 1;
+      return item.schoolSet === "quartel" ? quartelTax(item.id) : schoolTax(item.id);
+    },
+    itemFunded: function (item) {
+      if (!item || !item.school) return false;
+      if (item.schoolSet === "quartel") return fundedOf(QUARTEL_IDS) === item.id;
+      return fundedOf(DOCTRINE_IDS) === item.id;
+    },
+    itemLocked: function (item) {
+      if (!item || !item.lock) return false;
+      var lv = permOf()[item.id] | 0;
+      if (lv >= item.max) return false;
+      return !!item.lock(lv);
+    },
+    itemLockHint: function (item) {
+      if (!item || !item.lockHint || !this.itemLocked(item)) return "";
+      return item.lockHint() || "";
+    },
+    itemDesc: function (item, lv, maxed) {
+      if (!item || !item.desc) return "";
+      var at = maxed ? Math.max(0, item.max - 1) : lv;
+      return item.desc(at) || "";
+    },
+    quartelDmgMul: function (u) {
+      if (!u) return 1;
+      var m = 1;
+      var otica = lineLvForUnit(u, "otica");
+      var sup = lineLvForUnit(u, "supressao");
+      var bli = lineLvForUnit(u, "blindados");
+      var rai = lineLvForUnit(u, "raide");
+      var forca = lineLvForUnit(u, "forca");
+      if (otica) m *= 1 + 0.06 * otica;
+      if (sup) m *= 1 + 0.04 * sup;
+      if (bli) m *= 1 + 0.04 * bli;
+      if (rai) m *= 1 + 0.07 * rai;
+      if (forca) m *= 1 + 0.06 * forca;
+      return m;
+    },
+    quartelFireMul: function (u) {
+      var lv = lineLvForUnit(u, "supressao");
+      return lv ? 1 + 0.06 * lv : 1;
+    },
+    quartelHpMul: function (kind) {
+      var lv = lineLvForKind(kind, "blindados");
+      return lv ? 1 + 0.05 * lv : 1;
+    },
+    quartelDr: function (u) {
+      var lv = lineLvForUnit(u, "blindados");
+      return lv ? lv * 0.04 : 0;
+    },
+    activeCdMul: function (u) {
+      if (!u) return 1;
       var best = 0;
       var i;
-      for (i = 0; i < schools.length; i++) {
-        var lv = p[schools[i]] | 0;
-        if (lv > best) {
-          best = lv;
-          funded = schools[i];
-        }
+      for (i = 0; i < QUARTEL_IDS.length; i++) {
+        var lv = lineLvForUnit(u, QUARTEL_IDS[i]);
+        if (lv > best) best = lv;
       }
-      return funded;
+      if (best >= 2) return 0.92;
+      return 1;
     },
+    obsMarkBonus: function () {
+      return (permOf().otica | 0) * 1.6;
+    },
+    kitExtra: function () {
+      return (permOf().triagem | 0) >= 3 ? 1 : 0;
+    },
+    kitHealMul: function () {
+      return 1 + (permOf().triagem | 0) * 0.08;
+    },
+    fieldMedHq: function () {
+      return (permOf().triagem | 0) * 0.04;
+    },
+    smokeMul: function () {
+      return (permOf().raide | 0) >= 3 ? 1.2 : 1;
+    },
+    quartelSpawnMul: function () {
+      var lv = permOf().blindados | 0;
+      return lv ? 1 + 0.1 * lv : 1;
+    },
+    girSpinNeed: function () {
+      return (permOf().supressao | 0) >= 3 ? 1.25 : 2;
+    },
+    forceCdMul: function () {
+      var lv = permOf().forca | 0;
+      return lv ? 1 - 0.08 * lv : 1;
+    },
+    guerCdMul: function () {
+      var lv = permOf().guerrilhaEnsaiada | 0;
+      if (lv >= 2) return 0.78;
+      if (lv >= 1) return 0.88;
+      return 1;
+    },
+    guerRecruitCap: function () {
+      return (permOf().guerrilhaEnsaiada | 0) >= 2 ? 3 : 2;
+    },
+    cmdKit: function (slot) {
+      var id = slot === "strike" ? "cmdStrike" : slot === "recruit" ? "cmdRecruit" : "cmdUp";
+      return (permOf()[id] | 0) === 1 ? "b" : "a";
+    },
+    cmdSlice: function (slot) {
+      var b = this.cmdKit(slot) === "b";
+      if (slot === "strike") {
+        return b
+          ? { name: "Cluster", icon: "✸", col: "#ff9a3a" }
+          : { name: "Airstrike", icon: "△", col: "#ff9a3a" };
+      }
+      if (slot === "recruit") {
+        return b
+          ? { name: "Arquivos", icon: "▤", col: "#ffd24a" }
+          : { name: "Recruta", icon: "○", col: "#9ad4ff" };
+      }
+      return b
+        ? { name: "Grito", icon: "⚑", col: "#ffd24a" }
+        : { name: "Aura", icon: "✚", col: "#7cffb0" };
+    },
+    cmdMarkSnap: function () {
+      return 36 + (permOf().marcaComando | 0) * 16;
+    },
+    cmdMarkDmg: function () {
+      var lv = permOf().marcaComando | 0;
+      return lv ? 1 + 0.08 * lv : 1;
+    },
+    cmdMarkHold: function () {
+      var lv = permOf().marcaComando | 0;
+      if (!lv) return 0;
+      return 0.4 + 0.5 * lv;
+    },
+    colossoCost: function () {
+      return (permOf().blindados | 0) >= 3 ? 80 : 100;
+    },
+    uniqueCopyCap: function (kind) {
+      if ((kind === "inferno" || kind === "missil") && (permOf().duplaUnique | 0)) return 2;
+      return 1;
+    },
+    promoteCostFor: function (gen, kinds) {
+      var i;
+      kinds = kinds || [];
+      for (i = 0; i < kinds.length; i++) {
+        if (kinds[i] === "mestre" && (permOf().forca | 0) >= 3) return 12;
+        if ((kinds[i] === "inferno" || kinds[i] === "missil") && (permOf().supressao | 0) >= 3) return 12;
+      }
+      return 0;
+    },
+    dropChanceBonus: function () {
+      return (permOf().arquivista | 0) * 0.04;
+    },
+    killArquivoChance: function () {
+      return (permOf().arquivista | 0) >= 3 ? 0.12 : 0;
+    },
+    stageArquivo: function (state) {
+      var n = permOf().pocketArquivo | 0;
+      var saque = permOf().saqueInvasao | 0;
+      var inv = (state && state.run && state.run.invasion) | 0;
+      if (inv > 0 && saque) n += saque;
+      return n;
+    },
+    stageGold: function (state) {
+      var gold = (permOf().gold | 0) * 20;
+      var saque = permOf().saqueInvasao | 0;
+      var inv = (state && state.run && state.run.invasion) | 0;
+      if (inv > 0 && saque) gold += saque * 25;
+      return gold;
+    },
+    bankRun: function (state) {
+      var coins = (state && state.run && state.run.coins) | 0;
+      var saque = permOf().saqueInvasao | 0;
+      var inv = (state && state.run && state.run.invasion) | 0;
+      if (inv > 0 && saque) coins = Math.round(coins * (1 + 0.12 * saque));
+      G.save.bank(coins);
+    },
+
     favorMul: function (state, u) {
       if (!u || !u.def || !state || !state.run) return 1;
       var role = u.def.role;
@@ -447,6 +1042,7 @@
       if (raid && (role === "stealth" || role === "assassin" || role === "outlaw")) m *= 1 + 0.2 * raid;
       if (impact && (role === "colossus" || role === "tank" || role === "minitank" || role === "truck")) m *= 1 + 0.16 * impact;
       if (fieldMed && (role === "medic" || role === "surgeon" || role === "chaplain")) m *= 1 + 0.12 * fieldMed;
+      m *= G.upgrades.quartelDmgMul(u);
       return m;
     },
 
@@ -473,6 +1069,34 @@
       return textOf(card.combo, run);
     },
 
+    dossierView: function (card, ownedRank, run) {
+      ownedRank = ownedRank | 0;
+      var src = run || {};
+      function fake(ownVal) {
+        var o = {};
+        for (var k in src) {
+          if (Object.prototype.hasOwnProperty.call(src, k)) o[k] = src[k];
+        }
+        o[card.id] = ownVal;
+        return o;
+      }
+      var titleRun = fake(card.ranks && ownedRank >= 2 ? 1 : 0);
+      var title = textOf(card.title, titleRun);
+      if (!card.ranks && ownedRank > 1) title += " ×" + ownedRank;
+      var lines = [];
+      if (card.ranks) {
+        lines.push({ mark: "I", text: textOf(card.desc, fake(0)) });
+        if (ownedRank >= 2) lines.push({ mark: "II", text: textOf(card.desc, fake(1)) });
+      } else {
+        lines.push({ mark: "", text: textOf(card.desc, src) });
+      }
+      return {
+        title: title,
+        lines: lines,
+        combo: textOf(card.combo, src)
+      };
+    },
+
     cardById: function (id) {
       for (var i = 0; i < G.RUN_CARDS.length; i++) if (G.RUN_CARDS[i].id === id) return G.RUN_CARDS[i];
       return null;
@@ -481,10 +1105,12 @@
     applyHqStart: function (run, perm) {
       perm = perm || {};
       if ((perm.choque | 0) >= 3) run.regen = (run.regen || 0) + 0.006;
+      if ((perm.choque | 0) >= 4) run.shield = Math.min(0.45, (run.shield || 0) + 0.08);
       if ((perm.mobilidade | 0) >= 3) {
         run.magnet += 70;
         run.speed *= 1.12;
       }
+      if ((perm.mobilidade | 0) >= 4) run.dropChance = Math.min(0.5, (run.dropChance || 0) + 0.06);
     },
 
     grantDoctrineManual: function (state, perm) {
@@ -493,23 +1119,25 @@
       var school = G.upgrades.fundedSchool();
       var id = { choque: "knockback", disparo: "pierce", mobilidade: "freeze" }[school];
       if (!id) return;
-      var card = G.upgrades.cardById(id);
-      if (!card) return;
-      card.apply(state.run, state);
-      if (!state.run.taken) state.run.taken = {};
-      state.run.taken[id] = (state.run.taken[id] | 0) + 1;
-      var rank = card.ranks ? rankOf(state.run[id]) : (state.run.taken[id] | 0);
-      if (!state.run.dossier) state.run.dossier = [];
-      var found = false;
+      grantCard(state, id);
+      if ((perm.manualCampo | 0) >= 2) grantCard(state, id);
+    },
+
+    grantStartDossier: function (state, perm) {
+      perm = perm || (G.save && G.save.data && G.save.data.perm) || {};
+      if (!(perm.dossieInicial | 0) || !state || !state.run) return;
+      var taken = state.run.taken || {};
+      var pool = [];
       var i;
-      for (i = 0; i < state.run.dossier.length; i++) {
-        if (state.run.dossier[i].id === id) {
-          state.run.dossier[i].rank = rank;
-          found = true;
-          break;
-        }
+      for (i = 0; i < G.RUN_CARDS.length; i++) {
+        var card = G.RUN_CARDS[i];
+        if (card.rarity !== "confidencial" || card.unique) continue;
+        if (taken[card.id]) continue;
+        pool.push(card);
       }
-      if (!found) state.run.dossier.push({ id: id, rank: rank });
+      if (!pool.length) return;
+      var pick = pool[(Math.random() * pool.length) | 0];
+      grantCard(state, pick.id);
     },
 
     defaultRun: function () {
@@ -639,6 +1267,7 @@
       var picked = [];
       var perm = (G.save && G.save.data && G.save.data.perm) || {};
       var disparo = (perm.disparo | 0) >= 3;
+      var disparoHot = (perm.disparo | 0) >= 4 ? 0.9 : 0.75;
       var briefing = !!(perm.briefing | 0) || (perm.luck | 0) >= 4;
       var a = pickFrom(by.arquivo, seen);
       var c;
@@ -648,7 +1277,7 @@
         for (i = 0; i < by.confidencial.length; i++) {
           if (hot.indexOf(by.confidencial[i].id) >= 0) preferred.push(by.confidencial[i]);
         }
-        c = (preferred.length && Math.random() < 0.75) ? pickFrom(preferred, seen) : pickFrom(by.confidencial, seen);
+        c = (preferred.length && Math.random() < disparoHot) ? pickFrom(preferred, seen) : pickFrom(by.confidencial, seen);
       } else {
         c = pickFrom(by.confidencial, seen);
       }
@@ -719,8 +1348,21 @@
     },
 
     buy: function (item) {
+      if (item && item.kit) {
+        var kitLv = G.save.data.perm[item.id] | 0;
+        if (kitLv <= 0) {
+          if (G.upgrades.itemLocked(item)) return false;
+          if (!G.save.spend(item.cost(0))) return false;
+          G.save.data.perm[item.id] = 1;
+        } else {
+          G.save.data.perm[item.id] = kitLv === 1 ? 2 : 1;
+        }
+        G.save.persist();
+        return true;
+      }
       var lv = G.save.data.perm[item.id] | 0;
       if (lv >= item.max) return false;
+      if (G.upgrades.itemLocked(item)) return false;
       var cost = item.cost(lv);
       if (!G.save.spend(cost)) return false;
       G.save.data.perm[item.id] = lv + 1;

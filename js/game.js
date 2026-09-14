@@ -220,6 +220,7 @@
       state.run.invasion = (G.save.data && G.save.data.invasion) | 0;
       state.history = [];
       if (G.upgrades.grantDoctrineManual) G.upgrades.grantDoctrineManual(state, perm);
+      if (G.upgrades.grantStartDossier) G.upgrades.grantStartDossier(state, perm);
       state.debugFight = !!opts.debug;
       state.debugOpts = state.debugFight
         ? {
@@ -261,14 +262,21 @@
       state.squad.x = (field.x0 + field.x1) / 2;
       state.squad.y = (field.y0 + field.y1) / 2;
       var count = Math.min(G.maxUnits(), 1 + (perm.extraStart | 0));
-      var firstKind = G.unitKind(perm.earlyTier | 0);
+      var earlyList = (G.upgrades && G.upgrades.earlyKinds) ? G.upgrades.earlyKinds() : G.EARLY_KINDS;
+      var firstIdx = Math.max(0, Math.min(earlyList.length - 1, perm.earlyTier | 0));
+      var firstKind = earlyList[firstIdx];
+      var secondKind = "recruta";
+      if ((perm.segundoVeterano | 0) && firstIdx > 0) secondKind = earlyList[Math.max(0, firstIdx - 1)];
       G.codex.unlockUnit("recruta");
       G.codex.unlockUnit("comandante");
       G.codex.unlockUnit(firstKind);
+      if (secondKind !== "recruta") G.codex.unlockUnit(secondKind);
       state.run.rerolls = perm.rerolls | 0;
       state.run.reserve = [];
+      var startArq = perm.startArquivo | 0;
+      if ((perm.arquivista | 0) >= 2) startArq += 1;
       state.run.intel = {
-        arquivo: state.debugFight && state.debugOpts && state.debugOpts.startArchives ? 1000 : (perm.startArquivo | 0)
+        arquivo: state.debugFight && state.debugOpts && state.debugOpts.startArchives ? 1000 : startArq
       };
       state.paused = false;
       state.userPaused = false;
@@ -292,7 +300,7 @@
       state.units.push(G.createPlayerUnit(state.squad.x, state.squad.y, "comandante", state.run, perm));
       for (var i = 0; i < count; i++) {
         var a = (i / count) * Math.PI * 2;
-        var spawnKind = i === 0 ? firstKind : "recruta";
+        var spawnKind = i === 0 ? firstKind : (i === 1 ? secondKind : "recruta");
         state.units.push(
           G.createPlayerUnit(state.squad.x + Math.cos(a) * 16, state.squad.y + Math.sin(a) * 16, spawnKind, state.run, perm)
         );
@@ -382,8 +390,14 @@
         u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.22));
       }
       if (!state.debugFight) G.save.noteStage(state.stageIndex + 1);
-      var pocket = (G.save.data.perm.gold | 0) * 20;
+      var pocket = G.upgrades && G.upgrades.stageGold ? G.upgrades.stageGold(state) : (G.save.data.perm.gold | 0) * 20;
       if (pocket) state.run.coins = (state.run.coins || 0) + pocket;
+      var stageArq = G.upgrades && G.upgrades.stageArquivo ? G.upgrades.stageArquivo(state) : 0;
+      if (stageArq) {
+        G.merge.ensureIntel(state.run);
+        state.run.intel.arquivo = (state.run.intel.arquivo | 0) + stageArq;
+      }
+      state.cmdSecondWind = false;
       if (customBoss) {
         state.spawnQueue = [];
         queueSpawn(state, customBoss);

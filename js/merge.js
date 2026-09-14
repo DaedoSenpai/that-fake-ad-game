@@ -70,7 +70,9 @@
   function pickCost(kinds) {
     if (!kinds) return 0;
     for (var i = 0; i < kinds.length; i++) {
-      if (kinds[i] === "colosso") return COLOSSO_COST;
+      if (kinds[i] === "colosso") {
+        return G.upgrades && G.upgrades.colossoCost ? G.upgrades.colossoCost() : COLOSSO_COST;
+      }
     }
     return 0;
   }
@@ -78,6 +80,10 @@
   function promoteCost(gen, kinds) {
     var special = pickCost(kinds);
     if (special) return special;
+    if (G.upgrades && G.upgrades.promoteCostFor) {
+      var hq = G.upgrades.promoteCostFor(gen, kinds);
+      if (hq) return hq;
+    }
     var g = Math.max(0, gen | 0);
     if (g >= 4) return COLOSSO_COST;
     return 2 << g;
@@ -119,7 +125,9 @@
 
     promoteCost: promoteCost,
     pickCost: pickCost,
-    colossoCost: COLOSSO_COST,
+    colossoCost: function () {
+      return G.upgrades && G.upgrades.colossoCost ? G.upgrades.colossoCost() : COLOSSO_COST;
+    },
     openOptions: openOptions,
 
     listRoster: function (state) {

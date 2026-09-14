@@ -466,7 +466,10 @@
   G.kindCopyCap = function (kind) {
     if (!kind || kind === "recruta" || kind === "comandante") return 99;
     var def = G.UNIT_DEFS && G.UNIT_DEFS[kind];
-    if ((def && def.unique) || G.UNIQUE_KINDS[kind]) return 1;
+    if ((def && def.unique) || G.UNIQUE_KINDS[kind]) {
+      if (G.upgrades && G.upgrades.uniqueCopyCap) return G.upgrades.uniqueCopyCap(kind);
+      return 1;
+    }
     return G.KIND_COPY_CAP;
   };
 
@@ -809,6 +812,7 @@
     kind = G.unitKind(kind);
     var def = G.UNIT_DEFS[kind] || G.UNIT_DEFS.recruta;
     var hpMul = (run && run.hp ? run.hp : 1) * (1 + (perm ? perm.hp : 0) * 0.1) * (1 + (perm ? perm.choque : 0) * 0.06);
+    if (G.upgrades && G.upgrades.quartelHpMul) hpMul *= G.upgrades.quartelHpMul(kind);
     var hp = Math.round(def.hp * hpMul);
     return {
       id: uid(),
@@ -1087,6 +1091,68 @@
     ctx.restore();
   }
 
+  function slantBarPath(ctx, x, y, w, h, skew) {
+    ctx.beginPath();
+    ctx.moveTo(x + skew, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w - skew, y + h);
+    ctx.lineTo(x, y + h);
+    ctx.closePath();
+  }
+
+  function drawStyledHpBar(ctx, x, y, w, h, frac, opts) {
+    opts = opts || {};
+    frac = Math.max(0, Math.min(1, frac));
+    var skew = opts.skew != null ? opts.skew : Math.max(2, h * 0.55);
+    var ally = !!opts.ally;
+    var glow = opts.glow || 0;
+    var crit = !!opts.crit;
+    var frame = opts.frame || (ally ? "#d4b060" : "#c45a48");
+    slantBarPath(ctx, x - 1, y - 1, w + 2, h + 2, skew + 0.6);
+    ctx.fillStyle = "#0c0a06";
+    ctx.fill();
+    ctx.strokeStyle = frame;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    slantBarPath(ctx, x, y, w, h, skew);
+    ctx.fillStyle = "#14100c";
+    ctx.fill();
+    if (frac > 0.004) {
+      ctx.save();
+      slantBarPath(ctx, x, y, w, h, skew);
+      ctx.clip();
+      var grd = ctx.createLinearGradient(x, y, x, y + h);
+      if (opts.fill) {
+        grd.addColorStop(0, opts.hi || "#fff4c4");
+        grd.addColorStop(0.42, opts.fill);
+        grd.addColorStop(1, opts.lo || "#3a1808");
+      } else if (glow > 0) {
+        grd.addColorStop(0, "#e8ffe8");
+        grd.addColorStop(0.4, "#7cff9a");
+        grd.addColorStop(1, "#2a8a40");
+      } else if (crit) {
+        grd.addColorStop(0, "#ffb0a0");
+        grd.addColorStop(0.4, "#e23d3d");
+        grd.addColorStop(1, "#6a1010");
+      } else if (ally) {
+        grd.addColorStop(0, "#d8ff90");
+        grd.addColorStop(0.38, "#3ecf7a");
+        grd.addColorStop(1, "#146a38");
+      } else {
+        grd.addColorStop(0, "#ffb090");
+        grd.addColorStop(0.4, "#e85a4a");
+        grd.addColorStop(1, "#6a1010");
+      }
+      ctx.fillStyle = grd;
+      ctx.fillRect(x, y, w * frac, h);
+      ctx.fillStyle = "rgba(255,255,255,0.28)";
+      ctx.fillRect(x, y, w * frac, Math.max(1, h * 0.38));
+      ctx.restore();
+    }
+  }
+
+  G.drawStyledHpBar = drawStyledHpBar;
+
   function hpBar(ctx, e) {
     if (e.def.boss) return;
     if (e.fallen || e.scenery) return;
@@ -1094,33 +1160,40 @@
     var glow = e.healGlow || 0;
     var stolen = !!e.stolen;
     if (e.hp >= e.maxHp * 0.98 && glow <= 0 && !stolen && (e.burnT || 0) <= 0) return;
-    var w = Math.max(16, e.def.size * 2);
+    var w = Math.max(22, e.def.size * 2.2);
+    var h = 6;
     var bx = e.x - w / 2;
-    var by = e.y - e.def.size - 10;
+    var by = e.y - e.def.size - 11;
+    var frac = Math.max(0, Math.min(1, e.hp / e.maxHp));
+    var ally = e.team === "player" || stolen;
     ctx.save();
     if (glow > 0) {
       ctx.shadowColor = "#5cff8a";
       ctx.shadowBlur = 8 + glow * 14;
     }
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillRect(bx, by, w, 4);
-    ctx.fillStyle = glow > 0 ? "#b8ffc8" : (e.team === "player" || stolen ? "#6cff7a" : "#ff5a5a");
-    ctx.fillRect(bx, by, w * Math.max(0, Math.min(1, e.hp / e.maxHp)), 4);
+    drawStyledHpBar(ctx, bx, by, w, h, frac, {
+      ally: ally,
+      glow: glow,
+      crit: ally && frac > 0 && frac < 0.28
+    });
     if ((e.burnT || 0) > 0) {
       var flick = 0.45 + 0.55 * Math.max(0, Math.sin((e.phase || 0) * 16));
-      ctx.fillStyle = "rgba(255, 140, 40, " + (0.55 + flick * 0.4) + ")";
-      ctx.fillRect(bx, by + 4, w * Math.min(1, e.burnT / 5), 2);
+      drawStyledHpBar(ctx, bx, by + h + 1, w, 2.2, Math.min(1, e.burnT / 5), {
+        fill: "rgba(255, 140, 40, " + (0.7 + flick * 0.3) + ")",
+        hi: "#ffe08a",
+        lo: "#8a2808",
+        frame: "#c47830",
+        skew: 1.4
+      });
     }
     if (stolen) {
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(bx, by + 5, w, 3);
-      ctx.fillStyle = "#c86a3a";
-      ctx.fillRect(bx, by + 5, w * Math.max(0, Math.min(1, (e.stolenT || 0) / (e.stolenMax || 30))), 3);
-    }
-    if (glow > 0) {
-      ctx.strokeStyle = "rgba(92, 255, 138," + Math.min(1, glow) + ")";
-      ctx.lineWidth = 1.6;
-      ctx.strokeRect(bx - 1, by - 1, w + 2, 6);
+      drawStyledHpBar(ctx, bx, by + h + ((e.burnT || 0) > 0 ? 4 : 1), w, 2.4, Math.max(0, Math.min(1, (e.stolenT || 0) / (e.stolenMax || 30))), {
+        fill: "#c86a3a",
+        hi: "#e8a070",
+        lo: "#5a2010",
+        frame: "#a05028",
+        skew: 1.4
+      });
     }
     ctx.restore();
   }
@@ -1983,34 +2056,34 @@
         ctx.save();
         ctx.rotate(swing);
         ctx.shadowColor = acc;
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = 18;
         ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = Math.max(2.6, s * 0.15);
+        ctx.lineWidth = Math.max(3.2, s * 0.2);
         ctx.lineCap = "round";
         ctx.beginPath();
-        ctx.moveTo(s * 0.12, s * 0.08);
-        ctx.lineTo(s * 1.55, -s * 0.95);
+        ctx.moveTo(s * 0.16, s * 0.1);
+        ctx.lineTo(s * 3.1, -s * 1.9);
         ctx.stroke();
         ctx.strokeStyle = acc;
-        ctx.lineWidth = Math.max(5.2, s * 0.32);
+        ctx.lineWidth = Math.max(7.2, s * 0.48);
         ctx.globalAlpha = 0.62;
         ctx.beginPath();
-        ctx.moveTo(s * 0.18, s * 0.04);
-        ctx.lineTo(s * 1.48, -s * 0.88);
+        ctx.moveTo(s * 0.22, s * 0.06);
+        ctx.lineTo(s * 2.96, -s * 1.76);
         ctx.stroke();
         ctx.globalAlpha = 0.35;
         ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = Math.max(8, s * 0.42);
+        ctx.lineWidth = Math.max(12, s * 0.62);
         ctx.beginPath();
-        ctx.moveTo(s * 0.22, 0);
-        ctx.lineTo(s * 1.35, -s * 0.75);
+        ctx.moveTo(s * 0.28, 0);
+        ctx.lineTo(s * 2.7, -s * 1.5);
         ctx.stroke();
         ctx.globalAlpha = 1;
         ctx.shadowBlur = 0;
         ctx.fillStyle = "#1a2030";
-        ctx.fillRect(s * 0.05, s * 0.0, s * 0.24, s * 0.16);
+        ctx.fillRect(s * 0.05, s * 0.0, s * 0.32, s * 0.2);
         ctx.fillStyle = acc;
-        ctx.fillRect(s * 0.1, s * 0.04, s * 0.14, s * 0.08);
+        ctx.fillRect(s * 0.1, s * 0.05, s * 0.2, s * 0.1);
         ctx.restore();
       }
       ctx.restore();
@@ -5201,6 +5274,7 @@
       ctx.stroke();
     } else if (p.kind === "saber") {
       var scol = p.color || "#7affc8";
+      var br = Math.max(24, (p.r || 12) * 1.7);
       if (p.saberTrail && p.saberTrail.length > 1) {
         for (var ti = 0; ti < p.saberTrail.length; ti++) {
           var tr = p.saberTrail[ti];
@@ -5211,10 +5285,10 @@
           ctx.globalCompositeOperation = "lighter";
           ctx.globalAlpha = ta * 0.35;
           ctx.strokeStyle = scol;
-          ctx.lineWidth = 5;
+          ctx.lineWidth = Math.max(5, br * 0.22);
           ctx.beginPath();
-          ctx.moveTo(-14, 0);
-          ctx.lineTo(14, 0);
+          ctx.moveTo(-br * 0.7, 0);
+          ctx.lineTo(br * 0.7, 0);
           ctx.stroke();
           ctx.restore();
         }
@@ -5224,32 +5298,32 @@
       ctx.rotate(p.saberSpin || Math.atan2(p.vy, p.vx));
       ctx.globalCompositeOperation = "lighter";
       ctx.shadowColor = scol;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = 22;
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 3.8;
+      ctx.lineWidth = Math.max(3.8, br * 0.1);
       ctx.beginPath();
-      ctx.moveTo(-20, 0);
-      ctx.lineTo(20, 0);
+      ctx.moveTo(-br, 0);
+      ctx.lineTo(br, 0);
       ctx.stroke();
       ctx.strokeStyle = scol;
-      ctx.lineWidth = 7.5;
+      ctx.lineWidth = Math.max(7.5, br * 0.2);
       ctx.globalAlpha = 0.65;
       ctx.beginPath();
-      ctx.moveTo(-18, 0);
-      ctx.lineTo(18, 0);
+      ctx.moveTo(-br * 0.9, 0);
+      ctx.lineTo(br * 0.9, 0);
       ctx.stroke();
       ctx.globalAlpha = 0.3;
-      ctx.lineWidth = 12;
+      ctx.lineWidth = Math.max(12, br * 0.32);
       ctx.beginPath();
-      ctx.moveTo(-16, 0);
-      ctx.lineTo(16, 0);
+      ctx.moveTo(-br * 0.8, 0);
+      ctx.lineTo(br * 0.8, 0);
       ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#1a2030";
-      ctx.fillRect(-4, -5, 8, 10);
+      ctx.fillRect(-6, -7, 12, 14);
       ctx.fillStyle = scol;
-      ctx.fillRect(-2.5, -3, 5, 6);
+      ctx.fillRect(-4, -4, 8, 8);
       ctx.restore();
     } else if (p.kind === "ice") {
       ctx.fillStyle = "#b8f0ff";

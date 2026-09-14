@@ -7,6 +7,7 @@
   var screens = {
     menu: document.getElementById("screen-menu"),
     how: document.getElementById("screen-how"),
+    options: document.getElementById("screen-options"),
     shop: document.getElementById("screen-shop"),
     cards: document.getElementById("screen-cards"),
     codex: document.getElementById("screen-codex"),
@@ -84,6 +85,9 @@
     if (fromPlay) overlay.classList.add("is-fading");
     overlay.classList.toggle("hidden", name === "play");
     overlay.classList.toggle("field-visible", name === "cards");
+    overlay.classList.toggle("scene-codex", name === "codex");
+    overlay.classList.toggle("scene-shop", name === "shop");
+    overlay.classList.toggle("scene-options", name === "options");
     overlay.classList.remove("defeat", "lit");
     hud.classList.remove("defeat-hide");
     hud.style.opacity = "";
@@ -218,7 +222,8 @@
     state.shake = Math.max(state.shake || 0, 6);
     if (cmd) G.burst(state, cmd.x, cmd.y, "#ffe08a", 18, 90);
     if (!state.debugFight) {
-      G.save.bank(state.run.coins);
+      if (G.upgrades.bankRun) G.upgrades.bankRun(state);
+      else G.save.bank(state.run.coins);
       G.save.noteStage(state.stageIndex + 1);
     }
     fillOverResults();
@@ -288,6 +293,7 @@
     renderSlots();
     renderInvasion();
     syncIfcaraButton();
+    syncSettingsUi();
   }
 
   function renderInvasion() {
@@ -369,17 +375,33 @@
   function renderShop() {
     var board = document.getElementById("hq-board");
     document.getElementById("shop-vault").textContent = "Cofre: " + G.save.data.vault;
+    var tab = (G.upgrades && G.upgrades.shopBoard) || "operacao";
+    var tabBar = document.getElementById("hq-tabs");
+    if (tabBar) {
+      var tabBtns = tabBar.querySelectorAll("[data-hq-tab]");
+      for (var t = 0; t < tabBtns.length; t++) {
+        var on = tabBtns[t].getAttribute("data-hq-tab") === tab;
+        tabBtns[t].classList.toggle("on", on);
+      }
+    }
     board.innerHTML = "";
+    board.className = "hq-board board-" + tab;
     var funded = G.upgrades.fundedSchool ? G.upgrades.fundedSchool() : "";
+    var fundedQ = G.upgrades.fundedQuartel ? G.upgrades.fundedQuartel() : "";
     var schoolName = { choque: "Choque", disparo: "Disparo", mobilidade: "Mobilidade" };
     (G.PERM_WINGS || []).forEach(function (wing) {
+      var wingBoard = wing.board || "operacao";
+      if (wingBoard !== tab) return;
       var col = document.createElement("div");
-      col.className = "hq-wing wing-" + wing.id + (wing.id === "doutrina" && funded ? " has-funded" : "");
+      var fundedThis = wing.id === "quartel" ? fundedQ : (wing.id === "doutrina" ? funded : "");
+      col.className = "hq-wing wing-" + wing.id + (fundedThis ? " has-funded" : "");
       var head = document.createElement("header");
       head.className = "hq-wing-head";
       var fundedLine = "";
       if (wing.id === "doutrina" && funded) {
         fundedLine = "<p class=\"hq-funded\">Seu estilo: " + (schoolName[funded] || funded) + "</p>";
+      } else if (wing.id === "quartel" && fundedQ && G.upgrades.quartelName) {
+        fundedLine = "<p class=\"hq-funded\">Sua linha: " + G.upgrades.quartelName(fundedQ) + "</p>";
       }
       head.innerHTML =
         "<span class=\"hq-tab\">" + wing.kicker + "</span>" +
@@ -392,37 +414,56 @@
       list.className = "hq-nodes";
       wing.items.forEach(function (item) {
         var lv = G.save.data.perm[item.id] | 0;
-        var maxed = lv >= item.max;
+        var kit = !!item.kit;
+        var usingB = kit && lv === 1;
+        var maxed = !kit && lv >= item.max;
         var cost = maxed ? 0 : item.cost(lv);
-        var tax = !!(item.school && G.upgrades.schoolTax && G.upgrades.schoolTax(item.id) > 1);
+        var tax = !!(item.school && G.upgrades.itemTax && G.upgrades.itemTax(item) > 1);
+        var isFunded = !!(G.upgrades.itemFunded && G.upgrades.itemFunded(item));
+        var locked = !!(!maxed && !kit && G.upgrades.itemLocked && G.upgrades.itemLocked(item));
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = [
           "hq-node",
           item.capstone ? "capstone" : "",
+          kit ? "kit" : "",
+          usingB ? "kit-b" : "",
           item.school ? "school school-" + item.id : "",
-          item.school && funded === item.id ? "funded" : "",
+          isFunded ? "funded" : "",
           tax ? "taxed" : "",
           lv > 0 ? "owned" : "",
-          maxed ? "maxed" : ""
+          maxed ? "maxed" : "",
+          locked ? "locked" : ""
         ].filter(Boolean).join(" ");
-        btn.disabled = maxed || G.save.data.vault < cost;
+        var cantBuy = kit
+          ? (lv <= 0 && (locked || G.save.data.vault < cost))
+          : (maxed || locked || G.save.data.vault < cost);
+        btn.disabled = cantBuy;
         var pips = "";
         var p;
-        for (p = 0; p < item.max; p++) pips += "<i class=\"" + (p < lv ? "on" : "") + "\"></i>";
+        if (kit) {
+          pips = "<i class=\"" + (usingB ? "" : "on") + "\"></i><i class=\"" + (usingB ? "on" : "") + "\"></i>";
+        } else {
+          for (p = 0; p < item.max; p++) pips += "<i class=\"" + (p < lv ? "on" : "") + "\"></i>";
+        }
         var badges = "";
         if (item.capstone) badges += "<span class=\"hq-ink\">MÁXIMO</span>";
-        if (item.school && funded === item.id) badges += "<span class=\"hq-ribbon\">A SUA</span>";
+        if (isFunded) badges += "<span class=\"hq-ribbon\">A SUA</span>";
         else if (tax) badges += "<span class=\"hq-tax\">+60%</span>";
+        var desc = G.upgrades.itemDesc ? G.upgrades.itemDesc(item, lv, maxed) : (maxed ? item.desc(Math.max(0, item.max - 1)) : item.desc(lv));
+        var hint = locked && G.upgrades.itemLockHint ? G.upgrades.itemLockHint(item) : "";
+        if (hint && desc.indexOf(hint) < 0) desc += (desc ? " " : "") + hint;
+        var rankTxt = kit ? (usingB ? "B" : "A") : (lv + "/" + item.max);
+        var priceTxt = kit ? (lv <= 0 ? String(cost) : "TROCAR") : (maxed ? "NO PONTO" : (locked ? "TRAVADO" : cost));
         btn.innerHTML =
           badges +
-          "<span class=\"hq-rank\">" + lv + "/" + item.max + "</span>" +
+          "<span class=\"hq-rank\">" + rankTxt + "</span>" +
           "<span class=\"hq-node-top\">" +
             "<strong>" + item.title + "</strong>" +
-            "<span class=\"price\">" + (maxed ? "MÁX" : cost) + "</span>" +
+            "<span class=\"price\">" + priceTxt + "</span>" +
           "</span>" +
           "<span class=\"hq-pips\" aria-hidden=\"true\">" + pips + "</span>" +
-          "<span class=\"hq-node-desc\">" + (maxed ? "Nível máximo." : item.desc(lv)) + "</span>";
+          "<span class=\"hq-node-desc\">" + desc + "</span>";
         btn.onclick = function () {
           G.audio.ui();
           if (G.upgrades.buy(item)) renderShop();
@@ -517,10 +558,52 @@
   function openPause() {
     if (state.mode !== "play" || state.pendingMerge || state.archiveMenu || state.defeat) return;
     state.userPaused = true;
+    renderPauseDossier();
+    syncSettingsUi();
     document.getElementById("pause-modal").classList.remove("hidden");
     syncFreeze();
     updateInspect();
     G.audio.setPaused(true);
+  }
+
+  function renderPauseDossier() {
+    var box = document.getElementById("pause-dossier");
+    if (!box) return;
+    var list = (state.run && state.run.dossier) || [];
+    if (!list.length) {
+      box.innerHTML = "<p class=\"pause-empty\">Nenhuma carta ainda.</p>";
+      return;
+    }
+    var html = "";
+    var run = state.run || {};
+    for (var i = 0; i < list.length; i++) {
+      var entry = list[i];
+      var card = G.upgrades.cardById(entry.id);
+      if (!card) continue;
+      var rarity = G.upgrades.rarityOf(card);
+      var view = G.upgrades.dossierView(card, entry.rank | 0, run);
+      var body = "";
+      var n;
+      if (card.ranks) {
+        body += "<ul class=\"pause-ranks\">";
+        for (n = 0; n < view.lines.length; n++) {
+          body +=
+            "<li><span>" + view.lines[n].mark + "</span>" + view.lines[n].text + "</li>";
+        }
+        body += "</ul>";
+      } else {
+        body += "<p>" + (view.lines[0] && view.lines[0].text || "") + "</p>";
+      }
+      html +=
+        "<div class=\"pause-card rarity-" + rarity + "\">" +
+          "<span class=\"card-stamp\">" + G.upgrades.stamp(card) + "</span>" +
+          "<span class=\"pause-card-ico\">" + stickerFor(entry.id) + "</span>" +
+          "<strong>" + view.title + "</strong>" +
+          body +
+          (view.combo ? "<p class=\"pause-combo\">" + view.combo + "</p>" : "") +
+        "</div>";
+    }
+    box.innerHTML = html;
   }
 
   function hideInspect() {
@@ -1169,36 +1252,63 @@
       "Aliados " + c.units + "/" + c.unitMax + " · Inimigos " + c.enemies + "/" + c.enemyMax;
     document.getElementById("codex-ally").classList.toggle("primary", codexTab === "ally");
     document.getElementById("codex-enemy").classList.toggle("primary", codexTab === "enemy");
-    var grid = document.getElementById("codex-grid");
-    grid.innerHTML = "";
-    if (codexTab === "ally") {
-      G.unitList().forEach(function (kind) {
-        var def = G.UNIT_DEFS[kind];
-        var known = G.codex.hasUnit(kind);
+    var book = document.getElementById("codex-book");
+    var jump = document.getElementById("codex-jump");
+    book.innerHTML = "";
+    jump.innerHTML = "";
+    var ally = codexTab === "ally";
+    var sections = ally ? G.codex.allySections() : G.codex.enemySections();
+    var team = ally ? "player" : "enemy";
+    sections.forEach(function (sec) {
+      var knownN = 0;
+      sec.kinds.forEach(function (key) {
+        if (ally ? G.codex.hasUnit(key) : G.codex.hasEnemy(key)) knownN += 1;
+      });
+      var chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "codex-jump-btn";
+        chip.textContent = sec.jump || sec.title;
+      chip.onclick = function () {
+        G.audio.ui();
+        var el = document.getElementById("codex-sec-" + sec.id);
+        if (el) el.scrollIntoView({ block: "start", behavior: "smooth" });
+      };
+      jump.appendChild(chip);
+
+      var wrap = document.createElement("section");
+      wrap.className = "codex-sec tone-" + (sec.tone || "t1");
+      wrap.id = "codex-sec-" + sec.id;
+      var head = document.createElement("header");
+      head.className = "codex-sec-head";
+      head.innerHTML =
+        "<div><p class=\"kicker\">" + sec.title + "</p>" +
+        (sec.hint ? "<p class=\"codex-sec-hint\">" + sec.hint + "</p>" : "") +
+        "</div><span class=\"codex-sec-count\">" + knownN + "/" + sec.kinds.length + "</span>";
+      var grid = document.createElement("div");
+      grid.className = "codex-grid";
+      sec.kinds.forEach(function (key) {
+        var def = ally ? G.UNIT_DEFS[key] : G.ENEMY_DEFS[key];
+        if (!def) return;
+        var known = ally ? G.codex.hasUnit(key) : G.codex.hasEnemy(key);
         var btn = document.createElement("button");
-        btn.className = "codex-item" + (known ? "" : " locked");
-        btn.textContent = known ? def.name : "???";
+        btn.type = "button";
+        btn.className = "codex-item" + (known ? "" : " locked") + (def.boss ? " boss" : "");
+        if (known) {
+          btn.innerHTML = "<span class=\"codex-item-name\">" + def.name + "</span>" +
+            (def.title ? "<span class=\"codex-item-sub\">" + def.title + "</span>" : "");
+        } else {
+          btn.textContent = "???";
+        }
         btn.onclick = function () {
           G.audio.ui();
-          openCodexSheet("player", kind, known);
+          openCodexSheet(team, key, known);
         };
         grid.appendChild(btn);
       });
-    } else {
-      Object.keys(G.ENEMY_DEFS).forEach(function (type) {
-        var def = G.ENEMY_DEFS[type];
-        if (def.codexHide) return;
-        var known = G.codex.hasEnemy(type);
-        var btn = document.createElement("button");
-        btn.className = "codex-item" + (known ? "" : " locked");
-        btn.textContent = known ? def.name : "???";
-        btn.onclick = function () {
-          G.audio.ui();
-          openCodexSheet("enemy", type, known);
-        };
-        grid.appendChild(btn);
-      });
-    }
+      wrap.appendChild(head);
+      wrap.appendChild(grid);
+      book.appendChild(wrap);
+    });
   }
 
   function recenterSquad() {
@@ -1239,7 +1349,8 @@
   }
 
   function finish(win) {
-    G.save.bank(state.run.coins);
+    if (G.upgrades.bankRun) G.upgrades.bankRun(state);
+    else G.save.bank(state.run.coins);
     G.save.noteStage(state.stageIndex + 1);
     if (win) {
       var next = G.invasion ? G.invasion.noteWin(state.run.invasion | 0) : 0;
@@ -1261,13 +1372,82 @@
     showScreen("debug");
   }
 
+  function reduceMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  var fxTimer = 0;
+  function playMenuFx(kind, ms, onReady, onDone) {
+    var layer = document.getElementById("fx-layer");
+    if (!layer || reduceMotion()) {
+      if (onReady) onReady();
+      if (onDone) onDone();
+      return;
+    }
+    state.fxLock = true;
+    if (fxTimer) clearTimeout(fxTimer);
+    var lead = 0;
+    var wind = "";
+    if (kind === "doors") {
+      lead = 320;
+      wind = "slam";
+    } else if (kind === "gears") {
+      lead = 480;
+      wind = "wind";
+    }
+    layer.className = "fx-" + kind + (wind ? " " + wind : "");
+    if (lead) {
+      setTimeout(function () {
+        if (onReady) onReady();
+        layer.classList.remove(wind);
+        void layer.offsetWidth;
+        layer.classList.add("play");
+      }, lead);
+    } else {
+      requestAnimationFrame(function () {
+        if (onReady) onReady();
+        requestAnimationFrame(function () {
+          layer.classList.add("play");
+        });
+      });
+    }
+    fxTimer = setTimeout(function () {
+      fxTimer = 0;
+      layer.className = "hidden";
+      state.fxLock = false;
+      if (onDone) onDone();
+    }, ms + lead);
+  }
+
+  function introThenPlay() {
+    if (state.starting || state.fxLock) return;
+    if (reduceMotion()) {
+      startPlay();
+      return;
+    }
+    state.starting = true;
+    G.audio.ensure();
+    G.audio.ui();
+    playMenuFx("cape", 1580, null, function () {
+      state.starting = false;
+      startPlay({ skipFade: true });
+    });
+    setTimeout(function () {
+      overlay.classList.add("is-fading");
+    }, 1180);
+  }
+
   function startPlay(opts) {
     opts = opts || {};
     if (state.starting) return;
     state.starting = true;
     G.audio.ensure();
-    G.audio.ui();
-    overlay.classList.add("is-fading");
+    if (!opts.skipFade) G.audio.ui();
+    if (!opts.skipFade) overlay.classList.add("is-fading");
     setTimeout(function () {
       state.starting = false;
       state.defeat = null;
@@ -1275,6 +1455,7 @@
       overlay.classList.remove("defeat", "lit");
       hud.classList.remove("defeat-hide");
       G.game.startRun(state, opts);
+
       state.pointer.live = false;
       state.pointer.x = null;
       state.pointer.y = null;
@@ -1282,7 +1463,7 @@
       overlay.classList.remove("is-fading");
       G.audio.sync(state, 0);
       syncHud();
-    }, 380);
+    }, opts.skipFade ? 0 : 380);
   }
 
   function setDebugStatus(msg) {
@@ -1507,7 +1688,12 @@
       hp += state.units[i].hp;
       max += state.units[i].maxHp;
     }
-    document.getElementById("hp-fill").style.width = (max ? Math.max(0, (hp / max) * 100) : 0) + "%";
+    var squadFrac = max ? Math.max(0, hp / max) : 0;
+    var hpWrap = document.getElementById("hp-wrap");
+    if (hpWrap) {
+      hpWrap.classList.toggle("is-critical", squadFrac > 0 && squadFrac < 0.28);
+      hpWrap.classList.toggle("is-hurt", squadFrac >= 0.28 && squadFrac < 0.55);
+    }
     document.getElementById("btn-mute").textContent = G.audio.muted ? "Mudo" : "Som";
     syncVolumeUi();
     var bossHud = document.getElementById("boss-hud");
@@ -1535,6 +1721,7 @@
       if (fill) fill.style.width = frac * 100 + "%";
       if (delay) delay.style.width = easeBar(delayKey, frac) * 100 + "%";
     }
+    paintTrack("hp-fill", "hp-delay", squadFrac, "squadShown", false);
     var queen = null;
     var king = null;
     var boss = null;
@@ -1671,7 +1858,6 @@
     if (state.arklanGullet || state.arklanSpit) {
       bar.classList.add("hidden");
       bar.innerHTML = "";
-      syncDossier(state);
       syncBuffTray(state);
       return;
     }
@@ -1719,7 +1905,7 @@
       slot.style.setProperty("--cd", frac + "%");
       slot.title = act[s].def.active.name + " — " + (meta.detail || act[s].def.active.desc);
       if (guer) {
-        slot.title += " Recrutas nesta fase: " + guer.recruitsLeft + "/5.";
+        slot.title += guer.recNeedsCap ? (" Recrutas nesta fase: " + guer.recruitsLeft + "/" + (G.upgrades && G.upgrades.guerRecruitCap ? G.upgrades.guerRecruitCap() : 2) + ".") : "";
         function pip(cd, max, ok) {
           var on = cd <= 0 && ok !== false;
           var pf = on ? 100 : Math.max(0, 1 - cd / max) * 100;
@@ -1730,9 +1916,9 @@
           "<span class=\"ico\">" + (G.activeIconHtml ? G.activeIconHtml(aid) : meta.icon) + "</span>" +
           "<span class=\"nm\">Guerrilha</span>" +
           "<span class=\"g-pips\">" +
-            pip(guer.crate, guer.crateMax) + "✚</i>" +
-            pip(guer.recruit, guer.recruitMax, guer.recruitsLeft > 0) + "○</i>" +
-            pip(guer.strike, guer.strikeMax) + "△</i>" +
+            pip(guer.crate, guer.crateMax) + (guer.up && guer.up.icon || "✚") + "</i>" +
+            pip(guer.recruit, guer.recruitMax, !guer.recNeedsCap || guer.recruitsLeft > 0) + (guer.recSlice && guer.recSlice.icon || "○") + "</i>" +
+            pip(guer.strike, guer.strikeMax) + (guer.strikeSlice && guer.strikeSlice.icon || "△") + "</i>" +
           "</span>";
       } else if (force) {
         function fpip(cd, max) {
@@ -1773,41 +1959,7 @@
       })(s);
       bar.appendChild(slot);
     }
-    syncDossier(state);
     syncBuffTray(state);
-  }
-
-  function syncDossier(state) {
-    var tray = document.getElementById("dossier");
-    if (!tray) return;
-    var list = (state.run && state.run.dossier) || [];
-    tray.classList.toggle("hidden", !list.length);
-    if (!list.length) {
-      tray.innerHTML = "";
-      tray.dataset.sig = "";
-      return;
-    }
-    var sig = list.map(function (d) { return d.id + ":" + (d.rank || 1); }).join(",");
-    if (tray.dataset.sig === sig) return;
-    tray.dataset.sig = sig;
-    var html = "<div class=\"buff-kicker\">Dossiê</div>";
-    for (var i = 0; i < list.length; i++) {
-      var entry = list[i];
-      var card = G.upgrades.cardById(entry.id);
-      if (!card) continue;
-      var rarity = G.upgrades.rarityOf(card);
-      var title = G.upgrades.titleOf(card, state.run);
-      var desc = G.upgrades.descOf(card, state.run);
-      var combo = G.upgrades.comboOf(card, state.run);
-      var rankMark = card.ranks && (entry.rank | 0) >= 2 ? " II" : "";
-      html +=
-        "<div class=\"dossier-icon rarity-" + rarity + "\" tabindex=\"0\">" +
-        "<span>" + stickerFor(entry.id) + "</span>" +
-        (rankMark ? "<em>II</em>" : "") +
-        "<div class=\"buff-tip\"><b>" + title + "</b><p class=\"buff-desc\">" + desc + (combo ? " " + combo : "") + "</p></div>" +
-        "</div>";
-    }
-    tray.innerHTML = html;
   }
 
   function syncBuffTray(state) {
@@ -2600,7 +2752,7 @@
   }
 
   document.getElementById("btn-play").onclick = function () {
-    startPlay();
+    introThenPlay();
   };
   document.getElementById("btn-merge-cancel").onclick = function () {
     G.audio.ui();
@@ -2617,6 +2769,7 @@
     }
   };
   document.getElementById("btn-codex").onclick = function () {
+    if (state.fxLock || state.starting) return;
     G.audio.ui();
     renderCodex();
     showScreen("codex");
@@ -2716,7 +2869,10 @@
   };
   document.getElementById("btn-pause-menu").onclick = function () {
     G.audio.ui();
-    if (!state.debugFight) G.save.bank(state.run.coins);
+    if (!state.debugFight) {
+      if (G.upgrades.bankRun) G.upgrades.bankRun(state);
+      else G.save.bank(state.run.coins);
+    }
     closePause();
     leavePlayToMenu();
   };
@@ -2824,16 +2980,44 @@
     refreshMenu();
     showScreen("menu");
   };
-  document.getElementById("btn-shop").onclick = function () {
+  document.getElementById("btn-options").onclick = function () {
+    if (state.fxLock || state.starting) return;
     G.audio.ui();
-    renderShop();
-    showScreen("shop");
+    playMenuFx("gears", 780, function () {
+      syncSettingsUi();
+      showScreen("options");
+    });
+  };
+  document.getElementById("btn-options-back").onclick = function () {
+    G.audio.ui();
+    refreshMenu();
+    showScreen("menu");
+  };
+  document.getElementById("btn-shop").onclick = function () {
+    if (state.fxLock || state.starting) return;
+    G.audio.ui();
+    if (G.upgrades) G.upgrades.shopBoard = "operacao";
+    playMenuFx("doors", 820, function () {
+      renderShop();
+      showScreen("shop");
+    });
   };
   document.getElementById("btn-shop-back").onclick = function () {
     G.audio.ui();
     refreshMenu();
     showScreen("menu");
   };
+  (function bindHqTabs() {
+    var bar = document.getElementById("hq-tabs");
+    if (!bar) return;
+    bar.addEventListener("click", function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest("[data-hq-tab]") : null;
+      if (!btn) return;
+      G.audio.ui();
+      if (G.upgrades) G.upgrades.shopBoard = btn.getAttribute("data-hq-tab") || "operacao";
+      renderShop();
+    });
+  })();
   document.getElementById("btn-refund").onclick = function () {
     G.audio.ui();
     var got = G.upgrades.refundPerm();
@@ -2866,7 +3050,8 @@
   var volSliders = [
     document.getElementById("vol-slider"),
     document.getElementById("vol-slider-menu"),
-    document.getElementById("vol-slider-pause")
+    document.getElementById("vol-slider-pause"),
+    document.getElementById("vol-slider-options")
   ];
 
   function syncVolumeUi() {
@@ -2876,9 +3061,40 @@
     });
     var menuPct = document.getElementById("vol-pct-menu");
     var pausePct = document.getElementById("vol-pct-pause");
+    var optPct = document.getElementById("vol-pct-options");
     if (menuPct) menuPct.textContent = pct + "%";
     if (pausePct) pausePct.textContent = pct + "%";
+    if (optPct) optPct.textContent = pct + "%";
   }
+
+  function syncSettingsUi() {
+    var aim = G.save.opt ? G.save.opt("autoAim") : false;
+    var skill = G.save.opt ? G.save.opt("autoSkill") : false;
+    var map = {
+      "opt-auto-aim": aim,
+      "opt-auto-aim-pause": aim,
+      "opt-auto-skill": skill,
+      "opt-auto-skill-pause": skill
+    };
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.checked = map[id];
+    });
+  }
+
+  function bindOptToggle(id, key) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("change", function () {
+      G.audio.ui();
+      G.save.setOpt(key, el.checked);
+      syncSettingsUi();
+    });
+  }
+  bindOptToggle("opt-auto-aim", "autoAim");
+  bindOptToggle("opt-auto-aim-pause", "autoAim");
+  bindOptToggle("opt-auto-skill", "autoSkill");
+  bindOptToggle("opt-auto-skill-pause", "autoSkill");
 
   function applyVolume(raw, persist) {
     var v = Math.max(0, Math.min(1, (Number(raw) || 0) / 100));

@@ -36,8 +36,8 @@
       kind: "jedi", name: "Jedi", short: "JED", gen: 3,
       hp: 165, dmg: 36, range: 115, fire: 1.05, speed: 168, size: 14,
       color: "#8a6a3a", accent: "#7affc8", projectile: "none", role: "jedi",
-      blurb: "Melee com sabre de energia. Salta no inimigo e corta de perto. Tem bastante vida.",
-      active: { id: "saber_throw", name: "Sabre bumerangue", cd: 11, desc: "Arremessa o sabre: causa dano no caminho e volta pra mão." },
+      blurb: "Melee com sabre de energia. Salta no inimigo e corta em arco: quem estiver na lâmina toma o golpe.",
+      active: { id: "saber_throw", name: "Sabre bumerangue", cd: 11, desc: "Arremessa o sabre grande até a mira. Corta no caminho de ida e na volta." },
       merge: ["mestre"]
     }),
     mestre: u({
@@ -45,7 +45,7 @@
       hp: 230, dmg: 48, range: 130, fire: 1.15, speed: 172, size: 15,
       color: "#5a3a78", accent: "#e8b0ff", projectile: "none", role: "jedi",
       unique: true,
-      blurb: "Versão superior do Jedi. Menu radial com empurrão, puxão, sabre bumerangue e giro de sabre.",
+      blurb: "Versão superior do Jedi. O corte básico é em arco. A ativa abre o arsenal da Força num menu radial: empurrão, puxão, sabre e giro — tudo maior.",
       active: { id: "force_menu", name: "Arsenal da Força", cd: 0, desc: "Segura o direito: menu radial. Cada poder tem recarga própria." },
       merge: []
     }),
@@ -432,7 +432,7 @@
       aoe: 250,
       color: "#e8f6ff", accent: "#7af7ff", projectile: "none", role: "colossus",
       unique: true,
-      blurb: "Gundam de combate corpo a corpo. Salta no inimigo mais perto e cicla slam elétrico, investida de escudo (parede de energia que come bala) e rocket punch que ricocheteia. Caríssimo: 100 arquivos de guerra pra fazer.",
+      blurb: "Gundam de combate corpo a corpo. Salta no inimigo mais perto e cicla slam elétrico, investida de escudo (parede de energia que come bala) e rocket punch que ricocheteia. Caríssimo: 100 arquivos de guerra pra fazer — o Quartel de Blindados no QG pode baixar pra 80.",
       active: { id: "energy_blade", name: "Lâmina de energia", cd: 30, dur: 10, desc: "Empunha a espada de energia. Ao atirar, lança até 5 slashes de luz lentos, de alcance infinito e largura enorme." },
       merge: []
     }),
@@ -441,7 +441,7 @@
       hp: 150, dmg: 12, range: 170, fire: 0.85, speed: 150, size: 15,
       color: "#ffd24a", accent: "#fff4c4", projectile: "bullet", role: "commander",
       blurb: "Líder do esquadrão e esperança da humanidade. A pistola laser marca o alvo e orienta onde deve ser disparado. Inimigos derrotados se transforam em reforço que vira arquivo de guerra quando o esquadrão pega. R gasta arquivos: 1 convoca um recruta, o resto promove o esquadrão. Não ocupa vaga — se ele cair, a operação acaba.",
-      active: { id: "guerrilla", name: "Comandos de guerrilha", cd: 0, desc: "Segura o direito: menu radial. Cima: aura em volta do comandante, cura 2% da vida máxima por segundo durante 5s. Direita: airstrike. Esquerda: recruta perto do comandante (máx. 2 por fase). Solta na fatia. Recua pro centro pra cancelar." },
+      active: { id: "guerrilla", name: "Comandos de guerrilha", cd: 0, desc: "Segura o direito: menu radial. Cima, direita e esquerda. O QG troca cada fatia (A ou B). Solta na fatia; volta ao centro pra cancelar." },
       merge: []
     })
   };
@@ -461,7 +461,8 @@
 
   G.unitKind = function (kindOrGen) {
     if (typeof kindOrGen === "number") {
-      return G.EARLY_KINDS[Math.max(0, Math.min(G.EARLY_KINDS.length - 1, kindOrGen | 0))];
+      var list = (G.upgrades && G.upgrades.earlyKinds) ? G.upgrades.earlyKinds() : G.EARLY_KINDS;
+      return list[Math.max(0, Math.min(list.length - 1, kindOrGen | 0))];
     }
     return G.UNIT_DEFS[kindOrGen] ? kindOrGen : "recruta";
   };
@@ -548,11 +549,11 @@
     airstrike: { icon: "💣", color: "#5ad0c8", detail: "Desenha uma linha. Explosões caem no caminho." },
     carpetbomb: { icon: "✈", color: "#2ad8ff", detail: "Bombas caem sem parar sob a mira." },
     archive: { icon: "⭐", color: "#ffd24a", detail: "O esquadrão pega o reforço caído e vira arquivo. R abre a lista: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Colosso custa 100." },
-    guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito e abre um menu radial no clique. Cima: aura em volta do comandante — cura 2% da vida máxima por segundo durante 5s (15s de recarga). Direita: airstrike com fogo no chão (20s). Esquerda: recruta nasce perto do comandante — máx. 2 por fase (30s). Solta na fatia pra disparar no centro do menu; volta pro centro pra cancelar." },
+    guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito: menu radial. Cima, direita e esquerda têm recarga própria. O QG (aba Quartel → Comando) troca cada fatia entre A e B. Centro cancela." },
     psych_slam: { icon: "🔮", color: "#b08cff", detail: "Dispositivo na mira. Levanta inimigos próximos e esmaga no chão: pouco dano, atordoa por ~1,4s. Chefes levam stun curto." },
     stormtrooper: { icon: "💥", color: "#d4c090", detail: "Por 6s a cadência explode, mas cada tiro sai com mira horrível — clássico stormtrooper." },
-    saber_throw: { icon: "⚔", color: "#7affc8", detail: "Arremessa o sabre até a mira. Corta no caminho de ida e na volta." },
-    force_menu: { icon: "◎", color: "#e8b0ff", detail: "Segura o direito: menu radial. Empurrão, puxão, sabre e giro têm recarga individual (como a guerrilha do comandante). Centro cancela." }
+    saber_throw: { icon: "⚔", color: "#7affc8", detail: "Arremessa o sabre até a mira. Lâmina larga: corta no caminho de ida e na volta." },
+    force_menu: { icon: "◎", color: "#e8b0ff", detail: "Segura o direito: menu radial. Empurrão, puxão, sabre e giro têm recarga individual. Tudo em área grande. Centro cancela." }
   };
 
   G.activeMeta = function (id) {
@@ -629,8 +630,8 @@
   G.unitTierLabel = function (def) {
     if (!def) return "aliado";
     if (def.role === "commander") return "comandante";
-    if (def.gen === 0) return "aliado · base";
-    return "aliado · nível " + def.gen;
+    if (def.gen <= 0) return "aliado · recruta";
+    return "aliado · tier " + def.gen;
   };
 
   G.unitStatRows = function (def) {
@@ -663,8 +664,8 @@
     batedor: { id: "scoutgun", name: "Passo leve", desc: "O mais rápido do começo. A disparada atravessa inimigos e causa dano de contato." },
     psiquico: { id: "softseek", name: "Munição sintonizada", desc: "Balas teleguiadas leves: curvam no inimigo mais perto da mira, sem perseguir agressivo." },
     escolhido: { id: "blaster", name: "Blaster", desc: "Tiros laser rápidos. A ativa troca precisão por volume — e a mira piora pra valer." },
-    jedi: { id: "sabercut", name: "Corte de sabre", desc: "Salta no inimigo mais perto e corta de perto. Muita vida pra um melee." },
-    mestre: { id: "forcemaster", name: "Domínio", desc: "Como o Jedi, com mais peso. A ativa abre o arsenal da Força num menu radial." },
+    jedi: { id: "sabercut", name: "Corte de sabre", desc: "Salta no inimigo mais perto e corta em arco. O golpe da lâmina acerta quem estiver na frente, não só o alvo." },
+    mestre: { id: "forcemaster", name: "Domínio", desc: "Como o Jedi, com mais peso e o mesmo corte em arco. A ativa abre o arsenal da Força num menu radial." },
     sniper: { id: "rangedmg", name: "Punição de perto", desc: "Alcance infinito. A bala atravessa a tela na linha da mira. Dano sobe com a distância; de perto, fraqueja." },
     metralhador: { id: "recoil", name: "Coice", desc: "Cinco tiros em leque na mira. O recuo empurra o esquadrão pro lado oposto." },
     caminhao: { id: "bumper", name: "Bolha de comando", desc: "Escudo em volta do grupo (7 pontos). Segura o esquadrão dentro, empurra inimigo. Contato físico e projétil gastam o escudo. Recarrega 1 ponto a cada 5s e volta inteiro em 10s se quebrar. Merges da linha têm 10 pontos." },

@@ -11,7 +11,7 @@
   var wipedSlots = {};
 
   function permDefaults() {
-    return {
+    var p = {
       extraStart: 0,
       dmg: 0,
       hp: 0,
@@ -29,8 +29,50 @@
       mobilidade: 0,
       startArquivo: 0,
       briefing: 0,
-      manualCampo: 0
+      manualCampo: 0,
+      segundoVeterano: 0,
+      pocketArquivo: 0,
+      dossieInicial: 0,
+      saqueInvasao: 0,
+      otica: 0,
+      supressao: 0,
+      blindados: 0,
+      triagem: 0,
+      raide: 0,
+      forca: 0,
+      guerrilhaEnsaiada: 0,
+      arquivista: 0,
+      marcaComando: 0,
+      segundoFolego: 0,
+      duplaUnique: 0,
+      cmdUp: 0,
+      cmdStrike: 0,
+      cmdRecruit: 0
     };
+    if (G.PERM) {
+      G.PERM.forEach(function (item) {
+        if (p[item.id] == null) p[item.id] = 0;
+      });
+    }
+    return p;
+  }
+
+  function permCap(id) {
+    if (G.PERM) {
+      var i;
+      for (i = 0; i < G.PERM.length; i++) if (G.PERM[i].id === id) return G.PERM[i].max;
+    }
+    var legacy = { dmg: 10, hp: 10, fireRate: 8, speed: 8, regen: 5, magnet: 5 };
+    if (legacy[id] != null) return legacy[id];
+    var caps = {
+      extraStart: 4, earlyTier: 4, luck: 5, gold: 5, maxUnits: 1, rerolls: 2,
+      choque: 4, disparo: 4, mobilidade: 4, startArquivo: 1, briefing: 1, manualCampo: 2,
+      segundoVeterano: 1, pocketArquivo: 2, dossieInicial: 1, saqueInvasao: 3,
+      otica: 3, supressao: 3, blindados: 3, triagem: 3, raide: 3, forca: 3,
+      guerrilhaEnsaiada: 2, arquivista: 3, marcaComando: 2, segundoFolego: 1, duplaUnique: 1,
+      cmdUp: 2, cmdStrike: 2, cmdRecruit: 2
+    };
+    return caps[id] != null ? caps[id] : 1;
   }
 
   function emptySlot(i) {
@@ -57,26 +99,16 @@
 
   function normalizePerm(p) {
     p = p || {};
-    return {
-      extraStart: clamp(p.extraStart, 4),
-      dmg: clamp(p.dmg, 10),
-      hp: clamp(p.hp, 10),
-      earlyTier: clamp(p.earlyTier, 4),
-      fireRate: clamp(p.fireRate, 8),
-      speed: clamp(p.speed, 8),
-      luck: clamp(p.luck, 5),
-      gold: clamp(p.gold, 5),
-      regen: clamp(p.regen, 5),
-      magnet: clamp(p.magnet, 5),
-      maxUnits: clamp(p.maxUnits, 1),
-      rerolls: clamp(p.rerolls, 2),
-      choque: clamp(p.choque, 3),
-      disparo: clamp(p.disparo, 3),
-      mobilidade: clamp(p.mobilidade, 3),
-      startArquivo: clamp(p.startArquivo, 1),
-      briefing: clamp(p.briefing, 1),
-      manualCampo: clamp(p.manualCampo, 1)
-    };
+    var d = permDefaults();
+    var out = {};
+    var k;
+    for (k in d) out[k] = clamp(p[k], permCap(k));
+    if (G.PERM) {
+      G.PERM.forEach(function (item) {
+        if (out[item.id] == null) out[item.id] = clamp(p[item.id], item.max);
+      });
+    }
+    return out;
   }
 
   function normalizeSlot(raw, i) {
@@ -93,6 +125,14 @@
         units: (raw.codex && raw.codex.units) || {},
         enemies: (raw.codex && raw.codex.enemies) || {}
       }
+    };
+  }
+
+  function normalizeSettings(s) {
+    s = s || {};
+    return {
+      autoAim: !!s.autoAim,
+      autoSkill: !!s.autoSkill
     };
   }
 
@@ -113,6 +153,7 @@
         active: 0,
         muted: !!parsed.muted,
         volume: parsed.volume != null ? clampVol(parsed.volume) : 0.8,
+        settings: normalizeSettings(parsed.settings),
         updatedAt: parsed.updatedAt | 0,
         slots: [slot, emptySlot(1), emptySlot(2)]
       };
@@ -187,11 +228,9 @@
   function slotScore(s) {
     if (!s) return -1;
     var p = s.perm || {};
-    var permSum =
-      (p.extraStart | 0) + (p.dmg | 0) + (p.hp | 0) + (p.earlyTier | 0) +
-      (p.fireRate | 0) + (p.speed | 0) + (p.luck | 0) + (p.gold | 0) +
-      (p.regen | 0) + (p.magnet | 0) + (p.maxUnits | 0) + (p.rerolls | 0) +
-      (p.choque | 0) + (p.disparo | 0) + (p.mobilidade | 0) + (p.startArquivo | 0) + (p.briefing | 0) + (p.manualCampo | 0);
+    var permSum = 0;
+    var k;
+    for (k in p) permSum += p[k] | 0;
     var units = s.codex && s.codex.units ? Object.keys(s.codex.units).length : 0;
     var enemies = s.codex && s.codex.enemies ? Object.keys(s.codex.enemies).length : 0;
     var renamed = s.name && !/^Soldado [123]$/.test(String(s.name).trim()) ? 1 : 0;
@@ -284,6 +323,7 @@
       active: clamp(bestMeta.active, SLOT_COUNT - 1),
       muted: !!bestMeta.muted,
       volume: clampVol(bestMeta.volume),
+      settings: normalizeSettings(bestMeta.settings),
       updatedAt: bestMeta.updatedAt | 0,
       slots: slots
     };
@@ -295,11 +335,13 @@
         active: a && a.active,
         muted: a && a.muted,
         volume: a && a.volume,
+        settings: a && a.settings,
         slots: a && a.slots
       }) === JSON.stringify({
         active: b && b.active,
         muted: b && b.muted,
         volume: b && b.volume,
+        settings: b && b.settings,
         slots: b && b.slots
       });
     } catch (err) {
@@ -311,6 +353,7 @@
     target.index = clamp(parsed.active, SLOT_COUNT - 1);
     target.muted = !!parsed.muted;
     target.volume = clampVol(parsed.volume);
+    target.settings = normalizeSettings(parsed.settings);
     target.debugUnlocked = false;
     target.slots = [];
     var i;
@@ -326,6 +369,7 @@
       active: target.index,
       muted: !!target.muted,
       volume: target.volume,
+      settings: normalizeSettings(target.settings),
       updatedAt: Date.now(),
       slots: target.slots
     };
@@ -465,6 +509,7 @@
     index: 0,
     muted: false,
     volume: 0.8,
+    settings: { autoAim: false, autoSkill: false },
     debugUnlocked: false,
     slots: [emptySlot(0), emptySlot(1), emptySlot(2)],
 
@@ -479,6 +524,7 @@
           this.index = 0;
           this.muted = false;
           this.volume = 0.8;
+          this.settings = { autoAim: false, autoSkill: false };
           this.debugUnlocked = false;
         }
       } catch (err) {
@@ -486,6 +532,7 @@
         this.index = 0;
         this.muted = false;
         this.volume = 0.8;
+        this.settings = { autoAim: false, autoSkill: false };
         this.debugUnlocked = false;
       }
       this.data = this.slots[this.index];
@@ -588,6 +635,16 @@
         this.data.bestStage = stageNum;
         this.persist();
       }
+    },
+
+    opt: function (key) {
+      return !!(this.settings && this.settings[key]);
+    },
+
+    setOpt: function (key, on) {
+      this.settings = normalizeSettings(this.settings);
+      this.settings[key] = !!on;
+      this.persist();
     }
   };
 })(window.TFAG = window.TFAG || {});

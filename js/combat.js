@@ -108,6 +108,28 @@
     return (1 + (state.run.gold || 0)) * (1 + (G.save.data.perm.gold | 0) * 0.12);
   }
 
+  function enemyGait(e) {
+    if (e.stride) return e.stride;
+    var ph = e.phase || 0;
+    var id = e.id || 1;
+    e.stride = {
+      side: Math.sin(ph * 1.73 + id * 0.41) * 26,
+      bias: Math.cos(ph * 1.19 + id * 0.57) * 18,
+      turn: 2.8 + Math.abs(Math.sin(ph * 2.05 + id * 0.13)) * 4.2,
+      pace: 0.86 + Math.abs(Math.cos(ph + id * 0.23)) * 0.3
+    };
+    return e.stride;
+  }
+
+  function applyDrunkStep(e, dx, dy, dt) {
+    if ((e.drunkT || 0) <= 0) return;
+    e.drunkPhase = (e.drunkPhase || Math.random() * 6) + dt * 9;
+    var wobble = Math.sin(e.drunkPhase) * 28 * dt;
+    var pa = Math.atan2(dy, dx) + Math.PI / 2;
+    e.x += Math.cos(pa) * wobble;
+    e.y += Math.sin(pa) * wobble;
+  }
+
   function moveTowards(e, tx, ty, speed, dt) {
     var dx = tx - e.x;
     var dy = ty - e.y;
@@ -115,32 +137,38 @@
     var slow = e.slowT > 0 || e.freezeT > 0 ? 0.42 : 1;
     e.x += (dx / len) * speed * slow * dt;
     e.y += (dy / len) * speed * slow * dt;
-    if ((e.drunkT || 0) > 0) {
-      e.drunkPhase = (e.drunkPhase || Math.random() * 6) + dt * 9;
-      var sway = Math.sin(e.drunkPhase) * 52 * dt;
-      var pa = Math.atan2(dy, dx) + Math.PI / 2;
-      e.x += Math.cos(pa) * sway;
-      e.y += Math.sin(pa) * sway;
-    }
+    applyDrunkStep(e, dx, dy, dt);
+  }
+
+  function walkTowards(e, tx, ty, speed, dt) {
+    var g = enemyGait(e);
+    var dx = tx - e.x;
+    var dy = ty - e.y;
+    var want = Math.atan2(dy, dx);
+    if (e.walkAng == null || !isFinite(e.walkAng)) e.walkAng = want;
+    var dlt = Math.atan2(Math.sin(want - e.walkAng), Math.cos(want - e.walkAng));
+    var maxTurn = g.turn * dt;
+    if (dlt > maxTurn) dlt = maxTurn;
+    else if (dlt < -maxTurn) dlt = -maxTurn;
+    e.walkAng += dlt;
+    var slow = e.slowT > 0 || e.freezeT > 0 ? 0.42 : 1;
+    var step = speed * g.pace * slow * dt;
+    e.x += Math.cos(e.walkAng) * step;
+    e.y += Math.sin(e.walkAng) * step;
+    applyDrunkStep(e, Math.cos(e.walkAng), Math.sin(e.walkAng), dt);
   }
 
   function chase(state, e, target, speed, dt) {
-    var svx = target.vx != null ? target.vx : state.squad.vx || 0;
-    var svy = target.vy != null ? target.vy : state.squad.vy || 0;
-    var spin = Math.hypot(svx, svy);
+    var g = enemyGait(e);
     var d0 = dist(e, target);
-    var lead = Math.min(0.75, d0 / 240);
-    var tx = target.x + svx * lead;
-    var ty = target.y + svy * lead;
-    if (d0 < 72) {
-      tx = target.x;
-      ty = target.y;
-    } else if (spin > 50) {
-      var pull = Math.min(0.72, 0.32 + (spin - 50) / 180);
-      tx = tx * (1 - pull) + state.squad.x * pull;
-      ty = ty * (1 - pull) + state.squad.y * pull;
+    var tx = target.x;
+    var ty = target.y;
+    if (d0 > 48) {
+      var spread = Math.min(1, (d0 - 48) / 160);
+      tx += g.side * spread;
+      ty += g.bias * spread;
     }
-    moveTowards(e, tx, ty, speed * (d0 > 150 ? 1.18 : 1) * (spin > 90 ? 1.14 : 1), dt);
+    walkTowards(e, tx, ty, speed, dt);
   }
 
   function separateBodies(list, state, clampEach) {
@@ -201,21 +229,60 @@
     return null;
   }
 
-  function enemyInPullField(state, unit) {
-    if (!unit || unit.team !== "enemy" || !state.zones) return false;
+  function lingerHazardKind(z) {
+    if (!z || z.t <= 0 || z.retiring || z.hurtPlayer) return false;
+    if (z.kind === "fire" || z.kind === "napalm") return true;
+    if (z.kind === "blackhole" && z.t > 0.78) return true;
+    return false;
+  }
+
+  function lingerHazardFor(state, unit) {
+    if (!unit || unit.team !== "enemy" || !state.zones) return null;
     var size = (unit.def && unit.def.size) || 10;
-    var zi, z, dx, dy, d;
+    var best = null;
+    var bestScore = 1e9;
+    var zi, z, dx, dy, d, reach, score;
     for (zi = 0; zi < state.zones.length; zi++) {
       z = state.zones[zi];
-      if (z.t <= 0) continue;
-      if (z.kind === "blackhole" && z.t > 0.78) {
-        dx = unit.x - z.x;
-        dy = unit.y - z.y;
-        d = Math.hypot(dx, dy);
-        if (d <= z.r + size) return true;
+      if (!lingerHazardKind(z)) continue;
+      dx = unit.x - z.x;
+      dy = unit.y - z.y;
+      d = Math.sqrt(dx * dx + dy * dy);
+      reach = (z.r || 0) + size + 10;
+      if (d > reach) continue;
+      score = d / Math.max(8, z.r || 8);
+      if (score < bestScore) {
+        best = z;
+        bestScore = score;
       }
     }
-    return false;
+    return best;
+  }
+
+  function enemyInPullField(state, unit) {
+    return !!lingerHazardFor(state, unit);
+  }
+
+  function applyKnock(state, unit, srcX, srcY, push) {
+    if (!unit || unit.hp <= 0 || unit.scenery || unit.type === "arklan_spike") return;
+    if (srcX == null) return;
+    var dx, dy, len, step;
+    var sink = lingerHazardFor(state, unit);
+    if (sink) {
+      dx = sink.x - unit.x;
+      dy = sink.y - unit.y;
+      len = Math.sqrt(dx * dx + dy * dy) || 1;
+      step = Math.min(push * 1.4, Math.max(0, len - 3));
+      unit.x += (dx / len) * step;
+      unit.y += (dy / len) * step;
+    } else {
+      dx = unit.x - srcX;
+      dy = unit.y - srcY;
+      len = Math.sqrt(dx * dx + dy * dy) || 1;
+      unit.x += (dx / len) * push;
+      unit.y += (dy / len) * push;
+    }
+    G.clampPlay(unit, state);
   }
 
   function hurt(state, unit, amount, srcX, srcY, fromPlayer, opts) {
@@ -254,6 +321,7 @@
       if (!trueDmg) {
         amount *= 1 - (state.run.shield || 0) - ((state.aura && state.aura.shield) || 0) - (state.run.tempShield || 0) - ((state.tacticsAura && state.tacticsAura.shield) || 0);
         amount *= 1 - (G.save.data.perm.choque | 0) * 0.05;
+        if (G.upgrades && G.upgrades.quartelDr) amount *= 1 - G.upgrades.quartelDr(unit);
         if ((state.run.coilHp || 0) > 0) {
           var soak = Math.min(amount, state.run.coilHp);
           state.run.coilHp -= soak;
@@ -264,6 +332,23 @@
             return;
           }
         }
+        if (unit.commander && (unit.cmdIFrame || 0) > 0) {
+          unit.flash = 0.08;
+          return;
+        }
+        if (unit.commander && G.upgrades && (G.save.data.perm.segundoFolego | 0) && !state.cmdSecondWind) {
+          var would = unit.hp - amount;
+          if (would < unit.maxHp * 0.2) {
+            state.cmdSecondWind = true;
+            unit.hp = Math.max(unit.hp, Math.round(unit.maxHp * 0.42));
+            unit.cmdIFrame = 1.15;
+            unit.flash = 0.35;
+            state.shake = Math.max(state.shake || 0, 4);
+            G.burst(state, unit.x, unit.y, "#ffe08a", 22, 140);
+            G.burst(state, unit.x, unit.y, "#fff4c4", 12, 70);
+            return;
+          }
+        }
         if (unit.commander) amount *= 0.9;
         if (unit.parasite > 0) amount *= 1.15;
         if ((state.royalMarkT || 0) > 0) amount *= 1.28;
@@ -271,6 +356,9 @@
       }
     } else {
       unit.lastHitT = 0;
+      if (fromPlayer && !trueDmg && state.cmdMark && unit.id === state.cmdMark.id && G.upgrades && G.upgrades.cmdMarkDmg) {
+        amount *= G.upgrades.cmdMarkDmg();
+      }
       if (fromPlayer && !trueDmg && unit.type === "beeprincess" && unit.princessAct === "honeymoon") {
         if (G.invasion) G.invasion.heal(unit, amount);
         else unit.hp = Math.min(unit.maxHp, unit.hp + amount);
@@ -315,14 +403,8 @@
         unit.slowT = Math.max(unit.slowT, runRank(state.run.freeze) >= 2 ? 1.5 : 0.9);
       }
       var doKnock = runRank(state.run.knockback) || (state.bannerKnockT || 0) > 0;
-      if (doKnock && !(opts && opts.noKnockback) && !enemyInPullField(state, unit) && srcX != null && unit.type !== "arklan_spike" && !unit.scenery) {
-        var dx = unit.x - srcX;
-        var dy = unit.y - srcY;
-        var len = Math.sqrt(dx * dx + dy * dy) || 1;
-        var push = runRank(state.run.knockback) >= 2 ? 22 : 10;
-        unit.x += (dx / len) * push;
-        unit.y += (dy / len) * push;
-        G.clampPlay(unit, state);
+      if (doKnock && !(opts && (opts.noKnockback || opts.trueDmg)) && srcX != null) {
+        applyKnock(state, unit, srcX, srcY, runRank(state.run.knockback) >= 2 ? 22 : 10);
       }
       if (runRank(state.run.lifesteal)) {
         var ally = nearest(state.units, unit.x, unit.y);
@@ -434,8 +516,12 @@
       var extra = Math.random() < (G.save.data.perm.luck | 0) * 0.08 + (state.run.luck || 0) ? 1 : 0;
       var dropKind = extra ? "fuzileiro" : "recruta";
       var nodeChance = (state.run.dropChance + ((state.aura && state.aura.drop) || 0) + (G.save.data.perm.mobilidade | 0) * 0.03) * (obs ? 2.4 : 1);
+      if (G.upgrades && G.upgrades.dropChanceBonus) nodeChance += G.upgrades.dropChanceBonus();
       if (Math.random() < Math.min(0.85, nodeChance)) {
         state.drops.push(G.createDrop(e.x + 10, e.y, "unit", { unitKind: dropKind }));
+      }
+      if (G.upgrades && G.upgrades.killArquivoChance && Math.random() < G.upgrades.killArquivoChance()) {
+        if (G.merge && G.merge.addArquivo) G.merge.addArquivo(state, e.x, e.y - 6);
       }
     }
     if (G.codex && !e.fake && G.codex.unlockEnemy(e.type)) {
@@ -2268,8 +2354,8 @@
       }
     }
 
-    if (d < prefer - 28) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
-    else if (d > prefer + 24) moveTowards(e, target.x, target.y, spd * 0.85, dt);
+    if (d < prefer - 28) walkTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
+    else if (d > prefer + 24) walkTowards(e, target.x, target.y, spd * 0.85, dt);
 
     e.spawnWaveT = (e.spawnWaveT == null ? 6 : e.spawnWaveT) - dt;
     if (e.spawnWaveT <= 0) {
@@ -2371,11 +2457,11 @@
     var prefer = healed && rifle ? 36 : (healed ? 54 : (e.def.kind === "alien_scout" ? 70 : 96));
     var chase = e.def.kind === "alien_scout" ? 1.55 : 1.2;
     if (healed && rifle) {
-      moveTowards(e, target.x, target.y, spd * 1.85, dt);
+      walkTowards(e, target.x, target.y, spd * 1.85, dt);
     } else if (d > prefer + 14) {
-      moveTowards(e, target.x, target.y, spd * (healed ? 1.55 : chase), dt);
+      walkTowards(e, target.x, target.y, spd * (healed ? 1.55 : chase), dt);
     } else if (d < prefer - 18 && !healed) {
-      moveTowards(e, e.x + (e.x - target.x) * 0.15, e.y + (e.y - target.y) * 0.15, spd * 0.55, dt);
+      walkTowards(e, e.x + (e.x - target.x) * 0.15, e.y + (e.y - target.y) * 0.15, spd * 0.55, dt);
     }
     if (e.def.kind === "alien_pistol") {
       var irw = invasaoHost(state, e);
@@ -2393,8 +2479,8 @@
   function tickEliteRifle(state, e, target, dt, spd) {
     var d = dist(e, target);
     var vet = e.def.kind === "alien_veteran";
-    if (d > 64) moveTowards(e, target.x, target.y, spd * 1.15, dt);
-    else moveTowards(e, e.x + (e.x - target.x) * 0.1, e.y + (e.y - target.y) * 0.1, spd * 0.35, dt);
+    if (d > 64) walkTowards(e, target.x, target.y, spd * 1.15, dt);
+    else walkTowards(e, e.x + (e.x - target.x) * 0.1, e.y + (e.y - target.y) * 0.1, spd * 0.35, dt);
     e.barrageT = (e.barrageT == null ? 2.2 + (e.id % 5) * 0.35 : e.barrageT) - dt;
     if ((e.barrageWind || 0) > 0) {
       e.barrageWind -= dt;
@@ -2441,8 +2527,8 @@
     var d = dist(e, target);
     var inf = e.def.kind === "alien_infiltrator";
     var prefer = 150;
-    if (d < prefer - 24) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
-    else if (d > prefer + 20) moveTowards(e, target.x, target.y, spd * 0.9, dt);
+    if (d < prefer - 24) walkTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
+    else if (d > prefer + 20) walkTowards(e, target.x, target.y, spd * 0.9, dt);
     e.dropCd = (e.dropCd == null ? 1.1 + (e.id % 4) * 0.2 : e.dropCd) - dt;
     if (e.dropCd <= 0 && target) {
       var n = inf ? 2 : 1;
@@ -2470,8 +2556,8 @@
     var d = dist(e, target);
     var med = e.def.kind === "alien_field_medic";
     var prefer = 120;
-    if (d < prefer - 20) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
-    else if (d > prefer + 24) moveTowards(e, target.x, target.y, spd * 0.85, dt);
+    if (d < prefer - 20) walkTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
+    else if (d > prefer + 24) walkTowards(e, target.x, target.y, spd * 0.85, dt);
     var irw = invasaoHost(state, e);
     if (irw && dist(e, irw) < 110) {
       if (G.invasion) G.invasion.heal(irw, irw.maxHp * (med ? 0.01 : 0.007) * dt);
@@ -6819,7 +6905,7 @@
       return;
     }
     if (target) {
-      moveTowards(e, target.x, target.y, spd * (cmd === "attack" ? 1.55 : 1.1), dt);
+      walkTowards(e, target.x, target.y, spd * (cmd === "attack" ? 1.55 : 1.1), dt);
       if (Math.hypot(target.x - e.x, target.y - e.y) < e.def.size + target.def.size + 6) {
         hurt(state, target, Math.round(e.def.dmg * (cmd === "attack" ? 1.4 : 1)), e.x, e.y);
         if (cmd === "attack") {
@@ -8024,8 +8110,62 @@
   var AIM_SNAP = 64;
 
   function aimPoint(state) {
+    if (G.save && G.save.opt && G.save.opt("autoAim") && state && state.mode === "play" && !state.paused && !state.defeat) {
+      if (!(state.timeLock && state.timeLock.phase !== "slow") && !(G.invasion && G.invasion.cinematic(state)) && !state.arklanGullet) {
+        var lock = nearestEdge(state.enemies, state.squad.x, state.squad.y);
+        if (lock) return { x: lock.x, y: lock.y };
+      }
+    }
     if (state.pointer && state.pointer.x != null) return { x: state.pointer.x, y: state.pointer.y };
     return { x: state.squad.x, y: state.squad.y - 40 };
+  }
+
+  function playBlocked(state) {
+    if (!state || state.paused || state.userPaused || state.stageOutro || state.defeat) return true;
+    if (state.pendingMerge || state.archiveMenu) return true;
+    if (G.invasion && G.invasion.cinematic(state)) return true;
+    if (state.timeLock && state.timeLock.phase !== "slow") return true;
+    if (state.arklanGullet) return true;
+    return false;
+  }
+
+  function applyAssist(state, dt) {
+    if (playBlocked(state)) {
+      if (state.pointer && state.pointer.autoFire && !state.pointer.down) {
+        state.pointer.fireHold = false;
+        state.pointer.autoFire = false;
+      }
+      return;
+    }
+    var aimOn = G.save && G.save.opt && G.save.opt("autoAim");
+    var skillOn = G.save && G.save.opt && G.save.opt("autoSkill");
+    if (aimOn) {
+      var t = nearestEdge(state.enemies, state.squad.x, state.squad.y);
+      if (t) {
+        state.pointer.x = t.x;
+        state.pointer.y = t.y;
+        state.pointer.live = true;
+        if (!state.pointer.altHold) {
+          state.pointer.fireHold = true;
+          state.pointer.autoFire = true;
+        } else if (state.pointer.autoFire) {
+          state.pointer.fireHold = false;
+        }
+      } else if (state.pointer.autoFire && !state.pointer.down) {
+        state.pointer.fireHold = false;
+        state.pointer.autoFire = false;
+      }
+    } else if (state.pointer.autoFire && !state.pointer.down) {
+      state.pointer.fireHold = false;
+      state.pointer.autoFire = false;
+    }
+    if (skillOn && G.tactics && G.tactics.autoCast) {
+      state._autoSkillT = (state._autoSkillT || 0) - dt;
+      if (state._autoSkillT <= 0) {
+        G.tactics.autoCast(state);
+        state._autoSkillT = 0.16;
+      }
+    }
   }
 
   function aimGhost(state) {
@@ -8362,6 +8502,7 @@
         u.y = state.squad.y;
         u.vx = state.squad.vx || 0;
         u.vy = state.squad.vy || 0;
+        if ((u.cmdIFrame || 0) > 0) u.cmdIFrame = Math.max(0, u.cmdIFrame - dt);
       } else if (state.glinderMaze && state.glinderMaze.phase !== "done") {
         u.stowed = true;
         u.packed = false;
@@ -8627,8 +8768,8 @@
       } else if (kind === "ranged" || kind === "cryo") {
         var prefer = e.def.prefer || 160;
         if (e.rushMinion) prefer = 110;
-        if (d < prefer - 30) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd * (e.rushMinion ? 0.45 : 1), dt);
-        else if (d > prefer + 20) moveTowards(e, target.x, target.y, spd, dt);
+        if (d < prefer - 30) walkTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd * (e.rushMinion ? 0.45 : 1), dt);
+        else if (d > prefer + 20) walkTowards(e, target.x, target.y, spd, dt);
         if (d <= e.def.range && e.cooldown <= 0) {
           e.cooldown = 1 / e.def.fire;
           enemyFire(state, e, target, kind === "cryo" ? "ice" : "bullet");
@@ -8636,8 +8777,8 @@
       } else if (kind === "drone") {
         var ang = Math.atan2(target.y - e.y, target.x - e.x);
         var slow = e.slowT > 0 ? 0.42 : 1;
-        e.x += Math.cos(ang) * spd * slow * dt + Math.cos(e.phase * 5) * 40 * dt;
-        e.y += Math.sin(ang) * spd * slow * dt + Math.sin(e.phase * 4) * 40 * dt;
+        e.x += Math.cos(ang) * spd * slow * dt + Math.cos(e.phase * 5) * 22 * dt;
+        e.y += Math.sin(ang) * spd * slow * dt + Math.sin(e.phase * 4) * 18 * dt;
         if (d <= e.def.range && e.cooldown <= 0) {
           e.cooldown = 1 / e.def.fire;
           enemyFire(state, e, target);
@@ -8663,7 +8804,7 @@
             }
           }
           if (woundedP && worstP < 0.95) {
-            moveTowards(e, woundedP.x, woundedP.y, spd, dt);
+            walkTowards(e, woundedP.x, woundedP.y, spd, dt);
             if (dist(e, woundedP) < 55 && e.cooldown <= 0) {
               e.cooldown = 0.8;
               woundedP.hp = Math.min(woundedP.maxHp, woundedP.hp + 10);
@@ -8687,7 +8828,7 @@
           }
         }
         if (wounded && worst < 0.95) {
-          moveTowards(e, wounded.x, wounded.y, spd, dt);
+          walkTowards(e, wounded.x, wounded.y, spd, dt);
           if (dist(e, wounded) < 55 && e.cooldown <= 0) {
             e.cooldown = 0.8;
             if (G.invasion) G.invasion.heal(wounded, 10);
@@ -8697,14 +8838,14 @@
             G.burst(state, wounded.x, wounded.y, "#3dff7a", 8, 45);
           }
         } else {
-          moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
+          walkTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd, dt);
         }
         }
       } else if (kind === "artillery") {
         var prefA = e.def.prefer || 250;
         if (e.rushMinion) prefA = 160;
-        if (d < prefA - 40) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd * (e.rushMinion ? 0.4 : 1), dt);
-        else if (d > prefA + 40) moveTowards(e, target.x, target.y, spd * 0.6, dt);
+        if (d < prefA - 40) walkTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd * (e.rushMinion ? 0.4 : 1), dt);
+        else if (d > prefA + 40) walkTowards(e, target.x, target.y, spd * 0.6, dt);
         if (e.cooldown <= 0 && (e.silenceT || 0) <= 0) {
           e.cooldown = 1 / e.def.fire;
           state.warnings.push({ x: target.x, y: target.y, t: 0.85, max: 0.85, r: 42, dmg: e.def.dmg, team: e.stolen ? "player" : "enemy" });
@@ -8725,8 +8866,8 @@
       } else if (kind === "sniper") {
         var prefS = e.def.prefer || 240;
         if (e.rushMinion) prefS = 150;
-        if (d < prefS - 40) moveTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd * (e.rushMinion ? 0.4 : 1), dt);
-        else if (d > prefS + 30) moveTowards(e, target.x, target.y, spd, dt);
+        if (d < prefS - 40) walkTowards(e, e.x * 2 - target.x, e.y * 2 - target.y, spd * (e.rushMinion ? 0.4 : 1), dt);
+        else if (d > prefS + 30) walkTowards(e, target.x, target.y, spd, dt);
         if (e.cooldown <= 0 && d <= e.def.range) {
           e.cooldown = 1 / e.def.fire;
           enemyFire(state, e, target);
@@ -9770,6 +9911,7 @@
     var pack = unitsWithActive(state, id);
     var sm = stackMul(pack.length);
     var cd = u.def.active.cd;
+    if (G.upgrades && G.upgrades.activeCdMul) cd *= G.upgrades.activeCdMul(u);
     for (var gj = 0; gj < pack.length; gj++) {
       pack[gj].activeCd = cd;
       pack[gj].activeFlash = 0.45;
@@ -9984,6 +10126,7 @@
         tickGlinderFlash(state, dt);
         return;
       }
+      applyAssist(state, dt);
       if (G.tactics && G.tactics.update) G.tactics.update(state, dt);
       playerShoot(state, dt);
       tickHiveWorld(state, dt);
@@ -10022,6 +10165,7 @@
     nearest: nearest,
     hurt: hurt,
     enemyInPullField: enemyInPullField,
+    applyKnock: applyKnock,
     flameAt: flameAt,
     explode: explode,
     killEnemy: killEnemy,

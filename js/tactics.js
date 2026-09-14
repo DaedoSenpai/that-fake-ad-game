@@ -47,14 +47,7 @@
   }
 
   function knockEnemy(state, e, srcX, srcY, push) {
-    if (!e || e.hp <= 0 || e.scenery) return;
-    if (C().enemyInPullField && C().enemyInPullField(state, e)) return;
-    var dx = e.x - srcX;
-    var dy = e.y - srcY;
-    var len = hypot(dx, dy) || 1;
-    e.x += (dx / len) * (push || 16);
-    e.y += (dy / len) * (push || 16);
-    G.clampPlay(e, state);
+    if (C().applyKnock) C().applyKnock(state, e, srcX, srcY, push || 16);
   }
 
   function knockAlong(state, e, ang, push) {
@@ -261,7 +254,8 @@
 
   function zoneRetirePal(z) {
     var k = z && z.kind;
-    if (k === "heal" || k === "cmd_aura") return ["#b8ffd0", "#7cffb0", "#e8ffe8"];
+    if (k === "heal" || (k === "cmd_aura" && !(z && z.dmg))) return ["#b8ffd0", "#7cffb0", "#e8ffe8"];
+    if (k === "cmd_aura") return ["#ffe08a", "#ffd24a", "#fff4d0"];
     if (k === "fire" || k === "napalm") return ["#ffe060", "#ff6a20", "#fff4d0"];
     if (k === "smoke") return ["#c8d0d8", "#8a949e", "#e8eef4"];
     if (k === "obsmark" || k === "spot") return ["#7ad8ff", "#e8ffff", "#4aa3ff"];
@@ -559,7 +553,7 @@
     }
     var p = aim(state);
     var best = null;
-    var bestD = 36;
+    var bestD = G.upgrades && G.upgrades.cmdMarkSnap ? G.upgrades.cmdMarkSnap() : 36;
     for (var i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
       if (e.hp <= 0) continue;
@@ -570,24 +564,47 @@
       }
     }
     state.cmdMark = best;
+    if (best && G.upgrades && G.upgrades.cmdMarkHold) {
+      var hold = G.upgrades.cmdMarkHold();
+      if (hold) best.obsMarkT = Math.max(best.obsMarkT || 0, hold);
+    }
   }
 
   var GUER_CD = { crate: 15, recruit: 30, strike: 20 };
   var GUER_RECRUIT_CAP = 2;
 
+  function guerCd(id) {
+    var base = GUER_CD[id] || 15;
+    if (id === "strike" && G.upgrades && G.upgrades.cmdKit && G.upgrades.cmdKit("strike") === "b") base = 16;
+    var mul = G.upgrades && G.upgrades.guerCdMul ? G.upgrades.guerCdMul() : 1;
+    return base * mul;
+  }
+
+  function guerRecruitCap() {
+    return G.upgrades && G.upgrades.guerRecruitCap ? G.upgrades.guerRecruitCap() : GUER_RECRUIT_CAP;
+  }
+
   function guerrillaHud(state) {
     ensure(state);
     var o = state.cmdOrders;
-    var recLeft = Math.max(0, GUER_RECRUIT_CAP - (state.cmdRecruitUsed | 0));
+    var recLeft = Math.max(0, guerRecruitCap() - (state.cmdRecruitUsed | 0));
+    var up = G.upgrades && G.upgrades.cmdSlice ? G.upgrades.cmdSlice("up") : { name: "Aura", icon: "✚", col: "#7cffb0" };
+    var strike = G.upgrades && G.upgrades.cmdSlice ? G.upgrades.cmdSlice("strike") : { name: "Airstrike", icon: "△", col: "#ff9a3a" };
+    var rec = G.upgrades && G.upgrades.cmdSlice ? G.upgrades.cmdSlice("recruit") : { name: "Recruta", icon: "○", col: "#9ad4ff" };
+    var recB = G.upgrades && G.upgrades.cmdKit && G.upgrades.cmdKit("recruit") === "b";
     return {
       crate: o.crate || 0,
       recruit: o.recruit || 0,
       strike: o.strike || 0,
-      crateMax: GUER_CD.crate,
-      recruitMax: GUER_CD.recruit,
-      strikeMax: GUER_CD.strike,
+      crateMax: guerCd("crate"),
+      recruitMax: guerCd("recruit"),
+      strikeMax: guerCd("strike"),
       recruitsLeft: recLeft,
-      anyReady: (o.crate || 0) <= 0 || ((o.recruit || 0) <= 0 && recLeft > 0) || (o.strike || 0) <= 0
+      recNeedsCap: !recB,
+      anyReady: (o.crate || 0) <= 0 || ((o.recruit || 0) <= 0 && (recB || recLeft > 0)) || (o.strike || 0) <= 0,
+      up: up,
+      strikeSlice: strike,
+      recSlice: rec
     };
   }
 
@@ -612,6 +629,11 @@
 
   var FORCE_CD = { push: 8, pull: 10, saber: 11, spin: 14 };
 
+  function forceCd(id) {
+    var mul = G.upgrades && G.upgrades.forceCdMul ? G.upgrades.forceCdMul() : 1;
+    return (FORCE_CD[id] || 10) * mul;
+  }
+
   function forceHud(state) {
     ensure(state);
     var o = state.forceOrders;
@@ -620,10 +642,10 @@
       pull: o.pull || 0,
       saber: o.saber || 0,
       spin: o.spin || 0,
-      pushMax: FORCE_CD.push,
-      pullMax: FORCE_CD.pull,
-      saberMax: FORCE_CD.saber,
-      spinMax: FORCE_CD.spin,
+      pushMax: forceCd("push"),
+      pullMax: forceCd("pull"),
+      saberMax: forceCd("saber"),
+      spinMax: forceCd("spin"),
       anyReady: (o.push || 0) <= 0 || (o.pull || 0) <= 0 || (o.saber || 0) <= 0 || (o.spin || 0) <= 0
     };
   }
@@ -720,69 +742,99 @@
   }
 
   function guerrillaFireAt(state, kind, x, y) {
+    ensure(state);
     var pos = guerrillaClamp(state, x, y);
     var cmd = lead(state, "comandante");
     var o = state.cmdOrders;
     if (kind === "square") {
       if (o.crate > 0) {
         var waitAt = cmd || pos;
-        state.floaters.push(G.createFloater(waitAt.x, waitAt.y - 18, "aura em recarga", "#7cffb0"));
+        var upName = G.upgrades && G.upgrades.cmdSlice ? G.upgrades.cmdSlice("up").name : "aura";
+        state.floaters.push(G.createFloater(waitAt.x, waitAt.y - 18, upName.toLowerCase() + " em recarga", "#7cffb0"));
         return false;
       }
       if (!cmd || cmd.hp <= 0) return false;
       for (var zi = state.zones.length - 1; zi >= 0; zi--) {
         if (state.zones[zi].kind === "cmd_aura") beginRetire(state, state.zones[zi], 0.5);
       }
-      zone(state, {
-        kind: "cmd_aura",
-        x: cmd.x,
-        y: cmd.y,
-        r: 96,
-        t: 5,
-        max: 5,
-        healPct: 0.02
-      });
-      G.burst(state, cmd.x, cmd.y, "#7cffb0", 14, 80);
-      o.crate = GUER_CD.crate;
-      state.floaters.push(G.createFloater(cmd.x, cmd.y - 22, "aura 5s", "#7cffb0"));
+      var war = G.upgrades && G.upgrades.cmdKit && G.upgrades.cmdKit("up") === "b";
+      zone(state, war
+        ? { kind: "cmd_aura", x: cmd.x, y: cmd.y, r: 110, t: 5, max: 5, dmg: 0.2, fire: 0.2 }
+        : { kind: "cmd_aura", x: cmd.x, y: cmd.y, r: 96, t: 5, max: 5, healPct: 0.02 }
+      );
+      G.burst(state, cmd.x, cmd.y, war ? "#ffd24a" : "#7cffb0", 14, 80);
+      o.crate = guerCd("crate");
+      state.floaters.push(G.createFloater(cmd.x, cmd.y - 22, war ? "grito 5s" : "aura 5s", war ? "#ffd24a" : "#7cffb0"));
     } else if (kind === "circle") {
       var here = nearCommander(state);
       var waitAt = cmd || here;
-      if ((state.cmdRecruitUsed | 0) >= GUER_RECRUIT_CAP) {
+      var recB = G.upgrades && G.upgrades.cmdKit && G.upgrades.cmdKit("recruit") === "b";
+      if (!recB && (state.cmdRecruitUsed | 0) >= guerRecruitCap()) {
         state.floaters.push(G.createFloater(waitAt.x, waitAt.y - 18, "limite da fase", "#9ad4ff"));
         return false;
       }
       if (o.recruit > 0) {
-        state.floaters.push(G.createFloater(waitAt.x, waitAt.y - 18, "recruta em recarga", "#9ad4ff"));
+        state.floaters.push(G.createFloater(waitAt.x, waitAt.y - 18, recB ? "arquivos em recarga" : "recruta em recarga", recB ? "#ffd24a" : "#9ad4ff"));
         return false;
       }
-      if (G.soldierCount && G.soldierCount(state) >= G.maxUnits()) {
-        state.floaters.push(G.createFloater(waitAt.x, waitAt.y - 18, "esquadrão cheio", "#9ad4ff"));
-        return false;
+      if (recB) {
+        var intel = G.merge && G.merge.ensureIntel ? G.merge.ensureIntel(state.run) : null;
+        if (intel) intel.arquivo = (intel.arquivo | 0) + 2;
+        state.floaters.push(G.createFloater(here.x, here.y - 16, "+2 arquivos", "#ffd24a"));
+        G.burst(state, here.x, here.y, "#ffd24a", 12, 80);
+      } else {
+        if (G.soldierCount && G.soldierCount(state) >= G.maxUnits()) {
+          state.floaters.push(G.createFloater(waitAt.x, waitAt.y - 18, "esquadrão cheio", "#9ad4ff"));
+          return false;
+        }
+        spawnGuerrillaRecruit(state, here.x, here.y);
+        state.cmdRecruitUsed = (state.cmdRecruitUsed | 0) + 1;
       }
-      spawnGuerrillaRecruit(state, here.x, here.y);
-      state.cmdRecruitUsed = (state.cmdRecruitUsed | 0) + 1;
-      o.recruit = GUER_CD.recruit;
+      o.recruit = guerCd("recruit");
     } else if (kind === "triangle") {
       if (o.strike > 0) {
-        state.floaters.push(G.createFloater(pos.x, pos.y - 18, "airstrike em recarga", "#ff9a3a"));
+        var strikeName = G.upgrades && G.upgrades.cmdSlice ? G.upgrades.cmdSlice("strike").name.toLowerCase() : "airstrike";
+        state.floaters.push(G.createFloater(pos.x, pos.y - 18, strikeName + " em recarga", "#ff9a3a"));
         return false;
       }
-      var r = 62;
-      var dmg = cmd ? Math.round(cmd.def.dmg * C().dmgMul(state) * 4.2) : 52;
-      state.cmdStrikes.push({
-        x: pos.x,
-        y: pos.y,
-        t: 0.55,
-        max: 0.55,
-        r: r,
-        dmg: dmg,
-        fire: true,
-        fireR: r * 0.92,
-        fireDps: 18
-      });
-      o.strike = GUER_CD.strike;
-      state.floaters.push(G.createFloater(pos.x, pos.y - 22, "airstrike", "#ff9a3a"));
+      var cluster = G.upgrades && G.upgrades.cmdKit && G.upgrades.cmdKit("strike") === "b";
+      var dmg = cmd ? Math.round(cmd.def.dmg * C().dmgMul(state) * (cluster ? 1.35 : 4.2)) : (cluster ? 18 : 52);
+      if (cluster) {
+        var spots = [
+          { x: pos.x, y: pos.y, t: 0.28 },
+          { x: pos.x + 30, y: pos.y, t: 0.42 },
+          { x: pos.x - 30, y: pos.y, t: 0.42 },
+          { x: pos.x, y: pos.y + 30, t: 0.56 },
+          { x: pos.x, y: pos.y - 30, t: 0.56 }
+        ];
+        for (var cs = 0; cs < spots.length; cs++) {
+          state.cmdStrikes.push({
+            x: spots[cs].x,
+            y: spots[cs].y,
+            t: spots[cs].t,
+            max: spots[cs].t,
+            r: 36,
+            dmg: dmg,
+            fire: false
+          });
+        }
+        state.floaters.push(G.createFloater(pos.x, pos.y - 22, "cluster", "#ff9a3a"));
+      } else {
+        var r = 62;
+        state.cmdStrikes.push({
+          x: pos.x,
+          y: pos.y,
+          t: 0.55,
+          max: 0.55,
+          r: r,
+          dmg: dmg,
+          fire: true,
+          fireR: r * 0.92,
+          fireDps: 18
+        });
+        state.floaters.push(G.createFloater(pos.x, pos.y - 22, "airstrike", "#ff9a3a"));
+      }
+      o.strike = guerCd("strike");
     } else {
       return false;
     }
@@ -953,6 +1005,71 @@
     }
   }
 
+  function putActiveOnCd(state, id) {
+    var cd = 1;
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.hp > 0 && u.def.active && u.def.active.id === id) {
+        cd = u.def.active.cd;
+        if (G.upgrades && G.upgrades.activeCdMul) cd *= G.upgrades.activeCdMul(u);
+        break;
+      }
+    }
+    for (var j = 0; j < state.units.length; j++) {
+      var other = state.units[j];
+      if (other.hp > 0 && other.def.active && other.def.active.id === id) other.activeCd = cd;
+    }
+  }
+
+  function autoCast(state) {
+    if (!state || state.paused || state.stageOutro || state.defeat) return;
+    if (state.guerrillaMenu || state.forceMenu || state.turretMenu || state.bombLine || state.mineDraw) return;
+    if (state.pointer && state.pointer.altHold && !state.pointer.autoFire) return;
+    var p = aim(state);
+    var list = C().activesOf(state);
+    var fired = 0;
+    var skip = {
+      firemode: 1,
+      carpetbomb: 1,
+      dash: 1,
+      spear_dash: 1,
+      reap: 1,
+      execute_dash: 1,
+      hook: 1
+    };
+    for (var i = 0; i < list.length && fired < 2; i++) {
+      var u = list[i];
+      if (!u || u.activeCd > 0 || u.activeHeld) continue;
+      var id = u.def.active.id;
+      if (skip[id]) continue;
+      var ok = false;
+      if (id === "guerrilla") {
+        var gh = guerrillaHud(state);
+        if ((gh.strike || 0) <= 0) ok = guerrillaFireAt(state, "triangle", p.x, p.y);
+        else if ((gh.crate || 0) <= 0) ok = guerrillaFireAt(state, "square", p.x, p.y);
+      } else if (id === "force_menu") {
+        var mestre = lead(state, "mestre");
+        if (!mestre) continue;
+        var fh = forceHud(state);
+        if ((fh.saber || 0) <= 0) ok = forceFireAt(state, mestre, "saber", p.x, p.y);
+        else if ((fh.push || 0) <= 0) ok = forceFireAt(state, mestre, "push", p.x, p.y);
+        else if ((fh.pull || 0) <= 0) ok = forceFireAt(state, mestre, "pull", p.x, p.y);
+      } else if (id === "deploy") {
+        deployTurret(state, "mg", p);
+        putActiveOnCd(state, "deploy");
+        ok = true;
+      } else if (id === "airstrike") {
+        if (state.bombPending) continue;
+        state.bombPending = { x0: p.x, y0: p.y - 36, x1: p.x, y1: p.y + 36, t: 0.28 };
+        putActiveOnCd(state, "airstrike");
+        ok = true;
+      } else {
+        ok = C().useActive(state, i) !== false;
+      }
+      if (ok) fired++;
+    }
+  }
+
   function selectedUnit(state) {
     var list = C().activesOf(state);
     if (!list.length) return null;
@@ -972,6 +1089,7 @@
     if (!u || !u.def.active) return;
     var id = u.def.active.id;
     var cd = u.def.active.cd;
+    if (G.upgrades && G.upgrades.activeCdMul) cd *= G.upgrades.activeCdMul(u);
     for (var i = 0; i < state.units.length; i++) {
       var other = state.units[i];
       if (other.hp > 0 && other.def.active && other.def.active.id === id) other.activeCd = cd;
@@ -1349,6 +1467,12 @@
         a.fire = Math.max(a.fire, z.fire || 0.4);
         a.dmg = Math.max(a.dmg, z.dmg || 0.4);
         a.speed = Math.max(a.speed, z.speed || 0.4);
+      }
+      if (z.kind === "cmd_aura") {
+        if (z.healPct) a.heal = Math.max(a.heal || 0, z.healPct);
+        if (z.dmg) a.dmg = Math.max(a.dmg, z.dmg);
+        if (z.fire) a.fire = Math.max(a.fire, z.fire);
+        if (z.shield) a.shield = Math.max(a.shield, z.shield);
       }
     }
     state.tacticsAura = a;
@@ -1931,13 +2055,13 @@
                 followId: u.id,
                 x: u.x,
                 y: u.y,
-                r: L.slashR || 72,
+                r: L.slashR || 144,
                 t: 0.4,
                 max: 0.4,
                 color: scol,
                 startAng: L.spinStart
               });
-              spawnSaberSlash(state, u, u.x, u.y, L.spinStart, { r: (L.slashR || 72) * 0.9, t: 0.28, wide: true, silent: true });
+              spawnSaberSlash(state, u, u.x, u.y, L.spinStart, { r: (L.slashR || 144) * 0.9, t: 0.28, wide: true, silent: true });
               if (G.audio && G.audio.saber) G.audio.saber();
               continue;
             }
@@ -1957,29 +2081,23 @@
             if (tgt && tgt.hp > 0) {
               if (L.reapBasic) {
                 scytheSlash(state, u, u.x, u.y, u.def.aoe || 60, 1, null, { ring: true, epic: false });
+              } else if (u.kind === "jedi" || u.kind === "mestre") {
+                var leapAng = Math.atan2(L.ty - L.y0, L.tx - L.x0);
+                saberCleave(state, u, u.x, u.y, leapAng, 112, 1.7, { wide: true, swing: true });
               } else {
                 var dmg = Math.round(u.def.dmg * C().dmgMul(state) * 1.7 * speedDmgMul(state, u.kind));
                 C().hurt(state, tgt, dmg, u.x, u.y, true);
                 G.burst(state, tgt.x, tgt.y, u.def.color || "#ff9a3a", 12, 110);
                 if (u.kind === "phalanx") phalanxBeam(state, u, tgt.x, tgt.y, Math.atan2(L.ty - L.y0, L.tx - L.x0));
                 if (u.kind === "bandeira") grantBannerBuff(state, u);
-                if (u.kind === "jedi" || u.kind === "mestre") {
-                  var leapAng = Math.atan2(L.ty - L.y0, L.tx - L.x0);
-                  var mx = (u.x + tgt.x) * 0.5;
-                  var my = (u.y + tgt.y) * 0.5;
-                  spawnSaberSlash(state, u, mx, my, leapAng, { r: 56, t: 0.3, wide: true });
-                  u.saberSwing = 0.28;
-                  u.saberFace = leapAng;
-                }
               }
             } else if (L.reapBasic) {
               scytheSlash(state, u, u.x, u.y, u.def.aoe || 60, 1, null, { ring: true, epic: false });
             } else if (u.kind === "phalanx") {
               phalanxBeam(state, u, u.x, u.y, Math.atan2(L.ty - L.y0, L.tx - L.x0));
-            } else if ((u.kind === "jedi" || u.kind === "mestre") && L.eid) {
+            } else if ((u.kind === "jedi" || u.kind === "mestre") && L.saberBasic) {
               var missAng = Math.atan2(L.ty - L.y0, L.tx - L.x0);
-              spawnSaberSlash(state, u, u.x, u.y, missAng, { r: 48, t: 0.26 });
-              u.saberFace = missAng;
+              saberCleave(state, u, u.x, u.y, missAng, 96, 1.7, { wide: true, swing: true });
             }
             L.phase = "back";
             L.t = 0;
@@ -1994,7 +2112,7 @@
           var spinK = Math.min(1, L.t / Math.max(0.05, L.dur));
           u.saberSpin = (L.spinStart || 0) + spinK * Math.PI * 1.85;
           L.trailAng = u.saberSpin;
-          var spinR = L.slashR || 72;
+          var spinR = L.slashR || 144;
           var scol = u.def.accent || "#e8b0ff";
           var slashStep = Math.floor(spinK * 4);
           if (slashStep > (L.spinSlash | 0)) {
@@ -2440,21 +2558,22 @@
     var fade = 1 - progress;
     var ang = fx.ang || 0;
     var col = fx.color || "#d8c8ff";
+    var base = fx.r || 54;
     ctx.save();
     ctx.translate(fx.x, fx.y);
     ctx.rotate(ang);
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = fade * 0.55;
     ctx.strokeStyle = col;
-    ctx.lineWidth = 4;
+    ctx.lineWidth = Math.max(4, base * 0.08);
     ctx.beginPath();
-    ctx.arc(0, 0, 18 + progress * 36, -1.1, 1.1);
+    ctx.arc(0, 0, base * (0.33 + progress * 0.67), -1.1, 1.1);
     ctx.stroke();
     ctx.globalAlpha = fade * 0.85;
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(2, base * 0.04);
     ctx.beginPath();
-    ctx.arc(0, 0, 14 + progress * 28, -0.85, 0.85);
+    ctx.arc(0, 0, base * (0.26 + progress * 0.52), -0.85, 0.85);
     ctx.stroke();
     ctx.restore();
   }
@@ -2592,25 +2711,26 @@
     var col = fx.color || "#7affc8";
     var mid = ang - 0.95 * wide + progress * 1.9 * wide;
     var half = 0.7 * wide;
+    var lw = Math.max(8, r * 0.14);
     ctx.save();
     ctx.translate(fx.x, fx.y);
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = fade * 0.55;
     ctx.strokeStyle = col;
-    ctx.lineWidth = 8;
+    ctx.lineWidth = lw;
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.arc(0, 0, r, mid - half, mid + half);
     ctx.stroke();
     ctx.globalAlpha = fade * 0.9;
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = Math.max(3, lw * 0.38);
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.98, mid - half * 0.85, mid + half * 0.85);
     ctx.stroke();
     ctx.globalAlpha = fade * 0.25;
     ctx.strokeStyle = col;
-    ctx.lineWidth = 14;
+    ctx.lineWidth = Math.max(14, lw * 1.75);
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.92, mid - half * 0.6, mid + half * 0.6);
     ctx.stroke();
@@ -2633,7 +2753,7 @@
         }
       }
     }
-    var r = fx.r || 72;
+    var r = fx.r || 144;
     var col = fx.color || "#e8b0ff";
     var sweep = Math.min(Math.PI * 1.6, progress * Math.PI * 1.85);
     ctx.save();
@@ -2641,14 +2761,14 @@
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = fade * 0.28;
     ctx.strokeStyle = col;
-    ctx.lineWidth = 10;
+    ctx.lineWidth = Math.max(10, r * 0.07);
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.9, ang - sweep, ang);
     ctx.stroke();
     ctx.globalAlpha = fade * 0.55;
     ctx.strokeStyle = col;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = Math.max(5, r * 0.035);
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.92, ang - sweep * 0.7, ang);
     ctx.stroke();
@@ -2813,8 +2933,8 @@
       ny: ny,
       px: -ny,
       py: nx,
-      halfW: 68,
-      band: 38,
+      halfW: 136,
+      band: 76,
       speed: 620,
       range: 360,
       traveled: 0,
@@ -2831,6 +2951,7 @@
       x: ox,
       y: oy,
       ang: ang,
+      r: 108,
       t: 0.32,
       max: 0.32,
       color: col
@@ -2846,7 +2967,7 @@
     var aimP = aim(state);
     var cx = aimP.x;
     var cy = aimP.y;
-    var r = 168;
+    var r = 336;
     var col = "#e8b0ff";
     var dmg = Math.round(u.def.dmg * 0.38 * C().dmgMul(state));
     ensure(state);
@@ -2889,6 +3010,36 @@
     G.burst(state, cx, cy, col, 18, 100);
     state.floaters.push(G.createFloater(cx, cy - 18, "puxão", col));
     return true;
+  }
+
+  function saberCleave(state, u, x, y, ang, r, dmgMul, opt) {
+    opt = opt || {};
+    var wide = opt.wide !== false;
+    var half = 0.95 * (wide ? 1.35 : 1);
+    var col = (u.def && u.def.accent) || "#7affc8";
+    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * (dmgMul || 1.7) * speedDmgMul(state, u.kind));
+    spawnSaberSlash(state, u, x, y, ang, { r: r, t: opt.t || 0.32, wide: wide, silent: !!opt.silent });
+    if (opt.swing) {
+      u.saberSwing = 0.28;
+      u.saberFace = ang;
+    }
+    for (var i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (e.hp <= 0 || e.scenery) continue;
+      var dx = e.x - x;
+      var dy = e.y - y;
+      var dist = hypot(dx, dy);
+      var reach = r + (e.def.size || 10);
+      if (dist > reach) continue;
+      var close = dist < (u.def.size || 14) + (e.def.size || 10) + 10;
+      if (!close) {
+        var a = Math.atan2(dy, dx);
+        var da = Math.abs(Math.atan2(Math.sin(a - ang), Math.cos(a - ang)));
+        if (da > half) continue;
+      }
+      C().hurt(state, e, dmg, u.x, u.y, true);
+      G.burst(state, e.x, e.y, col, 8, 70);
+    }
   }
 
   function spawnSaberSlash(state, u, x, y, ang, opt) {
@@ -2935,7 +3086,7 @@
       team: "player",
       kind: "saber",
       life: 4,
-      r: 12,
+      r: 24,
       pierce: true,
       hitsLeft: 99,
       color: col
@@ -2982,7 +3133,7 @@
       ty: land.y,
       saberSpin: true,
       slash: true,
-      slashR: 72,
+      slashR: 144,
       pierce: true,
       hit: {},
       spinStart: approach,
@@ -2992,7 +3143,7 @@
       saberWhirlTele: true,
       x: land.x,
       y: land.y,
-      r: 72,
+      r: 144,
       t: 0.28,
       max: 0.28,
       color: col
@@ -3017,7 +3168,7 @@
     else if (kind === "saber") ok = throwSaber(state, u, { x: x, y: y });
     else if (kind === "spin") ok = saberWhirl(state, u, x, y);
     if (ok) {
-      o[kind] = FORCE_CD[kind] || 10;
+      o[kind] = forceCd(kind);
       u.activeFlash = 0.45;
     }
     return ok;
@@ -3238,8 +3389,8 @@
       }
       if (Math.random() < 0.65) {
         state.particles.push({
-          x: p.x + (Math.random() - 0.5) * 8,
-          y: p.y + (Math.random() - 0.5) * 8,
+          x: p.x + (Math.random() - 0.5) * 16,
+          y: p.y + (Math.random() - 0.5) * 16,
           vx: -p.vx * 0.08 + (Math.random() - 0.5) * 30,
           vy: -p.vy * 0.08 + (Math.random() - 0.5) * 30,
           life: 0.18 + Math.random() * 0.12,
@@ -3259,7 +3410,7 @@
         var asp = 520;
         p.vx = (toTx / td) * asp;
         p.vy = (toTy / td) * asp;
-        if (td < 16 || p.life < 2.2) {
+        if (td < 28 || p.life < 2.2) {
           p.saberPhase = "back";
           p.hitIds = {};
           p.hitsLeft = 99;
@@ -3275,7 +3426,7 @@
         var sp = 560;
         p.vx = (dx / len) * sp;
         p.vy = (dy / len) * sp;
-        if (len < 18) {
+        if (len < 28) {
           if (owner) owner.saberGone = false;
           state.projectiles.splice(i, 1);
           G.burst(state, ox, oy, p.color || "#7affc8", 14, 100);
@@ -4579,7 +4730,7 @@
     if (q && q.def.spawn) {
       q.spawnT = (q.spawnT || q.def.spawn) - dt;
       if (q.spawnT <= 0) {
-        q.spawnT = q.def.spawn / (1 + 0.2 * Math.max(0, nKind(state, "quartel") - 1));
+        q.spawnT = q.def.spawn / (1 + 0.2 * Math.max(0, nKind(state, "quartel") - 1)) / (G.upgrades && G.upgrades.quartelSpawnMul ? G.upgrades.quartelSpawnMul() : 1);
         var elites = 0;
         for (var ei = 0; ei < state.minions.length; ei++) if (state.minions[ei].kind === "elite") elites++;
         if (elites < 4) {
@@ -5466,7 +5617,7 @@
         } else {
           z.x = host.x;
           z.y = host.y;
-          healAlliesPct(state, (z.healPct || 0.02) * dt, z.x, z.y, z.r);
+          if (z.healPct) healAlliesPct(state, z.healPct * dt, z.x, z.y, z.r);
         }
       }
       if (z.kind === "obsmark" && z.followId) {
@@ -5783,7 +5934,7 @@
       if (kind === "bombardeiro" || kind === "droneiro" || kind === "helicoptero" || kind === "recon") continue;
       if (kind === "bandeira") continue;
       if (!firing && kind !== "giratoria" && kind !== "torreta") continue;
-      if (kind === "giratoria" && (state.girSpin || 0) < 2) continue;
+      if (kind === "giratoria" && (state.girSpin || 0) < (G.upgrades && G.upgrades.girSpinNeed ? G.upgrades.girSpinNeed() : 2)) continue;
       if (u.cooldown > 0) continue;
       var turretTgt = null;
       if (kind === "torreta") {
@@ -5792,6 +5943,7 @@
       }
 
       var rate = C().fireMul(state);
+      if (G.upgrades && G.upgrades.quartelFireMul) rate *= G.upgrades.quartelFireMul(u);
       if ((kind === "fuzileiro" || kind === "designado") && state.pointer && state.pointer.fireHold) rate *= 1.65;
       if (kind === "giratoria") rate *= 1.8;
       if ((u.stormT || 0) > 0) rate *= 3.6;
@@ -6006,7 +6158,7 @@
     if (p.ownerKind === "pistoleiro" && hit.team === "enemy" && Math.random() < 0.28) {
       state.drops.push(G.createDrop(hit.x, hit.y, "hp", { value: 14 }));
     }
-    if (p.ownerKind === "medico" && hit.team === "enemy" && (hit.slowT || 0) > 0.05 && Math.random() < 0.28 + 0.16 * runRank(state.run && state.run.fieldMed)) {
+    if (p.ownerKind === "medico" && hit.team === "enemy" && (hit.slowT || 0) > 0.05 && Math.random() < 0.28 + 0.16 * runRank(state.run && state.run.fieldMed) + (G.upgrades && G.upgrades.fieldMedHq ? G.upgrades.fieldMedHq() : 0)) {
       state.drops.push(G.createDrop(hit.x, hit.y, "hp", { value: 14 }));
     }
     if (p.pairId && hit.team === "enemy") {
@@ -6344,15 +6496,16 @@
     if (id === "storm" || id === "coil") return placeCoilTower(state, u);
     if (id === "smoke") {
       var s = aim(state);
-      zone(state, { kind: "smoke", x: s.x, y: s.y, r: Math.round(132 * 1.3), t: 3.2 });
+      zone(state, { kind: "smoke", x: s.x, y: s.y, r: Math.round(132 * 1.3), t: 3.2 * (G.upgrades && G.upgrades.smokeMul ? G.upgrades.smokeMul() : 1) });
       return true;
     }
     if (id === "flare") {
       var p = aim(state);
       var host = C().nearest(state.enemies, p.x, p.y);
       if (host) {
-        host.obsMarkT = 8 + 5 * runRank(state.run && state.run.optics);
-        zone(state, { kind: "obsmark", x: host.x, y: host.y, r: 36, t: 8 + 5 * runRank(state.run && state.run.optics), max: 8 + 5 * runRank(state.run && state.run.optics), followId: host.id });
+        host.obsMarkT = 8 + 5 * runRank(state.run && state.run.optics) + (G.upgrades && G.upgrades.obsMarkBonus ? G.upgrades.obsMarkBonus() : 0);
+        var markT = host.obsMarkT;
+        zone(state, { kind: "obsmark", x: host.x, y: host.y, r: 36, t: markT, max: markT, followId: host.id });
         state.floaters.push(G.createFloater(host.x, host.y - 18, "marcado", "#80e0ff"));
       } else {
         u.activeCd = 0;
@@ -6366,7 +6519,7 @@
     }
     if (id === "bless") {
       var a = aim(state);
-      zone(state, { kind: "anchor", x: a.x, y: a.y, r: Math.round(176 * (1 + 0.2 * runRank(state.run && state.run.fieldMed))), t: 9, shield: 0.35 + 0.1 * runRank(state.run && state.run.fieldMed) });
+      zone(state, { kind: "anchor", x: a.x, y: a.y, r: Math.round(176 * (1 + 0.2 * runRank(state.run && state.run.fieldMed) + (G.upgrades && G.upgrades.fieldMedHq ? G.upgrades.fieldMedHq() : 0))), t: 9, shield: 0.35 + 0.1 * runRank(state.run && state.run.fieldMed) + (G.upgrades && G.upgrades.fieldMedHq ? G.upgrades.fieldMedHq() : 0) });
       return true;
     }
     if (id === "order") {
@@ -6386,11 +6539,13 @@
     if (id === "kit") {
       var sx = state.squad.x;
       var sy = state.squad.y;
-      state.drops.push(G.createDrop(sx, sy - 10, "hp", { value: 16 }));
-      state.drops.push(G.createDrop(sx - 16, sy + 8, "hp", { value: 16 }));
-      state.drops.push(G.createDrop(sx + 16, sy + 8, "hp", { value: 16 }));
-      if (runRank(state.run && state.run.fieldMed) >= 2) {
-        state.drops.push(G.createDrop(sx, sy + 16, "hp", { value: 16 }));
+      var kitMul = G.upgrades && G.upgrades.kitHealMul ? G.upgrades.kitHealMul() : 1;
+      var kitVal = Math.round(16 * kitMul);
+      state.drops.push(G.createDrop(sx, sy - 10, "hp", { value: kitVal }));
+      state.drops.push(G.createDrop(sx - 16, sy + 8, "hp", { value: kitVal }));
+      state.drops.push(G.createDrop(sx + 16, sy + 8, "hp", { value: kitVal }));
+      if (runRank(state.run && state.run.fieldMed) >= 2 || (G.upgrades && G.upgrades.kitExtra && G.upgrades.kitExtra())) {
+        state.drops.push(G.createDrop(sx, sy + 16, "hp", { value: kitVal }));
       }
       for (var ki = 0; ki < state.enemies.length; ki++) {
         var ke = state.enemies[ki];
@@ -6681,10 +6836,23 @@
 
   function drawHpPip(ctx, hp, maxHp, y, color) {
     if (hp == null || !maxHp) return;
+    var frac = Math.max(0, Math.min(1, hp / maxHp));
+    if (G.drawStyledHpBar) {
+      var custom = color && color !== "#7cffb0" && color !== "#6cff7a";
+      G.drawStyledHpBar(ctx, -12, y, 24, 4, frac, {
+        ally: !custom,
+        fill: custom ? color : null,
+        hi: custom ? "#fff4c4" : null,
+        lo: custom ? "#2a1808" : null,
+        frame: "#c9a45a",
+        skew: 2
+      });
+      return;
+    }
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fillRect(-11, y, 22, 3.4);
     ctx.fillStyle = color || "#7cffb0";
-    ctx.fillRect(-11, y, 22 * Math.max(0, Math.min(1, hp / maxHp)), 3.4);
+    ctx.fillRect(-11, y, 22 * frac, 3.4);
   }
 
   function drawTurretSprite(ctx, dp, time) {
@@ -8184,18 +8352,28 @@
         ctx.restore();
       } else if (z.kind === "cmd_aura") {
         var pulse = 0.5 + 0.5 * Math.sin((z.max - z.t) * 5);
-        ctx.fillStyle = "rgba(80, 255, 160, " + (0.08 + pulse * 0.07) + ")";
+        var war = !!(z.dmg || z.fire);
+        ctx.fillStyle = war
+          ? "rgba(255, 180, 60, " + (0.08 + pulse * 0.08) + ")"
+          : "rgba(80, 255, 160, " + (0.08 + pulse * 0.07) + ")";
         circle(ctx, z.x, z.y, z.r);
         ctx.fill();
-        ctx.strokeStyle = "rgba(160, 255, 200, " + (0.4 + pulse * 0.4) + ")";
+        ctx.strokeStyle = war
+          ? "rgba(255, 210, 74, " + (0.45 + pulse * 0.4) + ")"
+          : "rgba(160, 255, 200, " + (0.4 + pulse * 0.4) + ")";
         ctx.lineWidth = 2.2;
         circle(ctx, z.x, z.y, z.r);
         ctx.stroke();
         ctx.save();
         ctx.translate(z.x, z.y);
         groundShadow(ctx, 7, 3, 0.32);
-        isoCyl(ctx, 5, 6, "#7cffb0", "#2a7050");
-        isoCyl(ctx, 2.2, 16, "#e8ffe8", "#7cffb0");
+        if (war) {
+          isoCyl(ctx, 5, 6, "#ffd24a", "#8a5010");
+          isoCyl(ctx, 2.2, 16, "#fff4c8", "#ffd24a");
+        } else {
+          isoCyl(ctx, 5, 6, "#7cffb0", "#2a7050");
+          isoCyl(ctx, 2.2, 16, "#e8ffe8", "#7cffb0");
+        }
         ctx.restore();
       } else if (z.kind === "smoke") {
         drawSmokeVolume(ctx, z, state.time || 0);
@@ -8570,9 +8748,9 @@
       var inner = 26;
       var outer = 86;
       var items = [
-        { id: "square", icon: "✚", name: "Aura", col: "#7cffb0", ready: hud.crate <= 0, a0: -Math.PI / 2 - Math.PI / 3, a1: -Math.PI / 2 + Math.PI / 3 },
-        { id: "triangle", icon: "△", name: "Airstrike", col: "#ff9a3a", ready: hud.strike <= 0, a0: -Math.PI / 2 + Math.PI / 3, a1: -Math.PI / 2 + Math.PI },
-        { id: "circle", icon: "○", name: "Recruta", col: "#9ad4ff", ready: hud.recruit <= 0 && hud.recruitsLeft > 0, a0: -Math.PI / 2 + Math.PI, a1: -Math.PI / 2 + Math.PI * 5 / 3 }
+        { id: "square", icon: hud.up.icon, name: hud.up.name, col: hud.up.col, ready: hud.crate <= 0, a0: -Math.PI / 2 - Math.PI / 3, a1: -Math.PI / 2 + Math.PI / 3 },
+        { id: "triangle", icon: hud.strikeSlice.icon, name: hud.strikeSlice.name, col: hud.strikeSlice.col, ready: hud.strike <= 0, a0: -Math.PI / 2 + Math.PI / 3, a1: -Math.PI / 2 + Math.PI },
+        { id: "circle", icon: hud.recSlice.icon, name: hud.recSlice.name, col: hud.recSlice.col, ready: hud.recruit <= 0 && (!hud.recNeedsCap || hud.recruitsLeft > 0), a0: -Math.PI / 2 + Math.PI, a1: -Math.PI / 2 + Math.PI * 5 / 3 }
       ];
       ctx.save();
       ctx.translate(gm.x, gm.y);
@@ -9062,7 +9240,7 @@
           ctx.globalAlpha = 0.35 + mk * 0.5;
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(fx.x, fx.y, 10 + (1 - mk) * 18, 0, Math.PI * 2);
+          ctx.arc(fx.x, fx.y, 20 + (1 - mk) * 36, 0, Math.PI * 2);
           ctx.stroke();
           ctx.globalAlpha = 1;
           ctx.restore();
@@ -9076,7 +9254,7 @@
           ctx.globalAlpha = 0.25 + tk * 0.45;
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(fx.x, fx.y, fx.r || 145, 0, Math.PI * 2);
+          ctx.arc(fx.x, fx.y, fx.r || 144, 0, Math.PI * 2);
           ctx.stroke();
           ctx.setLineDash([]);
           ctx.restore();
@@ -9179,6 +9357,7 @@
     onAltUp: onAltUp,
     onFireDown: onFireDown,
     onFireUp: onFireUp,
+    autoCast: autoCast,
     speedMul: speedMul,
     blockHurt: blockHurt,
     holdingLeap: holdingLeap,
