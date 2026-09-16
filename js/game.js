@@ -398,6 +398,10 @@
         state.run.intel.arquivo = (state.run.intel.arquivo | 0) + stageArq;
       }
       state.cmdSecondWind = false;
+      for (var rs = 0; rs < state.units.length; rs++) {
+        state.units[rs].hpFiftyUsed = false;
+        state.units[rs].raidCheatUsed = false;
+      }
       if (customBoss) {
         state.spawnQueue = [];
         queueSpawn(state, customBoss);

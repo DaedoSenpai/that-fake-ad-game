@@ -14,7 +14,7 @@
   }
 
   function unitHittable(u) {
-    if (!u || u.hp <= 0 || u.stowed || u.stolen) return false;
+    if (!u || u.hp <= 0 || u.stowed || u.stolen || u.raidGhost) return false;
     if (u.fallen || u.phased) return false;
     if (u.scenery && u.immortal) return false;
     return true;
@@ -84,10 +84,19 @@
       var hp = 0;
       var max = 0;
       for (var i = 0; i < state.units.length; i++) {
-        hp += state.units[i].hp;
-        max += state.units[i].maxHp;
+        var bu = state.units[i];
+        if (bu.raidGhost) {
+          max += bu.maxHp;
+          continue;
+        }
+        hp += bu.hp;
+        max += bu.maxHp;
       }
-      if (max > 0) mul *= 1 + (1 - hp / max) * (runRank(state.run.berserk) >= 2 ? 1.15 : 0.7);
+      if (max > 0) {
+        var frac = hp / max;
+        if (runRank(state.run.berserk) >= 2) mul *= 1 + (1 - frac) * 1.15;
+        else mul *= 1 + Math.min(1, (1 - frac) / 0.7) * 0.7;
+      }
     }
     if (state.debugFight && state.debugOpts) {
       var dmgScale = state.debugOpts.dmgMul | 0;
@@ -183,6 +192,9 @@
         if (a.type === "hive_cell" || b.type === "hive_cell") continue;
         if (a.type === "hive_cocoon" || b.type === "hive_cocoon") continue;
         if (a.type === "hive_flower" || b.type === "hive_flower") continue;
+        if (a.type === "fogueira" || b.type === "fogueira") continue;
+        if (a.glinderCoal || b.glinderCoal) continue;
+        if (hiveIsFormBee(a) || hiveIsFormBee(b)) continue;
         if (a.fallen || b.fallen) continue;
         if (a.phased || b.phased) continue;
         if (a.kingAct === "charge" || b.kingAct === "charge") continue;
@@ -212,7 +224,7 @@
           b.y += ny * push;
         }
       }
-      if (clampEach && a.wormAct !== "dive" && a.vultoAct !== "strafe" && a.princessAct !== "thrust" && a.princessAct !== "hellish" && !kaskaAirborne(a)) G.clampPlay(a, state);
+      if (clampEach && a.wormAct !== "dive" && a.vultoAct !== "strafe" && a.princessAct !== "thrust" && a.princessAct !== "hellish" && !kaskaAirborne(a) && !hiveIsFormBee(a) && a.type !== "fogueira") G.clampPlay(a, state);
     }
   }
 
@@ -231,8 +243,12 @@
 
   function lingerHazardKind(z) {
     if (!z || z.t <= 0 || z.retiring || z.hurtPlayer) return false;
+    if (z.kind === "cmd_aura" || z.kind === "trail" || z.kind === "anchor" || z.kind === "smoke") return false;
     if (z.kind === "fire" || z.kind === "napalm") return true;
     if (z.kind === "blackhole" && z.t > 0.78) return true;
+    if (z.kind === "crack" || z.kind === "lure") return true;
+    if (z.kind === "heal" && z.toxin) return true;
+    if (z.dmg && !z.hurtPlayer) return true;
     return false;
   }
 
@@ -312,7 +328,7 @@
       unit.flash = 0.06;
       return;
     }
-    if (unit.stowed) return;
+    if (unit.stowed || unit.raidGhost) return;
     if (fromPlayer && unit.stolen) return;
     var trueDmg = opts && opts.trueDmg;
     if (unit.team === "player") {
@@ -332,6 +348,10 @@
             return;
           }
         }
+        if ((unit.raidIFrame || 0) > 0) {
+          unit.flash = 0.08;
+          return;
+        }
         if (unit.commander && (unit.cmdIFrame || 0) > 0) {
           unit.flash = 0.08;
           return;
@@ -346,6 +366,16 @@
             state.shake = Math.max(state.shake || 0, 4);
             G.burst(state, unit.x, unit.y, "#ffe08a", 22, 140);
             G.burst(state, unit.x, unit.y, "#fff4c4", 12, 70);
+            return;
+          }
+        }
+        if (state.run.hpFifty && !unit.hpFiftyUsed) {
+          var wouldFifty = unit.hp - amount;
+          if (unit.hp > unit.maxHp * 0.5 && wouldFifty <= unit.maxHp * 0.5) {
+            unit.hpFiftyUsed = true;
+            unit.hp = unit.maxHp;
+            unit.flash = 0.28;
+            G.burst(state, unit.x, unit.y, "#7cffb0", 16, 90);
             return;
           }
         }
@@ -386,6 +416,9 @@
         amount *= 0.58;
       }
       if (unit.kingStun || unit.hiveVuln) amount *= 1.35;
+      if (fromPlayer && !trueDmg && runRank(state.run.freeze) >= 2 && ((unit.slowT || 0) > 0.05 || (unit.freezeT || 0) > 0)) {
+        amount *= 1.1;
+      }
     }
     unit.hp -= amount;
     if (unit.team === "enemy" && unit.hp <= 0 && G.invasion && !unit.p2 && G.invasion.barCount(unit) >= 2) {
@@ -407,14 +440,15 @@
         applyKnock(state, unit, srcX, srcY, runRank(state.run.knockback) >= 2 ? 22 : 10);
       }
       if (runRank(state.run.lifesteal)) {
-        var ally = nearest(state.units, unit.x, unit.y);
-        if (ally) ally.hp = Math.min(ally.maxHp, ally.hp + amount * (runRank(state.run.lifesteal) >= 2 ? 0.2 : 0.12));
+        var ally = mostHurtAlly(state);
+        if (ally) ally.hp = Math.min(ally.maxHp, ally.hp + amount * (runRank(state.run.lifesteal) >= 2 ? 0.2 : 0.1));
       }
     }
     if (unit.hp > 0 && unit.team === "enemy" && G.invasion && G.invasion.enterP2) {
       G.invasion.enterP2(state, unit);
     }
     if (unit.hp <= 0) {
+      if (unit.team === "player" && startRaidGhost(state, unit)) return;
       if (unit.team === "enemy" && unit.type === "chefe_arklan" && (unit.p2 || unit.invP2) && !unit.arklanBroken) {
         if (G.arklanP2 && G.arklanP2.onBroken) G.arklanP2.onBroken(state, unit);
         return;
@@ -429,6 +463,76 @@
     }
   }
 
+  function mostHurtAlly(state) {
+    var best = null;
+    var worst = 2;
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.hp <= 0 || u.raidGhost || u.stowed) continue;
+      var frac = u.maxHp > 0 ? u.hp / u.maxHp : 1;
+      if (frac < worst) {
+        worst = frac;
+        best = u;
+      }
+    }
+    return best;
+  }
+
+  function startRaidGhost(state, unit) {
+    if (!unit || unit.commander || unit.raidCheatUsed || unit.raidGhost) return false;
+    if (runRank(state.run && state.run.raid) < 1) return false;
+    if (!(G.upgrades && G.upgrades.raidRole && G.upgrades.raidRole(unit))) return false;
+    unit.hp = Math.max(1, unit.hp);
+    unit.raidCheatUsed = true;
+    unit.raidGhost = true;
+    unit.raidGhostT = runRank(state.run.raid) >= 2 ? 2.5 : 5;
+    unit.flash = 0.2;
+    G.burst(state, unit.x, unit.y, "#c8b0ff", 18, 90);
+    state.floaters.push(G.createFloater(unit.x, unit.y - 18, "some", "#c8b0ff"));
+    return true;
+  }
+
+  function saberDeflectChance(u) {
+    if (!u || u.hp <= 0 || u.raidGhost || u.stowed) return 0;
+    if (u.kind === "mestre") return 1;
+    if (u.kind === "jedi") return 0.5;
+    return 0;
+  }
+
+  function trySaberDeflect(state, p, hit) {
+    var chance = saberDeflectChance(hit);
+    if (chance <= 0 || !p || p.team !== "enemy") return false;
+    if (Math.random() >= chance) return false;
+    var sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy) || 280;
+    var tgt = nearest(state.enemies, hit.x, hit.y);
+    if (tgt) {
+      var dx = tgt.x - p.x;
+      var dy = tgt.y - p.y;
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      p.vx = (dx / len) * sp;
+      p.vy = (dy / len) * sp;
+    } else {
+      p.vx = -p.vx;
+      p.vy = -p.vy;
+    }
+    p.team = "player";
+    p.hitIds = {};
+    p.hitIds[hit.id] = 1;
+    p.homing = false;
+    p.homeId = 0;
+    p.hitsLeft = Math.max(p.hitsLeft || 1, 1);
+    p.life = Math.max(p.life || 0, 0.75);
+    p.x += p.vx * 0.03;
+    p.y += p.vy * 0.03;
+    var accent = (hit.def && hit.def.accent) || "#7affc8";
+    p.color = accent;
+    hit.flash = Math.max(hit.flash || 0, 0.12);
+    G.burst(state, p.x, p.y, accent, 10, 70);
+    G.burst(state, p.x, p.y, "#fff4d0", 5, 36);
+    if (G.audio && G.audio.hit) G.audio.hit();
+    return true;
+  }
+
   function explode(state, x, y, radius, dmg, team, extraColor) {
     var col = extraColor || (team === "player" ? "#ffd24a" : "#ff5a32");
     G.burst(state, x, y, col, 28, 210);
@@ -439,7 +543,7 @@
     var list = team === "player" ? state.enemies : state.units;
     for (var i = 0; i < list.length; i++) {
       var t = list[i];
-      if (t.hp <= 0 || t.stowed || t.stolen) continue;
+      if (t.hp <= 0 || t.stowed || t.stolen || t.raidGhost) continue;
       if (team === "enemy" && G.tactics && G.tactics.shieldProtects && G.tactics.shieldProtects(state, x, y, t.x, t.y)) continue;
       var dx = t.x - x;
       var dy = t.y - y;
@@ -513,7 +617,7 @@
       if (obs && Math.random() < 0.55) {
         state.drops.push(G.createDrop(e.x - 10, e.y + 6, "coin", { value: Math.max(1, Math.round(2 * goldMul(state))) }));
       }
-      var extra = Math.random() < (G.save.data.perm.luck | 0) * 0.08 + (state.run.luck || 0) ? 1 : 0;
+      var extra = Math.random() < (G.save.data.perm.luck | 0) * 0.08 ? 1 : 0;
       var dropKind = extra ? "fuzileiro" : "recruta";
       var nodeChance = (state.run.dropChance + ((state.aura && state.aura.drop) || 0) + (G.save.data.perm.mobilidade | 0) * 0.03) * (obs ? 2.4 : 1);
       if (G.upgrades && G.upgrades.dropChanceBonus) nodeChance += G.upgrades.dropChanceBonus();
@@ -533,8 +637,8 @@
     }
     if (runRank(state.run.explode) && !skipLoot) {
       G.audio.explosion();
-      var er = 42 + boomAdd(state) + (runRank(state.run.explode) >= 2 ? 22 : 0);
-      explode(state, e.x, e.y, er, Math.round((18 + boomAdd(state) + (runRank(state.run.explode) >= 2 ? 10 : 0)) * dmgMul(state)), "player");
+      var er = 42 + (runRank(state.run.explode) >= 2 ? 22 : 0);
+      explode(state, e.x, e.y, er, Math.round((18 + (runRank(state.run.explode) >= 2 ? 10 : 0)) * dmgMul(state)), "player");
       if (runRank(state.run.freeze)) {
         for (var fz = 0; fz < state.enemies.length; fz++) {
           var fe = state.enemies[fz];
@@ -677,7 +781,7 @@
         life: kind === "missile" ? 2.2 : 1.35,
         r: r,
         ricochet: runRank(state.run.ricochet) > 0,
-        ricoLeft: runRank(state.run.ricochet),
+        ricoLeft: runRank(state.run.ricochet) >= 2 ? 3 : runRank(state.run.ricochet),
         pierce: runRank(state.run.pierce) > 0 || kind === "laser",
         homing: kind === "missile",
         hitsLeft: runRank(state.run.pierce) > 0 || kind === "laser" ? (runRank(state.run.pierce) >= 2 ? 7 : 4) : 1,
@@ -3732,16 +3836,20 @@
     return null;
   }
 
+  function glinderCoalDist(state, coal) {
+    var d = Math.hypot(state.squad.x - coal.x, state.squad.y - coal.y);
+    var cmd = commanderOf(state);
+    if (cmd) d = Math.min(d, Math.hypot(cmd.x - coal.x, cmd.y - coal.y));
+    return d;
+  }
+
   function tickGlinderRub(state, dt) {
     state.glinderRub = null;
     if (!state.glinderNight) return;
     var coal = glinderCoalOf(state);
     if (!coal) return;
-    var cmd = commanderOf(state);
-    var px = cmd ? cmd.x : state.squad.x;
-    var py = cmd ? cmd.y : state.squad.y;
-    var d = Math.hypot(px - coal.x, py - coal.y);
-    var near = d < 54;
+    var d = glinderCoalDist(state, coal);
+    var near = d < 62;
     coal.rubPct = Math.max(0, Math.min(100, coal.rubPct || 0));
     coal.rubNear = near;
     state.glinderRub = {
@@ -3749,7 +3857,7 @@
       y: coal.y,
       d: d,
       near: near,
-      close: d < 78,
+      close: d < 88,
       progress: (coal.rubPct || 0) / 100,
       pct: coal.rubPct || 0
     };
@@ -3760,10 +3868,7 @@
     if (state.paused || (G.invasion && G.invasion.cinematic(state))) return false;
     var coal = glinderCoalOf(state);
     if (!coal) return false;
-    var cmd = commanderOf(state);
-    var px = cmd ? cmd.x : state.squad.x;
-    var py = cmd ? cmd.y : state.squad.y;
-    if (Math.hypot(px - coal.x, py - coal.y) > 54) return false;
+    if (glinderCoalDist(state, coal) > 62) return false;
     coal.rubPct = Math.min(100, (coal.rubPct || 0) + 10);
     coal.rub = coal.rubPct / 100;
     G.burst(state, coal.x, coal.y - 6, "#ff9a2a", 6, 40);
@@ -5861,6 +5966,26 @@
     return best;
   }
 
+  function hiveIsFormBee(e) {
+    return !!(e && (e.hiveCmd === "beewall" || e.hiveCmd === "beespear"));
+  }
+
+  function hiveKillFormBee(bee) {
+    if (!bee || bee.hp <= 0) return;
+    bee.hp = 0;
+    bee.noDrop = true;
+    bee.immortal = false;
+    bee.scenery = false;
+    bee.hiveCmd = "";
+  }
+
+  function hiveBeeHitsBorder(state, bee) {
+    if (!bee) return true;
+    var b = G.playfield(state);
+    var m = 6;
+    return bee.x <= b.x0 + m || bee.x >= b.x1 - m || bee.y <= b.y0 + m || bee.y >= b.y1 - m;
+  }
+
   function hiveClearBeeForm(state, hostId, cmd) {
     var i, bee;
     for (i = 0; i < state.enemies.length; i++) {
@@ -5869,8 +5994,7 @@
       if (bee.hiveCmd !== "beewall" && bee.hiveCmd !== "beespear") continue;
       if (cmd && bee.hiveCmd !== cmd) continue;
       if (hostId && bee.hiveHost !== hostId) continue;
-      bee.hp = 0;
-      bee.noDrop = true;
+      hiveKillFormBee(bee);
     }
   }
 
@@ -6205,6 +6329,7 @@
       var span = 82;
       var bi, bee, t, n, along, thru, push;
       n = 9;
+      var wallAlive = 0;
       for (bi = 0; bi < state.enemies.length; bi++) {
         bee = state.enemies[bi];
         if (bee.hp <= 0 || bee.hiveCmd !== "beewall" || bee.hiveHost !== e.id) continue;
@@ -6214,6 +6339,11 @@
         bee.y = e.wallY + (e.wallPy || 0) * t * span;
         bee.rot = Math.atan2(e.wallNy || 0, e.wallNx || 1);
         bee.vx = bee.vy = 0;
+        if (hiveBeeHitsBorder(state, bee)) {
+          hiveKillFormBee(bee);
+          continue;
+        }
+        wallAlive++;
       }
       along = (state.squad.x - e.wallX) * (e.wallPx || 0) + (state.squad.y - e.wallY) * (e.wallPy || 0);
       thru = (state.squad.x - e.wallX) * (e.wallNx || 0) + (state.squad.y - e.wallY) * (e.wallNy || 0);
@@ -6224,7 +6354,7 @@
         G.clampPlay(state.squad, state);
       }
       if (target) e.rot = Math.atan2(target.y - e.y, target.x - e.x);
-      if (e.wallT <= 0 || e.wallX < b.x0 - 28 || e.wallX > b.x1 + 28 || e.wallY < b.y0 - 28 || e.wallY > b.y1 + 28) {
+      if (e.wallT <= 0 || wallAlive <= 0 || e.wallX < b.x0 - 28 || e.wallX > b.x1 + 28 || e.wallY < b.y0 - 28 || e.wallY > b.y1 + 28) {
         hiveClearBeeWall(state, e.id);
         e.queenAct = "";
         e.skillT = 0.25;
@@ -6257,11 +6387,17 @@
         e.spearX = (e.spearX || e.x) + (e.spearNx || 0) * sp * dt;
         e.spearY = (e.spearY || e.y) + (e.spearNy || 0) * sp * dt;
       }
-      var si, sbee, hitR, knock;
+      var si, sbee, hitR, knock, spearAlive = 0;
+      if ((e.spearWind || 0) <= 0) e.spearT = (e.spearT || 0) - dt;
       for (si = 0; si < state.enemies.length; si++) {
         sbee = state.enemies[si];
         if (sbee.hp <= 0 || sbee.hiveCmd !== "beespear" || sbee.hiveHost !== e.id) continue;
         hivePlaceBeeSpear(e, sbee);
+        if (hiveBeeHitsBorder(state, sbee) && (e.spearWind || 0) <= 0) {
+          hiveKillFormBee(sbee);
+          continue;
+        }
+        spearAlive++;
         if ((e.spearWind || 0) > 0) continue;
         hitR = (sbee.def.size || 10) + (state.squad.def && state.squad.def.size ? state.squad.def.size : 12) + 10;
         if (Math.hypot(state.squad.x - sbee.x, state.squad.y - sbee.y) < hitR) {
@@ -6277,7 +6413,7 @@
         }
       }
       if ((e.spearHitCd || 0) > 0) e.spearHitCd -= dt;
-      if ((e.spearWind || 0) <= 0 && (e.spearX < b.x0 - 36 || e.spearX > b.x1 + 36 || e.spearY < b.y0 - 36 || e.spearY > b.y1 + 36)) {
+      if ((e.spearWind || 0) <= 0 && (spearAlive <= 0 || (e.spearT || 0) <= 0 || e.spearX < b.x0 - 36 || e.spearX > b.x1 + 36 || e.spearY < b.y0 - 36 || e.spearY > b.y1 + 36)) {
         hiveClearBeeForm(state, e.id, "beespear");
         e.queenAct = "";
         e.skillT = e.enrage ? 1.05 : 1.65;
@@ -6823,8 +6959,11 @@
     e.zDraw = 5 + Math.sin((e.phase || 0) * 9) * 2;
     if (cmd === "beewall") {
       if (!host || host.hp <= 0 || host.queenAct !== "beewall") {
-        e.hp = 0;
-        e.noDrop = true;
+        hiveKillFormBee(e);
+        return;
+      }
+      if (hiveBeeHitsBorder(state, e)) {
+        hiveKillFormBee(e);
         return;
       }
       e.immortal = true;
@@ -6834,8 +6973,11 @@
     }
     if (cmd === "beespear") {
       if (!host || host.hp <= 0 || host.queenAct !== "beespear") {
-        e.hp = 0;
-        e.noDrop = true;
+        hiveKillFormBee(e);
+        return;
+      }
+      if (hiveBeeHitsBorder(state, e) && !(host.spearWind > 0)) {
+        hiveKillFormBee(e);
         return;
       }
       e.immortal = true;
@@ -8238,12 +8380,13 @@
     return true;
   }
 
-  function squadSpeedMul(state) {
+  function squadSpeedMul(state, opts) {
+    var ignoreSlow = !!(opts && opts.ignoreSlow);
     var speedMul = state.run.speed * (1 + (G.save.data.perm.speed | 0) * 0.06) * (1 + (G.save.data.perm.mobilidade | 0) * 0.08) * (state.run.tempSpeed || 1);
     if (state.aura) speedMul *= 1 + state.aura.speed;
-    if (state.aura && state.aura.slowSquad) speedMul *= Math.max(0.55, 1 - state.aura.slowSquad);
-    if (G.tactics && G.tactics.speedMul) speedMul *= G.tactics.speedMul(state);
-    if ((state.honeyT || 0) > 0) speedMul *= 0.42;
+    if (!ignoreSlow && state.aura && state.aura.slowSquad) speedMul *= Math.max(0.55, 1 - state.aura.slowSquad);
+    if (G.tactics && G.tactics.speedMul) speedMul *= G.tactics.speedMul(state, opts);
+    if (!ignoreSlow && (state.honeyT || 0) > 0) speedMul *= 0.42;
     return speedMul;
   }
 
@@ -8339,10 +8482,13 @@
       state.dashSlideT = 0;
       return;
     }
-    var speedMul = squadSpeedMul(state);
-    if ((state.honeyPin || 0) > 0) {
+    var dashing = (state.dashT || 0) > 0;
+    var speedMul = squadSpeedMul(state, dashing ? { ignoreSlow: true } : null);
+    if (!dashing && (state.honeyPin || 0) > 0) {
       state.honeyPin = Math.max(0, state.honeyPin - dt);
       speedMul *= 0.12;
+    } else if ((state.honeyPin || 0) > 0) {
+      state.honeyPin = Math.max(0, state.honeyPin - dt);
     }
     if (squadPinned(state)) {
       state.dashT = 0;
@@ -8432,10 +8578,24 @@
     var soldiers = [];
     var cmd = null;
     for (var i = 0; i < state.units.length; i++) {
-      if (state.units[i].hp <= 0) continue;
-      alive.push(state.units[i]);
-      if (state.units[i].commander) cmd = state.units[i];
-      else soldiers.push(state.units[i]);
+      var ru = state.units[i];
+      if (ru.raidGhost) {
+        ru.raidGhostT = (ru.raidGhostT || 0) - dt;
+        if (ru.raidGhostT <= 0) {
+          ru.raidGhost = false;
+          ru.hp = ru.maxHp;
+          ru.flash = 0.35;
+          if (runRank(state.run.raid) >= 2) ru.raidIFrame = 5;
+          G.burst(state, ru.x, ru.y, "#c8b0ff", 16, 100);
+          state.floaters.push(G.createFloater(ru.x, ru.y - 18, "voltou", "#c8b0ff"));
+        }
+        continue;
+      }
+      if ((ru.raidIFrame || 0) > 0) ru.raidIFrame = Math.max(0, ru.raidIFrame - dt);
+      if (ru.hp <= 0) continue;
+      alive.push(ru);
+      if (ru.commander) cmd = ru;
+      else soldiers.push(ru);
     }
     var speedMul = state.run.speed * (1 + (G.save.data.perm.speed | 0) * 0.06) * (1 + (G.save.data.perm.mobilidade | 0) * 0.08) * (state.run.tempSpeed || 1);
     if (state.aura) speedMul *= 1 + state.aura.speed;
@@ -9412,7 +9572,7 @@
         e.fuseCd = (e.fuseCd || 0) - dt;
       }
 
-      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && kind !== "hive_cell" && kind !== "hive_cocoon" && kind !== "hive_pillar" && kind !== "hive_flower" && e.vultoAct !== "strafe" && e.vultoAct !== "maze" && e.vultoAct !== "burn" && e.wormAct !== "dive" && e.kingAct !== "charge" && e.princessAct !== "thrust" && e.princessAct !== "hellish" && !e.buried && !kaskaAirborne(e)) G.clampPlay(e, state);
+      if (!e.attached && !(e.ricoLeft > 0) && kind !== "orbit_shield" && kind !== "pin_spike" && kind !== "hive_cell" && kind !== "hive_cocoon" && kind !== "hive_pillar" && kind !== "hive_flower" && kind !== "bonfire" && !hiveIsFormBee(e) && e.vultoAct !== "strafe" && e.vultoAct !== "maze" && e.vultoAct !== "burn" && e.wormAct !== "dive" && e.kingAct !== "charge" && e.princessAct !== "thrust" && e.princessAct !== "hellish" && !e.buried && !kaskaAirborne(e)) G.clampPlay(e, state);
     }
     separateBodies(state.enemies, state, true);
   }
@@ -9498,6 +9658,7 @@
         }
       }
       if (!hit) continue;
+      if (p.team === "enemy" && trySaberDeflect(state, p, hit)) continue;
       if (hit.immortal && hit.type === "chefe_beeking" && hit.kingAct === "charge" && p.team === "player") {
         G.burst(state, p.x, p.y, "#ffe08a", 6, 36);
         state.projectiles.splice(i, 1);
@@ -9729,7 +9890,8 @@
   }
 
   function pickupRadius(state) {
-    return state.vacuumLoot ? 45 : 35;
+    var mul = (state.run && state.run.magnetMul) || 1;
+    return (state.vacuumLoot ? 45 : 35) * mul;
   }
 
   function applyDrop(state, d) {
@@ -9751,6 +9913,7 @@
 
   function updateDrops(state, dt) {
     var magnet = 70 + state.run.magnet + (G.save.data.perm.magnet | 0) * 18 + (G.save.data.perm.mobilidade | 0) * 22 + ((state.aura && state.aura.magnet) || 0);
+    magnet *= (state.run.magnetMul || 1);
     for (var i = state.drops.length - 1; i >= 0; i--) {
       var d = state.drops[i];
       d.t += dt;
@@ -9766,7 +9929,7 @@
       var dx = state.squad.x - d.x;
       var dy = state.squad.y - d.y;
       var dist2 = dx * dx + dy * dy;
-      var mag = d.kind === "hp" ? 40 : magnet;
+      var mag = (d.kind === "hp" ? 40 : magnet) * (d.kind === "hp" ? (state.run.magnetMul || 1) : 1);
       if (state.vacuumLoot) mag = 8000;
       var banner = G.tactics && G.tactics.inBanner && G.tactics.inBanner(state, d.x, d.y);
       if (banner) dist2 = 0;

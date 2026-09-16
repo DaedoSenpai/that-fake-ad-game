@@ -4,7 +4,7 @@
     var bestD = 22;
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.hp <= 0 || u.stowed) continue;
+      if (u.hp <= 0 || u.stowed || u.raidGhost) continue;
       var d = Math.hypot(u.x - x, u.y - y);
       var hit = Math.max(16, u.def.size + 8);
       if (d < hit && d < bestD + u.def.size) {
@@ -20,7 +20,7 @@
     var bestD = 28;
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.hp <= 0 || u.id === held.id || u.stowed) continue;
+      if (u.hp <= 0 || u.id === held.id || u.stowed || u.raidGhost) continue;
       if (u.kind !== held.kind) continue;
       var d = Math.hypot(u.x - x, u.y - y);
       if (d < Math.max(22, u.def.size + 10) && d < bestD) {
@@ -98,10 +98,11 @@
     return out;
   }
 
-  function addArquivo(state, x, y) {
+  function addArquivo(state, x, y, n) {
+    n = Math.max(1, n | 0);
     var intel = ensureIntel(state.run);
-    intel.arquivo += 1;
-    state.floaters.push(G.createFloater(x, y - 8, "Arquivo de guerra", "#ffd24a"));
+    intel.arquivo += n;
+    state.floaters.push(G.createFloater(x, y - 8, n > 1 ? ("+" + n + " arquivos") : "Arquivo de guerra", "#ffd24a"));
   }
 
   G.merge = {
@@ -110,8 +111,8 @@
     enemyAt: enemyAt,
     ensureIntel: ensureIntel,
 
-    addArquivo: function (state, x, y) {
-      addArquivo(state, x, y);
+    addArquivo: function (state, x, y, n) {
+      addArquivo(state, x, y, n);
     },
 
     intelLine: function (run) {
@@ -239,6 +240,7 @@
       if (pending.b) pending.b.hp = 0;
       var nu = G.createPlayerUnit(pending.x, pending.y, pick, state.run, G.save.data.perm);
       state.units.push(nu);
+      if (G.upgrades && G.upgrades.maybeRecruitRefund) G.upgrades.maybeRecruitRefund(state, nu);
       G.audio.merge();
       G.burst(state, pending.x, pending.y, "#ffd24a", 18, 120);
       var tag = pending.fromBank ? "PROMOÇÃO! " : "MERGE! ";

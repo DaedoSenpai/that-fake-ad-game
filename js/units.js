@@ -36,7 +36,7 @@
       kind: "jedi", name: "Jedi", short: "JED", gen: 3,
       hp: 165, dmg: 36, range: 115, fire: 1.05, speed: 168, size: 14,
       color: "#8a6a3a", accent: "#7affc8", projectile: "none", role: "jedi",
-      blurb: "Melee com sabre de energia. Salta no inimigo e corta em arco: quem estiver na lâmina toma o golpe.",
+      blurb: "Melee com sabre de energia. Salta no inimigo e corta em arco: quem estiver na lâmina toma o golpe. 50% de chance de defletir projéteis.",
       active: { id: "saber_throw", name: "Sabre bumerangue", cd: 11, desc: "Arremessa o sabre grande até a mira. Corta no caminho de ida e na volta." },
       merge: ["mestre"]
     }),
@@ -45,7 +45,7 @@
       hp: 230, dmg: 48, range: 130, fire: 1.15, speed: 172, size: 15,
       color: "#5a3a78", accent: "#e8b0ff", projectile: "none", role: "jedi",
       unique: true,
-      blurb: "Versão superior do Jedi. O corte básico é em arco. A ativa abre o arsenal da Força num menu radial: empurrão, puxão, sabre e giro — tudo maior.",
+      blurb: "Versão superior do Jedi. O corte básico é em arco. Sempre deflete projéteis. A ativa abre o arsenal da Força num menu radial: empurrão, puxão, sabre e giro — tudo maior.",
       active: { id: "force_menu", name: "Arsenal da Força", cd: 0, desc: "Segura o direito: menu radial. Cada poder tem recarga própria." },
       merge: []
     }),
@@ -716,9 +716,22 @@
   Object.keys(UNIT_PASSIVES).forEach(function (k) {
     if (G.UNIT_DEFS[k]) G.UNIT_DEFS[k].passive = UNIT_PASSIVES[k];
   });
+  if (G.UNIT_DEFS.jedi) {
+    G.UNIT_DEFS.jedi.passives = [
+      UNIT_PASSIVES.jedi,
+      { id: "deflect", name: "Deflexão", desc: "50% de chance de defletir qualquer projétil que encoste nele, negando o dano." }
+    ];
+  }
+  if (G.UNIT_DEFS.mestre) {
+    G.UNIT_DEFS.mestre.passives = [
+      UNIT_PASSIVES.mestre,
+      { id: "deflect", name: "Deflexão", desc: "Sempre deflete qualquer projétil que encoste nele, negando o dano." }
+    ];
+  }
 
   G.unitPassives = function (def) {
-    return def.passive ? [def.passive] : [];
+    if (def && def.passives && def.passives.length) return def.passives;
+    return def && def.passive ? [def.passive] : [];
   };
 
   G.unitActives = function (def) {

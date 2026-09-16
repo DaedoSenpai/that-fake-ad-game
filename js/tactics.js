@@ -9,7 +9,7 @@
 
   function has(state, kind) {
     for (var i = 0; i < state.units.length; i++) {
-      if (state.units[i].hp > 0 && state.units[i].kind === kind) return true;
+      if (state.units[i].hp > 0 && !state.units[i].raidGhost && state.units[i].kind === kind) return true;
     }
     return false;
   }
@@ -18,7 +18,7 @@
     var best = null;
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.hp <= 0 || u.kind !== kind) continue;
+      if (u.hp <= 0 || u.raidGhost || u.kind !== kind) continue;
       if (!best || u.id < best.id) best = u;
     }
     return best;
@@ -26,7 +26,7 @@
 
   function nKind(state, kind) {
     var n = 0;
-    for (var i = 0; i < state.units.length; i++) if (state.units[i].hp > 0 && state.units[i].kind === kind) n++;
+    for (var i = 0; i < state.units.length; i++) if (state.units[i].hp > 0 && !state.units[i].raidGhost && state.units[i].kind === kind) n++;
     return n;
   }
 
@@ -468,7 +468,7 @@
     p.homeCursor = !!extra.homeCursor;
     if (state.run && runRank(state.run.ricochet)) {
       p.ricochet = true;
-      p.ricoLeft = runRank(state.run.ricochet);
+      p.ricoLeft = runRank(state.run.ricochet) >= 2 ? 3 : runRank(state.run.ricochet);
     }
     if (state.run && runRank(state.run.pierce) && !p.pierce) {
       p.pierce = true;
@@ -724,6 +724,7 @@
     var pos = guerrillaClamp(state, x, y);
     var nu = G.createPlayerUnit(pos.x, pos.y, "recruta", state.run, G.save.data.perm);
     state.units.push(nu);
+    if (G.upgrades && G.upgrades.maybeRecruitRefund) G.upgrades.maybeRecruitRefund(state, nu);
     if (G.codex) G.codex.unlockUnit("recruta");
     state.floaters.push(G.createFloater(pos.x, pos.y - 16, "recruta", "#9ad4ff"));
     G.burst(state, pos.x, pos.y, "#9ad4ff", 12, 80);
@@ -1416,14 +1417,15 @@
     G.audio.explosion();
   }
 
-  function speedMul(state) {
+  function speedMul(state, opts) {
+    var ignoreSlow = !!(opts && opts.ignoreSlow);
     var mul = 1;
-    if ((state.spearRamT || 0) <= 0) {
+    if ((state.spearRamT || 0) <= 0 && !ignoreSlow) {
       if ((has(state, "fuzileiro") || has(state, "designado")) && state.pointer && state.pointer.fireHold) mul *= 0.7;
       if (has(state, "giratoria") && (state.girSpin || 0) > 1.2) mul *= 0.42;
     }
     if (onTrail(state)) mul *= 2;
-    if ((state.honeyT || 0) > 0) mul *= 0.42;
+    if (!ignoreSlow && (state.honeyT || 0) > 0) mul *= 0.42;
     var onCrack = false;
     var onSand = false;
     for (var i = 0; i < (state.zones || []).length; i++) {
@@ -1437,8 +1439,8 @@
         if (isFinite(cr) && cr > 0 && hypot(state.squad.x - z.x, state.squad.y - z.y) < Math.min(cr, 260)) onCrack = true;
       }
     }
-    if (onCrack) mul *= 0.55;
-    if (onSand) mul *= 0.58;
+    if (!ignoreSlow && onCrack) mul *= 0.55;
+    if (!ignoreSlow && onSand) mul *= 0.58;
     if (state.tacticsAura && state.tacticsAura.speed) mul *= 1 + state.tacticsAura.speed;
     return mul;
   }
@@ -1504,7 +1506,18 @@
     return false;
   }
 
+  function bumperIgnores(e) {
+    if (!e) return true;
+    if (e.scenery) return true;
+    if (e.glinderCoal || e.type === "fogueira") return true;
+    if (e.hiveCmd === "beewall" || e.hiveCmd === "beespear") return true;
+    var k = e.def && e.def.kind;
+    if (k === "orbit_shield" || k === "bonfire" || k === "hive_cell" || k === "hive_pillar" || k === "hive_cocoon" || k === "hive_flower") return true;
+    return false;
+  }
+
   function skipContact(state, enemy) {
+    if (bumperIgnores(enemy)) return false;
     var sg = radioShieldAt(state, enemy.x, enemy.y);
     if (sg) {
       var sr = sg.range || 86;
@@ -1712,16 +1725,28 @@
     return Math.atan2(dy, dx);
   }
 
+  function impactMeleeMul(state) {
+    var r = runRank(state.run && state.run.impact);
+    if (r >= 2) return 1.2 + Math.random() * 0.25;
+    if (r >= 1) return 1.15 + Math.random() * 0.15;
+    return 1;
+  }
+
+  function impactAreaMul(state) {
+    return runRank(state.run && state.run.impact) >= 2 ? 1.15 : 1;
+  }
+
   function coloStrike(state, u, style, ang) {
-    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * favorMul(state, u));
+    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * favorMul(state, u) * impactMeleeMul(state));
     var x = u.x;
     var y = u.y;
     var i;
     var e;
     var impact = runRank(state.run && state.run.impact);
+    var area = impactAreaMul(state);
     state.vfx = state.vfx || [];
     if (style === "slam") {
-      var slamR = Math.round((u.def.aoe || 250) * (1 + 0.12 * impact));
+      var slamR = Math.round((u.def.aoe || 250) * (1 + 0.12 * impact) * area);
       for (i = 0; i < state.enemies.length; i++) {
         e = state.enemies[i];
         if (e.hp <= 0 || e.scenery) continue;
@@ -1737,8 +1762,8 @@
       if (G.audio && G.audio.explosion) G.audio.explosion();
       else if (G.audio && G.audio.thud) G.audio.thud();
     } else if (style === "bash") {
-      var bashDepth = 176;
-      var bashHalf = 118;
+      var bashDepth = 176 * area;
+      var bashHalf = 118 * area;
       for (i = 0; i < state.enemies.length; i++) {
         e = state.enemies[i];
         if (e.hp <= 0 || e.scenery) continue;
@@ -1816,7 +1841,7 @@
   function tickColosso(state, dt) {
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.hp <= 0 || u.kind !== "colosso") continue;
+      if (u.hp <= 0 || u.raidGhost || u.kind !== "colosso") continue;
       u.coloGlow = (state.coloOverT || 0) > 0;
       if (u.leap && u.leap.colo) {
         u.leap = null;
@@ -5424,7 +5449,7 @@
       }
     }
     var ring = 34 + Math.max(0, n - 3) * 5;
-    var r = ring + maxS + 16;
+    var r = (ring + maxS + 16) * (runRank(state.run && state.run.impact) >= 2 ? 1.15 : 1);
     return {
       x: state.squad.x,
       y: state.squad.y,
@@ -5505,11 +5530,18 @@
   }
 
   function bumperMeleeHit(state, enemy) {
-    if (!bumperUp(state) || !enemy) return;
+    if (!bumperUp(state) || !enemy || bumperIgnores(enemy)) return;
     var now = state.time || 0;
     if ((enemy.bumperHitT || 0) > now) return;
     enemy.bumperHitT = now + 0.32;
     G.burst(state, enemy.x, enemy.y, "#9ad4ff", 6, 40);
+    if (runRank(state.run && state.run.impact)) {
+      var host = lead(state, "colosso") || lead(state, "tanque") || lead(state, "caminhao") || lead(state, "minitanque");
+      if (host) {
+        var bdmg = Math.round(host.def.dmg * C().dmgMul(state) * favorMul(state, host) * impactMeleeMul(state));
+        C().hurt(state, enemy, bdmg, host.x, host.y, true);
+      }
+    }
     bumpBumper(state);
   }
 
@@ -5532,7 +5564,7 @@
     }
     for (i = 0; i < state.enemies.length; i++) {
       var e = state.enemies[i];
-      if (e.hp <= 0 || e.def.kind === "orbit_shield") continue;
+      if (e.hp <= 0 || bumperIgnores(e)) continue;
       if (e.type === "chefe_arklan" && (e.wormAct === "devour" || e.buried || e.phased)) continue;
       var edx = e.x - g.x;
       var edy = e.y - g.y;
@@ -5918,7 +5950,7 @@
 
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.hp <= 0) continue;
+      if (u.hp <= 0 || u.stowed || u.raidGhost) continue;
       u.cooldown -= dt;
       var kind = u.kind;
       if (kind === "ceifador") {
@@ -6199,7 +6231,8 @@
             plantMineAt(state, eng, ar.tx, ar.ty);
           } else if (ar.land === "puddle") {
             splashMedicFlask(state, p, ar.tx, ar.ty);
-            placePuddle(state, ar.tx, ar.ty, 40, 0, 4.8);
+            var pudR = 40 * (1 + 0.25 * (runRank(state.run && state.run.fieldMed) >= 2 ? 1 : 0));
+            placePuddle(state, ar.tx, ar.ty, pudR, 0, 4.8);
           } else if (ar.land === "buckshot") {
             fireBucknade(state, p, ar.tx, ar.ty);
           } else if (ar.land === "blackhole") {

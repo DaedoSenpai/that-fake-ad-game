@@ -399,9 +399,9 @@
       head.className = "hq-wing-head";
       var fundedLine = "";
       if (wing.id === "doutrina" && funded) {
-        fundedLine = "<p class=\"hq-funded\">Seu estilo: " + (schoolName[funded] || funded) + "</p>";
+        fundedLine = "<p class=\"hq-funded\">Doutrina principal: " + (schoolName[funded] || funded) + "</p>";
       } else if (wing.id === "quartel" && fundedQ && G.upgrades.quartelName) {
-        fundedLine = "<p class=\"hq-funded\">Sua linha: " + G.upgrades.quartelName(fundedQ) + "</p>";
+        fundedLine = "<p class=\"hq-funded\">Linha principal: " + G.upgrades.quartelName(fundedQ) + "</p>";
       }
       head.innerHTML =
         "<span class=\"hq-tab\">" + wing.kicker + "</span>" +
@@ -636,7 +636,9 @@
       document.getElementById("inspect-name").textContent = u.def.name;
       if (u.def.blurb) html += "<p>" + u.def.blurb + "</p>";
       var pass = G.unitPassives(u.def);
-      if (pass.length) html += "<div class=\"bit\"><strong>Passiva · " + pass[0].name + "</strong><p>" + pass[0].desc + "</p></div>";
+      for (var pi = 0; pi < pass.length; pi++) {
+        html += "<div class=\"bit\"><strong>Passiva · " + pass[pi].name + "</strong><p>" + pass[pi].desc + "</p></div>";
+      }
       if (u.def.active) {
         var meta = G.activeMeta(u.def.active.id);
         html += "<div class=\"bit\"><strong>Ativa · " + u.def.active.name + "</strong><p>" + (meta.detail || u.def.active.desc) + "</p></div>";
@@ -1710,6 +1712,7 @@
     var hp = 0;
     var max = 0;
     for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].raidGhost) continue;
       hp += state.units[i].hp;
       max += state.units[i].maxHp;
     }
@@ -2283,7 +2286,7 @@
       if (G.drawHiveKingGhosts) G.drawHiveKingGhosts(ctx, state);
       if (G.drawHeirTake) G.drawHeirTake(ctx, state);
       for (var au = 0; au < state.units.length; au++) {
-        if (!state.units[au].commander && !state.units[au].stowed) G.drawPlayerUnit(ctx, state.units[au], state.time);
+        if (!state.units[au].commander && !state.units[au].stowed && !state.units[au].raidGhost) G.drawPlayerUnit(ctx, state.units[au], state.time);
       }
       for (var p = 0; p < state.projectiles.length; p++) {
         try { G.drawProjectile(ctx, state.projectiles[p]); } catch (ep) {}

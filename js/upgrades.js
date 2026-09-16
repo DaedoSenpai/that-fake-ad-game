@@ -11,73 +11,74 @@
   }
 
   G.RUN_CARDS = [
-    { id: "dmg", rarity: "arquivo", title: "Mais dano", desc: "+18% de dano em todas as unidades.", apply: function (run) { run.dmg *= 1.18; } },
-    { id: "fire", rarity: "arquivo", title: "Cadência", desc: "+20% na velocidade de tiro.", apply: function (run) { run.fireRate *= 1.2; } },
-    { id: "hp", rarity: "arquivo", title: "Blindagem", desc: "+20% de HP no esquadrão e uma cura na hora.", apply: function (run, state) {
+    { id: "dmg", rarity: "arquivo", title: "Mais dano", desc: "+18% de dano para todas as unidades do esquadrão.", apply: function (run) { run.dmg *= 1.18; } },
+    { id: "fire", rarity: "arquivo", title: "Cadência", desc: "+20% de cadência de tiro para todas as unidades do esquadrão.", apply: function (run) { run.fireRate *= 1.2; } },
+    { id: "hp", rarity: "arquivo", title: "Blindagem", desc: "+20% de vida para todas as unidades do esquadrão. Quando uma unidade chega a 50% de vida, ela se cura por completo.", apply: function (run, state) {
       run.hp *= 1.2;
+      run.hpFifty = true;
       for (var i = 0; i < state.units.length; i++) {
         var u = state.units[i];
         u.maxHp = Math.round(u.maxHp * 1.2);
-        u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.35));
+        u.hp = Math.min(u.maxHp, u.hp);
       }
     } },
-    { id: "speed", rarity: "arquivo", title: "Marcha rápida", desc: "+16% de velocidade no esquadrão.", apply: function (run) { run.speed *= 1.16; } },
-    { id: "magnet", rarity: "arquivo", title: "Ímã de loot", desc: "Puxa moeda e reforço de mais longe.", apply: function (run) { run.magnet += 70; } },
-    { id: "drop", rarity: "arquivo", title: "Reforços", desc: "Inimigo solta unidade com mais frequência.", apply: function (run) { run.dropChance = Math.min(0.5, run.dropChance + 0.1); } },
+    { id: "speed", rarity: "arquivo", title: "Marcha rápida", desc: "+16% de velocidade de movimento do esquadrão.", apply: function (run) { run.speed *= 1.16; } },
+    { id: "magnet", rarity: "arquivo", title: "Ímã de loot", desc: "Todos os drops e pickups são puxados com o dobro da distância.", apply: function (run) { run.magnetMul = (run.magnetMul || 1) * 2; } },
+    { id: "drop", rarity: "arquivo", title: "Reforços", desc: "+10% de chance do inimigo soltar um reforço.", apply: function (run) { run.dropChance = Math.min(0.5, run.dropChance + 0.1); } },
     { id: "gold", rarity: "arquivo", title: "Saque de guerra", desc: "+25% de moedas nesta run.", apply: function (run) { run.gold = (run.gold || 0) + 0.25; } },
-    { id: "luck", rarity: "arquivo", title: "Sorte de recrutador", desc: "Reforço pode nascer um nível acima.", apply: function (run) { run.luck = (run.luck || 0) + 0.2; } },
-    { id: "regen", rarity: "arquivo", title: "Rações", desc: "O esquadrão regenera HP no combate.", apply: function (run) { run.regen = (run.regen || 0) + 0.006; } },
-    { id: "shield", rarity: "arquivo", title: "Campo de força", desc: "Toma 18% menos dano.", apply: function (run) { run.shield = Math.min(0.45, (run.shield || 0) + 0.18); } },
+    { id: "luck", rarity: "arquivo", title: "Sorte de recrutador", desc: "+15% de chance de, ao recrutar uma unidade, reembolsar o valor dela em arquivo de guerra.", apply: function (run) { run.recruitRefund = (run.recruitRefund || 0) + 0.15; } },
+    { id: "regen", rarity: "arquivo", title: "Rações", desc: "O esquadrão regenera 0,6% da vida por segundo.", apply: function (run) { run.regen = (run.regen || 0) + 0.006; } },
+    { id: "shield", rarity: "arquivo", title: "Campo de força", desc: "Todas as unidades recebem 18% de redução de dano.", apply: function (run) { run.shield = Math.min(0.45, (run.shield || 0) + 0.18); } },
 
     { id: "explode", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.explode) ? "Explosão final II" : "Explosão final"; },
-      desc: function (run) { return rankOf(run.explode) ? "O estouro fica maior e mais forte." : "Inimigo explode ao morrer."; },
-      combo: function (run) { return rankOf(run.freeze) ? "Combo: o estouro também aplica o gelo." : ""; },
+      desc: function (run) { return rankOf(run.explode) ? "A explosão fica maior e causa mais dano." : "Quando um inimigo morre, ele explode e fere quem está perto."; },
+      combo: function (run) { return rankOf(run.freeze) ? "Com Munição gelada: a explosão também deixa lento." : ""; },
       apply: function (run) { bump(run, "explode", 2); }
     },
     { id: "ricochet", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.ricochet) ? "Ricochete II" : "Ricochete"; },
-      desc: function (run) { return rankOf(run.ricochet) ? "O tiro pula duas vezes." : "O tiro pula pra um segundo alvo."; },
-      combo: function (run) { return rankOf(run.pierce) ? "Combo: o pulo também atravessa." : ""; },
+      desc: function (run) { return rankOf(run.ricochet) ? "O tiro pula duas vezes (máximo de 3 pulos)." : "Depois do acerto, o tiro pula pra um segundo inimigo."; },
+      combo: function (run) { return rankOf(run.pierce) ? "Com Perfuração: o pulo também atravessa." : ""; },
       apply: function (run) { bump(run, "ricochet", 2); }
     },
     { id: "dual", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.dual) ? "Fogo duplo II" : "Fogo duplo"; },
-      desc: function (run) { return rankOf(run.dual) ? "Terceiro tiro do outro lado da mira." : "Cada disparo manda um segundo tiro na mesma mira."; },
+      desc: function (run) { return rankOf(run.dual) ? "Ganha um terceiro tiro do outro lado da mira, também com 80% do dano." : "Cada disparo manda um segundo tiro ao lado da mira, com 80% do dano."; },
       apply: function (run) { bump(run, "dual", 2); }
     },
     { id: "pierce", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.pierce) ? "Perfuração II" : "Perfuração"; },
-      desc: function (run) { return rankOf(run.pierce) ? "Atravessa mais alvos e o dano cresce depois do primeiro." : "O projétil atravessa vários inimigos."; },
-      combo: function (run) { return rankOf(run.ricochet) ? "Combo: o pulo do ricochete também atravessa." : ""; },
+      desc: function (run) { return rankOf(run.pierce) ? "Atravessa até 7 inimigos. Depois do primeiro, o dano cresce 15% a cada um." : "O projétil atravessa até 4 inimigos."; },
+      combo: function (run) { return rankOf(run.ricochet) ? "Com Ricochete: o pulo também atravessa." : ""; },
       apply: function (run) { bump(run, "pierce", 2); }
     },
     { id: "freeze", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.freeze) ? "Munição gelada II" : "Munição gelada"; },
-      desc: function (run) { return rankOf(run.freeze) ? "O lento dura bem mais." : "Acerto deixa o inimigo lento."; },
-      combo: function (run) { return rankOf(run.explode) ? "Combo: explosão final também gela." : ""; },
+      desc: function (run) { return rankOf(run.freeze) ? "O lento passa a durar 1,5s e inimigos lentos tomam 10% a mais de dano." : "Acerto deixa o inimigo lento por 0,9s."; },
+      combo: function (run) { return rankOf(run.explode) ? "Com Explosão final: o estouro também deixa lento." : ""; },
       apply: function (run) { bump(run, "freeze", 2); }
     },
     { id: "lifesteal", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.lifesteal) ? "Dreno II" : "Dreno"; },
-      desc: function (run) { return rankOf(run.lifesteal) ? "Cura bem mais com o dano causado." : "Dano causado cura o esquadrão."; },
+      desc: function (run) { return rankOf(run.lifesteal) ? "A cura sobe para 20% do dano causado." : "10% do dano causado vira cura na unidade mais ferida do esquadrão."; },
       apply: function (run) { bump(run, "lifesteal", 2); }
     },
     { id: "knockback", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.knockback) ? "Impacto II" : "Impacto"; },
       desc: function (run) {
         return rankOf(run.knockback)
-          ? "O empurrão fica pesado."
-          : "Acerto empurra o inimigo. Em fogo, napalm e buraco negro, puxa pra dentro.";
+          ? "O empurrão fica bem mais forte."
+          : "Acerto empurra o inimigo. Se ele estiver em fogo, napalm, buraco negro ou outro efeito de área, puxa pra dentro.";
       },
       apply: function (run) { bump(run, "knockback", 2); }
     },
     { id: "berserk", rarity: "confidencial", ranks: 2,
       title: function (run) { return rankOf(run.berserk) ? "Último suspiro II" : "Último suspiro"; },
-      desc: function (run) { return rankOf(run.berserk) ? "A curva de dano com HP baixo fica bem mais agressiva." : "Quanto menos HP, mais dano."; },
+      desc: function (run) { return rankOf(run.berserk) ? "A curva fica mais agressiva: até +115% de dano com a vida no osso." : "Quanto menos vida o esquadrão tiver, mais dano ele causa — até +70% com 30% da vida máxima restante."; },
       apply: function (run) { bump(run, "berserk", 2); }
     },
-    { id: "clone", rarity: "confidencial", title: "Cópia de guerra", desc: "Duplica o soldado de menor nível. Respeita o limite de cópias (recruta livre; Míssil, Inferno e Colosso são únicos). Se lotou, vira arquivo de guerra.", apply: function (run, state) {
+    { id: "clone", rarity: "confidencial", title: "Cópia de guerra", desc: "Copia o soldado de menor nível. Recruta não tem limite; Inferno, Míssil e Colosso são únicos. Se não couber, vira arquivos iguais ao custo da unidade mais barata.", apply: function (run, state) {
       var soldiers = [];
       for (var i = 0; i < state.units.length; i++) {
         if (state.units[i].hp > 0 && !state.units[i].commander) soldiers.push(state.units[i]);
@@ -86,46 +87,48 @@
       var low = soldiers[0];
       for (var s = 1; s < soldiers.length; s++) if ((soldiers[s].gen || 0) < (low.gen || 0)) low = soldiers[s];
       if (G.soldierCount(state) < G.maxUnits() && G.canAddKind(state, low.kind)) {
-        state.units.push(G.createPlayerUnit(low.x + 12, low.y + 12, low.kind, state.run, G.save.data.perm));
+        var copy = G.createPlayerUnit(low.x + 12, low.y + 12, low.kind, state.run, G.save.data.perm);
+        state.units.push(copy);
+        if (G.upgrades && G.upgrades.maybeRecruitRefund) G.upgrades.maybeRecruitRefund(state, copy);
       } else {
-        G.merge.addArquivo(state, low.x, low.y);
+        G.merge.addArquivo(state, low.x, low.y, G.upgrades.arquivoValue ? G.upgrades.arquivoValue(low) : 1);
       }
     } },
-    { id: "ficha", rarity: "confidencial", unique: true, rare: true, title: "Ficha de arquivo", desc: "+1 troca de cartas nesta run. Raro.", apply: function (run) { run.ficha = true; run.rerolls = (run.rerolls || 0) + 1; } },
+    { id: "ficha", rarity: "confidencial", unique: true, rare: true, title: "Ficha de arquivo", desc: "Ganha +2 trocas de cartas nesta operação. Aparece pouco.", apply: function (run) { run.ficha = true; run.rerolls = (run.rerolls || 0) + 2; } },
 
     { id: "minesPlus", rarity: "maximo", ranks: 2, favor: { projectile: "mine" },
       title: function (run) { return rankOf(run.minesPlus) ? "Campo minado II" : "Campo minado"; },
-      desc: function (run) { return rankOf(run.minesPlus) ? "Ainda mais minas, área maior." : "Minas ficam numa área maior e você planta mais."; },
+      desc: function (run) { return rankOf(run.minesPlus) ? "Ainda mais minas no campo e cada uma cobre uma área ainda maior." : "Você planta mais minas e cada uma cobre uma área maior."; },
       apply: function (run) { bump(run, "minesPlus", 2); }
     },
     { id: "flame", rarity: "maximo", ranks: 2, favor: { projectile: "flame" },
       title: function (run) { return rankOf(run.flame) ? "Combustível extra II" : "Combustível extra"; },
-      desc: function (run) { return rankOf(run.flame) ? "Alcance e queima ainda mais fortes." : "Lança-chamas alcança mais e queima mais forte."; },
+      desc: function (run) { return rankOf(run.flame) ? "O alcance do lança-chamas sobe para +24%." : "O lança-chamas alcança 12% mais longe."; },
       apply: function (run) { bump(run, "flame", 2); }
     },
     { id: "boom", rarity: "maximo", ranks: 2, favor: { projectile: ["missile", "grenade"], explode: true },
       title: function (run) { return rankOf(run.boom) ? "Carga extra II" : "Carga extra"; },
-      desc: function (run) { return rankOf(run.boom) ? "Explosão fica enorme." : "Explosão (morte, míssil, granada) fica maior."; },
+      desc: function (run) { return rankOf(run.boom) ? "O bônus sobe para +20 de área e de dano." : "Explosões de míssil e granada ficam maiores e mais fortes (+10 de área e de dano)."; },
       apply: function (run) { bump(run, "boom", 2); }
     },
     { id: "fieldMed", rarity: "maximo", ranks: 2, favor: { role: ["medic", "surgeon", "chaplain"] },
       title: function (run) { return rankOf(run.fieldMed) ? "Protocolo de campo II" : "Protocolo de campo"; },
-      desc: function (run) { return rankOf(run.fieldMed) ? "Kit, âncora e poça de médico ficam ainda mais fortes." : "Médico, cirurgião e capelão: kit cai mais, âncora protege mais."; },
+      desc: function (run) { return rankOf(run.fieldMed) ? "Dano da linha médica sobe para +24%. Kit solta um pacote extra. Âncora e poça ficam ainda mais fortes e maiores." : "Médico, cirurgião e capelão: +12% de dano. A âncora fica maior e protege mais."; },
       apply: function (run) { bump(run, "fieldMed", 2); }
     },
     { id: "impact", rarity: "maximo", ranks: 2, favor: { role: ["colossus", "tank", "minitank", "truck"] },
       title: function (run) { return rankOf(run.impact) ? "Doutrina de impacto II" : "Doutrina de impacto"; },
-      desc: function (run) { return rankOf(run.impact) ? "Slam, bash e linha blindada ficam ainda mais pesados." : "Colosso, tanque e caminhão: melee e escudo batem mais forte."; },
+      desc: function (run) { return rankOf(run.impact) ? "Dano da linha sobe para +32%. Slam, bash e para-choque causam 20–45% a mais e ganham +15% de área." : "Colosso, tanque, mini-tanque e caminhão: +16% de dano. Slam, bash e para-choque do Colosso causam 15–30% a mais."; },
       apply: function (run) { bump(run, "impact", 2); }
     },
     { id: "optics", rarity: "maximo", ranks: 2, favor: { role: ["observer", "sniper"] },
       title: function (run) { return rankOf(run.optics) ? "Linha de mira II" : "Linha de mira"; },
-      desc: function (run) { return rankOf(run.optics) ? "Marca dura mais e o atirador/observador causa mais dano." : "Observador e anti-matéria: marca dura mais, dano de precisão sobe."; },
+      desc: function (run) { return rankOf(run.optics) ? "Dano da linha sobe para +36%. A marca dura 10s a mais." : "Observador, sniper, antimaterial e designado: +18% de dano. A marca dura 5s a mais."; },
       apply: function (run) { bump(run, "optics", 2); }
     },
     { id: "raid", rarity: "maximo", ranks: 2, favor: { role: ["stealth", "assassin", "outlaw"] },
       title: function (run) { return rankOf(run.raid) ? "Doutrina de raide II" : "Doutrina de raide"; },
-      desc: function (run) { return rankOf(run.raid) ? "Furtivo, assassino e fora-da-lei ficam ainda mais letais." : "Furtivo, assassino e fora-da-lei: mais dano na linha de choque."; },
+      desc: function (run) { return rankOf(run.raid) ? "Dano da linha sobe para +40%. Eles voltam mais rápido e ficam invulneráveis por 5 segundos." : "Furtivo, assassino e fora-da-lei: +20% de dano. Uma vez por fase, ao morrer eles somem e voltam 5 segundos depois."; },
       apply: function (run) { bump(run, "raid", 2); }
     }
   ];
@@ -222,15 +225,8 @@
 
   function quartelLockHint(id) {
     if (!quartelSlotLocked(id)) return "";
-    if (quartelCount() >= 2) return "Invasão 5.";
-    return "Invasão 3.";
-  }
-
-  function taxNote(item) {
-    if (!item.school) return "";
-    var tax = item.schoolSet === "quartel" ? quartelTax(item.id) : schoolTax(item.id);
-    if (tax > 1) return " +60%.";
-    return "";
+    if (quartelCount() >= 2) return "A terceira linha destrava na Invasão 5.";
+    return "A segunda linha destrava na Invasão 3.";
   }
 
   function kindInLine(kind, spec) {
@@ -255,7 +251,7 @@
       kicker: "Começo",
       title: "Formação",
       stamp: "FORMAÇÃO",
-      blurb: "Começo da campanha.",
+      blurb: "Como o esquadrão entra na operação: quanta gente no campo, de que patente e com arquivo na mão.",
       items: [
         {
           id: "extraStart",
@@ -264,7 +260,7 @@
           cost: function (lv) { return 250 * Math.pow(2, lv); },
           desc: function (lv) {
             var n = lv + 1;
-            return "+" + n + (n === 1 ? " recruta" : " recrutas") + " no começo.";
+            return "Começa a operação com " + n + (n === 1 ? " recruta a mais." : " recrutas a mais.");
           }
         },
         {
@@ -277,8 +273,8 @@
             var kind = list[Math.min(list.length - 1, lv + 1)];
             var nome = G.UNIT_DEFS[kind] ? G.UNIT_DEFS[kind].name : kind;
             var q = G.upgrades && G.upgrades.fundedQuartel && G.upgrades.fundedQuartel();
-            var extra = q ? " Linha: " + (QUARTEL_NAME[q] || q) + "." : "";
-            return "O 1º soldado entra como " + nome + "." + extra;
+            var extra = q ? " A promoção segue a linha de " + (QUARTEL_NAME[q] || q) + "." : "";
+            return "O primeiro soldado já entra como " + nome + "." + extra;
           }
         },
         {
@@ -287,9 +283,9 @@
           max: 1,
           cost: function () { return 2200; },
           lock: function () { return (permOf().earlyTier | 0) < 1; },
-          lockHint: function () { return "Precisa de Soldado já promovido."; },
+          lockHint: function () { return "Primeiro sobe Soldado já promovido."; },
           desc: function () {
-            return "O 2º soldado entra um nível abaixo do 1º.";
+            return "O segundo soldado entra um nível abaixo do primeiro.";
           }
         },
         {
@@ -297,7 +293,7 @@
           title: "6ª vaga",
           max: 1,
           cost: function () { return 2800; },
-          desc: function () { return "6 soldados no campo."; }
+          desc: function () { return "O esquadrão pode ter até 6 soldados no campo. O comandante não ocupa vaga."; }
         },
         {
           id: "pocketArquivo",
@@ -306,7 +302,7 @@
           cost: function (lv) { return [1600, 3400][lv]; },
           desc: function (lv) {
             var n = lv + 1;
-            return "+" + n + (n === 1 ? " arquivo" : " arquivos") + " no começo de cada fase.";
+            return "Ganha " + n + (n === 1 ? " arquivo" : " arquivos") + " no começo de cada fase.";
           }
         },
         {
@@ -319,8 +315,8 @@
             var p = permOf();
             return (p.extraStart | 0) + (p.earlyTier | 0) + (p.maxUnits | 0) < 3;
           },
-          lockHint: function () { return "Sobe Recruta extra, Soldado já promovido ou 6ª vaga."; },
-          desc: function () { return "Começa com 1 arquivo."; }
+          lockHint: function () { return "Junta 3 níveis entre Recruta extra, Soldado já promovido e 6ª vaga."; },
+          desc: function () { return "Começa a operação com 1 arquivo de guerra."; }
         }
       ]
     },
@@ -330,7 +326,7 @@
       kicker: "Estilo",
       title: "Doutrina",
       stamp: "DOUTRINA",
-      blurb: "A primeira é a sua. As outras +60%. Nv 4 só na sua.",
+      blurb: "Cada doutrina especializa o esquadrão num estilo. A primeira que você compra vira a principal: qualquer outra custa 60% a mais, e só a principal chega no nível 4.",
       items: [
         {
           id: "choque",
@@ -339,13 +335,12 @@
           max: 4,
           cost: function (lv) { return schoolCost("choque", lv); },
           lock: function (lv) { return lv >= 3 && fundedOf(DOCTRINE_IDS) !== "choque"; },
-          lockHint: function () { return "Nv 4 só no seu estilo."; },
+          lockHint: function () { return "Só a doutrina principal sobe até o 4."; },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, id: "choque" });
-            if (n >= 4) return "+24% vida, −20% dano recebido. Regenera. +8% escudo." + tax;
-            if (n >= 3) return "+18% vida, −15% dano recebido. Regenera no começo." + tax;
-            return "+" + (n * 6) + "% vida, −" + (n * 5) + "% dano recebido." + tax;
+            if (n >= 4) return "+24% de vida e −20% de dano recebido. Regenera 0,6% da vida por segundo e ganha +8% de escudo.";
+            if (n >= 3) return "+18% de vida e −15% de dano recebido. O esquadrão passa a regenerar 0,6% da vida por segundo.";
+            return "+" + (n * 6) + "% de vida e −" + (n * 5) + "% de dano recebido.";
           }
         },
         {
@@ -355,13 +350,12 @@
           max: 4,
           cost: function (lv) { return schoolCost("disparo", lv); },
           lock: function (lv) { return lv >= 3 && fundedOf(DOCTRINE_IDS) !== "disparo"; },
-          lockHint: function () { return "Nv 4 só no seu estilo."; },
+          lockHint: function () { return "Só a doutrina principal sobe até o 4."; },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, id: "disparo" });
-            if (n >= 4) return "+28% dano, +32% cadência. Carta amarela de tiro quase sempre." + tax;
-            if (n >= 3) return "+21% dano, +24% cadência. Carta amarela tende a ser de tiro." + tax;
-            return "+" + (n * 7) + "% dano, +" + (n * 8) + "% cadência." + tax;
+            if (n >= 4) return "+28% de dano e +32% de cadência. A carta confidencial do fim da fase quase sempre é de tiro.";
+            if (n >= 3) return "+21% de dano e +24% de cadência. A carta confidencial tende a ser de tiro (perfuração, ricochete, fogo duplo…).";
+            return "+" + (n * 7) + "% de dano e +" + (n * 8) + "% de cadência.";
           }
         },
         {
@@ -371,13 +365,12 @@
           max: 4,
           cost: function (lv) { return schoolCost("mobilidade", lv); },
           lock: function (lv) { return lv >= 3 && fundedOf(DOCTRINE_IDS) !== "mobilidade"; },
-          lockHint: function () { return "Nv 4 só no seu estilo."; },
+          lockHint: function () { return "Só a doutrina principal sobe até o 4."; },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, id: "mobilidade" });
-            if (n >= 4) return "+32% velocidade. Ímã forte. Mais reforço no chão. Começa +12% rápido." + tax;
-            if (n >= 3) return "+24% velocidade. Ímã forte. Começa +12% rápido e puxando loot." + tax;
-            return "+" + (n * 8) + "% velocidade. Puxa loot de mais longe. Mais reforço no chão." + tax;
+            if (n >= 4) return "+32% de velocidade, ímã forte e mais reforço no chão. Começa a operação 12% mais rápido e puxando loot.";
+            if (n >= 3) return "+24% de velocidade e ímã forte. Começa a operação 12% mais rápido e puxando loot de mais longe.";
+            return "+" + (n * 8) + "% de velocidade. Puxa loot de mais longe e inimigos soltam reforço com mais frequência.";
           }
         },
         {
@@ -393,19 +386,20 @@
             return false;
           },
           lockHint: function () {
-            if (!fundedOf(DOCTRINE_IDS)) return "Compra um estilo.";
-            return "Estilo no nível 3.";
+            if (!fundedOf(DOCTRINE_IDS)) return "Primeiro escolhe uma doutrina.";
+            return "Sua doutrina principal precisa estar no nível 3.";
           },
           desc: function (lv) {
             var school = G.upgrades.fundedSchool && G.upgrades.fundedSchool();
-            var hint = {
-              choque: "Começa com Impacto.",
-              disparo: "Começa com Perfuração.",
-              mobilidade: "Começa com Munição gelada."
-            }[school];
-            if (!hint) return "Começa com a carta amarela do seu estilo.";
-            if (lv >= 1) return hint.replace(".", " II.");
-            return hint + " Nv 2: posto II.";
+            var names = {
+              choque: "Impacto",
+              disparo: "Perfuração",
+              mobilidade: "Munição gelada"
+            };
+            var card = names[school];
+            if (!card) return "Começa a operação com a carta confidencial do seu estilo.";
+            if (lv >= 1) return "Começa com " + card + " no posto II.";
+            return "Começa com a carta " + card + ". O segundo nível sobe ela pro posto II.";
           }
         }
       ]
@@ -416,7 +410,7 @@
       kicker: "Saque",
       title: "Inteligência",
       stamp: "INTEL",
-      blurb: "Moeda, reroll e carta do fim da fase.",
+      blurb: "Moeda no bolso, troca de carta e o que aparece no fim da fase.",
       items: [
         {
           id: "rerolls",
@@ -425,7 +419,7 @@
           cost: function (lv) { return [1800, 6500][lv]; },
           desc: function (lv) {
             var n = lv + 1;
-            return "+" + n + (n === 1 ? " troca" : " trocas") + " grátis no fim da fase.";
+            return "+" + n + (n === 1 ? " troca grátis" : " trocas grátis") + " quando as cartas aparecem no fim da fase.";
           }
         },
         {
@@ -435,7 +429,7 @@
           cost: function (lv) { return Math.round(240 * (lv + 1) * (1 + lv * 0.35)); },
           desc: function (lv) {
             var n = lv + 1;
-            return "+" + (n * 12) + "% moedas. +" + (n * 20) + " moedas no começo de cada fase.";
+            return "+" + (n * 12) + "% de moedas o tempo todo e +" + (n * 20) + " moedas no começo de cada fase.";
           }
         },
         {
@@ -445,9 +439,9 @@
           cost: function (lv) { return Math.round(270 * (lv + 1) * (1 + lv * 0.35)); },
           desc: function (lv) {
             var n = lv + 1;
-            var text = "Reforço nasce um nível acima mais vezes.";
-            if (n >= 4) text += " Carta vermelha combina com o esquadrão.";
-            else if (n >= 3) text += " Carta vermelha aparece mais.";
+            var text = "+" + (n * 8) + "% de chance do reforço nascer fuzileiro em vez de recruta.";
+            if (n >= 4) text += " A carta máxima do fim da fase combina com o esquadrão.";
+            else if (n >= 3) text += " Fica mais fácil cair carta máxima no fim da fase.";
             return text;
           }
         },
@@ -458,7 +452,7 @@
           cost: function (lv) { return [900, 2100, 3800][lv]; },
           desc: function (lv) {
             var n = lv + 1;
-            return "Na invasão: +" + (n * 12) + "% no Cofre. +" + (n * 25) + " moedas e +" + n + " arquivo" + (n === 1 ? "" : "s") + " por fase.";
+            return "Nas invasões: +" + (n * 12) + "% no que entra no Cofre, +" + (n * 25) + " moedas e +" + n + " arquivo" + (n === 1 ? "" : "s") + " por fase.";
           }
         },
         {
@@ -471,12 +465,12 @@
             var p = permOf();
             return (p.rerolls | 0) + (p.luck | 0) + (p.briefing | 0) < 2;
           },
-          lockHint: function () { return "Sobe Troca extra, Reforço melhor ou Carta vermelha certa."; },
-          desc: function () { return "Começa com 1 carta amarela extra."; }
+          lockHint: function () { return "Junta 2 níveis entre Troca extra, Reforço melhor e Carta máxima certa."; },
+          desc: function () { return "Começa a operação com uma carta confidencial aleatória."; }
         },
         {
           id: "briefing",
-          title: "Carta vermelha certa",
+          title: "Carta máxima certa",
           max: 1,
           capstone: true,
           cost: function () { return 3200; },
@@ -484,8 +478,8 @@
             var p = permOf();
             return (p.gold | 0) + (p.luck | 0) + (p.rerolls | 0) < 3;
           },
-          lockHint: function () { return "Sobe Mais moedas, Reforço melhor ou Troca extra."; },
-          desc: function () { return "A carta vermelha combina com o esquadrão."; }
+          lockHint: function () { return "Junta 3 níveis entre Mais moedas, Reforço melhor e Troca extra."; },
+          desc: function () { return "A carta máxima do fim da fase combina com quem está no campo."; }
         }
       ]
     },
@@ -495,7 +489,7 @@
       kicker: "Linha",
       title: "Quartel",
       stamp: "QUARTEL",
-      blurb: "A primeira é a sua. 2ª: Invasão 3. 3ª: Invasão 5. Outras +60%.",
+      blurb: "Cada linha especializa um tipo de soldado. A primeira que você compra é a principal. A segunda destrava na Invasão 3, a terceira na 5. Qualquer outra custa 60% a mais. A linha principal também muda quem entra no começo da operação.",
       items: [
         {
           id: "otica",
@@ -508,9 +502,10 @@
           lockHint: function () { return quartelLockHint("otica"); },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, schoolSet: "quartel", id: "otica" });
-            if (n >= 3) return "Linha: +18% dano. Marca dura mais. Formação inicial: Ótica." + tax;
-            return "Sniper, observador, designado, antimaterial: +" + (n * 6) + "% dano. Marca dura mais." + tax;
+            var base = "Sniper, observador, antimaterial e designado: +" + (n * 6) + "% de dano. A marca do observador dura +" + (n * 1.6).toFixed(1).replace(".", ",") + "s.";
+            if (n >= 3) return "Linha de ótica: +18% de dano. A marca dura +4,8s. Habilidades da linha recarregam 8% mais rápido.";
+            if (n >= 2) return base + " Habilidades da linha recarregam 8% mais rápido.";
+            return base;
           }
         },
         {
@@ -524,9 +519,10 @@
           lockHint: function () { return quartelLockHint("supressao"); },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, schoolSet: "quartel", id: "supressao" });
-            if (n >= 3) return "Linha: +18% cadência, +12% dano. Giratória esquenta mais rápido. Inferno/Míssil: 12 arquivos. Formação inicial: Supressão." + tax;
-            return "Metralhador, giratória, lança-chamas, canhoneiro: +" + (n * 6) + "% cadência, +" + (n * 4) + "% dano." + tax;
+            var base = "Metralhador, giratória, lança-chamas, canhoneiro, Inferno e Míssil: +" + (n * 6) + "% de cadência e +" + (n * 4) + "% de dano.";
+            if (n >= 3) return "Linha de supressão: +18% de cadência e +12% de dano. Giratória esquenta mais rápido. Inferno e Míssil saem por 12 arquivos. Habilidades da linha recarregam 8% mais rápido.";
+            if (n >= 2) return base + " Habilidades da linha recarregam 8% mais rápido.";
+            return base;
           }
         },
         {
@@ -540,9 +536,10 @@
           lockHint: function () { return quartelLockHint("blindados"); },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, schoolSet: "quartel", id: "blindados" });
-            if (n >= 3) return "Linha: +15% vida, −12% dano recebido. Quartel spawna mais rápido. Colosso: 80 arquivos. Formação inicial: Blindados." + tax;
-            return "Caminhão, mini-tanque, tanque, quartel, oficina: +" + (n * 5) + "% vida, −" + (n * 4) + "% dano recebido." + tax;
+            var base = "Caminhão, mini-tanque, tanque, quartel, oficina e Colosso: +" + (n * 5) + "% de vida, −" + (n * 4) + "% de dano recebido e +" + (n * 4) + "% de dano.";
+            if (n >= 3) return "Linha de blindados: +15% de vida, −12% de dano recebido e +12% de dano. Quartel spawna 30% mais rápido. Colosso sai por 80 arquivos. Habilidades da linha recarregam 8% mais rápido.";
+            if (n >= 2) return base + " Habilidades da linha recarregam 8% mais rápido.";
+            return base;
           }
         },
         {
@@ -556,9 +553,10 @@
           lockHint: function () { return quartelLockHint("triagem"); },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, schoolSet: "quartel", id: "triagem" });
-            if (n >= 3) return "Linha médica: kit e âncora mais fortes. Kit +1 pacote. Formação inicial: pistoleiro." + tax;
-            return "Médico, cirurgião, capelão, socorrista: kit e âncora +" + (n * 8) + "%." + tax;
+            var base = "Médico, cirurgião, capelão e socorrista: kit cura +" + (n * 8) + "% e âncora +" + (n * 4) + "%.";
+            if (n >= 3) return "Linha médica: kit e âncora mais fortes, e o kit solta um pacote extra. Habilidades da linha recarregam 8% mais rápido.";
+            if (n >= 2) return base + " Habilidades da linha recarregam 8% mais rápido.";
+            return base;
           }
         },
         {
@@ -572,9 +570,10 @@
           lockHint: function () { return quartelLockHint("raide"); },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, schoolSet: "quartel", id: "raide" });
-            if (n >= 3) return "Linha: +21% dano. Fumaça +20% duração. Formação inicial: Raide." + tax;
-            return "Batedor, infiltrador, assassino, fora-da-lei: +" + (n * 7) + "% dano." + tax;
+            var base = "Batedor, infiltrador, assassino, sabotador, fantasma, fora-da-lei e saqueador: +" + (n * 7) + "% de dano.";
+            if (n >= 3) return "Linha de raide: +21% de dano. Fumaça dura 20% mais. Habilidades da linha recarregam 8% mais rápido.";
+            if (n >= 2) return base + " Habilidades da linha recarregam 8% mais rápido.";
+            return base;
           }
         },
         {
@@ -588,9 +587,10 @@
           lockHint: function () { return quartelLockHint("forca"); },
           desc: function (lv) {
             var n = lv + 1;
-            var tax = taxNote({ school: true, schoolSet: "quartel", id: "forca" });
-            if (n >= 3) return "Linha: +18% dano. Menu da força −24% recarga. Mestre: 12 arquivos. Formação inicial: Força." + tax;
-            return "Psíquico, escolhido, jedi, mestre: +" + (n * 6) + "% dano. Menu da força −" + (n * 8) + "% recarga." + tax;
+            var base = "Psíquico, escolhido, jedi e mestre: +" + (n * 6) + "% de dano. Menu da Força recarrega " + (n * 8) + "% mais rápido.";
+            if (n >= 3) return "Linha da Força: +18% de dano. Menu da Força recarrega 24% mais rápido. Mestre sai por 12 arquivos. Habilidades da linha recarregam 8% mais rápido.";
+            if (n >= 2) return base + " Habilidades da linha recarregam 8% mais rápido.";
+            return base;
           }
         }
       ]
@@ -601,39 +601,39 @@
       kicker: "Radial",
       title: "Menu direito",
       stamp: "RADIAL",
-      blurb: "Segura o direito no combate. Cada fatia tem kit A (padrão) e B — comprar troca os dois.",
+      blurb: "Segura o botão direito no combate. Cada fatia tem dois kits: a primeira compra destrava a troca, depois você alterna de graça.",
       items: [
         {
           id: "cmdUp",
           kit: "up",
-          title: "Cima · cura ou grito",
+          title: "Cima: cura ou grito",
           max: 2,
           cost: function (lv) { return lv ? 0 : 1600; },
           desc: function (lv) {
             var now = (lv | 0) === 1 ? "B" : "A";
-            return "Agora: kit " + now + ". A · Aura: cura 2%/s, 5s. B · Grito: +20% dano e cadência, 5s.";
+            return "Agora: kit " + now + ". A — aura que cura 2% da vida por segundo, durante 5s. B — grito de guerra: +20% de dano e cadência por 5s.";
           }
         },
         {
           id: "cmdStrike",
           kit: "strike",
-          title: "Direita · bombardeio",
+          title: "Direita: bombardeio",
           max: 2,
           cost: function (lv) { return lv ? 0 : 1800; },
           desc: function (lv) {
             var now = (lv | 0) === 1 ? "B" : "A";
-            return "Agora: kit " + now + ". A · Airstrike com fogo no chão. B · Cluster: 5 bombas, sem fogo, recarga menor.";
+            return "Agora: kit " + now + ". A — airstrike com fogo no chão. B — cluster de 5 bombas, sem fogo e com recarga menor.";
           }
         },
         {
           id: "cmdRecruit",
           kit: "recruit",
-          title: "Esquerda · recruta ou arquivo",
+          title: "Esquerda: recruta ou arquivo",
           max: 2,
           cost: function (lv) { return lv ? 0 : 1600; },
           desc: function (lv) {
             var now = (lv | 0) === 1 ? "B" : "A";
-            return "Agora: kit " + now + ". A · Recruta no comandante. B · +2 arquivos. Mesma recarga.";
+            return "Agora: kit " + now + ". A — chama um recruta no comandante (tem limite por fase). B — ganha 2 arquivos. A recarga é a mesma.";
           }
         },
         {
@@ -643,8 +643,8 @@
           max: 2,
           cost: function (lv) { return [1400, 2800][lv]; },
           desc: function (lv) {
-            if (lv >= 1) return "Radial −22% recarga. Recruta: 3 por fase.";
-            return "Radial −12% recarga.";
+            if (lv >= 1) return "O menu direito recarrega 22% mais rápido. Recruta pode ser chamado 3 vezes por fase.";
+            return "O menu direito recarrega 12% mais rápido.";
           }
         }
       ]
@@ -652,10 +652,10 @@
     {
       id: "cmd-hero",
       board: "comando",
-      kicker: "Unique",
+      kicker: "Herói",
       title: "Comandante",
       stamp: "HERÓI",
-      blurb: "Laser, arquivos e o que só o herói faz — fora do menu radial.",
+      blurb: "O que só o comandante faz: laser, arquivo e sobreviver quando a linha quebra.",
       items: [
         {
           id: "marcaComando",
@@ -663,8 +663,8 @@
           max: 2,
           cost: function (lv) { return [1100, 2400][lv]; },
           desc: function (lv) {
-            if (lv >= 1) return "Laser pega de mais longe. Alvo marcado: +16% dano. Esquadrão mira nele.";
-            return "Laser pega de mais longe. Alvo marcado: +8% dano.";
+            if (lv >= 1) return "O laser alcança ainda mais. O marcado toma +16% de dano e o esquadrão segura a mira nele por mais tempo.";
+            return "O laser alcança mais longe. O inimigo marcado toma +8% de dano e o esquadrão passa a mirar nele.";
           }
         },
         {
@@ -674,9 +674,9 @@
           cost: function (lv) { return [900, 1800, 3200][lv]; },
           desc: function (lv) {
             var n = lv + 1;
-            var text = "+" + (n * 4) + "% chance de reforço.";
-            if (n >= 2) text += " +1 arquivo no começo.";
-            if (n >= 3) text += " 12% da baixa virar arquivo.";
+            var text = "+" + (n * 4) + "% de chance de reforço.";
+            if (n >= 2) text += " Começa a operação com +1 arquivo.";
+            if (n >= 3) text += " 12% de cada abate virar arquivo de guerra.";
             return text;
           }
         },
@@ -687,12 +687,12 @@
           capstone: true,
           cost: function () { return 3600; },
           lock: function () { return (permOf().guerrilhaEnsaiada | 0) < 1; },
-          lockHint: function () { return "Precisa de Guerrilha ensaiada (aba Radial)."; },
-          desc: function () { return "1× por fase: se o comandante cair abaixo de 20% de vida, cura e fica 1s imune."; }
+          lockHint: function () { return "Primeiro compra Guerrilha ensaiada, na aba do menu direito."; },
+          desc: function () { return "Uma vez por fase: se o comandante cair abaixo de 20% da vida, ele recupera até 42% e fica invulnerável por 1 segundo."; }
         },
         {
           id: "duplaUnique",
-          title: "Licença de unique",
+          title: "Cópia extra",
           max: 1,
           capstone: true,
           cost: function () { return 4800; },
@@ -702,10 +702,10 @@
             return (p.supressao | 0) < 2 && (p.raide | 0) < 2;
           },
           lockHint: function () {
-            if (maxInvasionOf() < 4) return "Invasão 4.";
-            return "Supressão ou Raide no nível 2 (aba Quartel).";
+            if (maxInvasionOf() < 4) return "Chega na Invasão 4.";
+            return "Sobe Supressão ou Raide até o nível 2, no Quartel.";
           },
-          desc: function () { return "Inferno e Míssil: até 2 no campo."; }
+          desc: function () { return "Inferno e Míssil podem ter 2 no campo ao mesmo tempo. Colosso continua único."; }
         }
       ]
     }
@@ -751,6 +751,9 @@
       hp: run.hp,
       speed: run.speed,
       magnet: run.magnet,
+      magnetMul: run.magnetMul || 1,
+      recruitRefund: run.recruitRefund || 0,
+      hpFifty: !!run.hpFifty,
       dropChance: run.dropChance,
       explode: run.explode,
       ricochet: run.ricochet,
@@ -1108,6 +1111,25 @@
       };
     },
 
+    arquivoValue: function (unit) {
+      if (!unit || !G.merge || !G.merge.promoteCost) return 1;
+      var kinds = (unit.def && unit.def.merge) || (unit.kind ? [unit.kind] : []);
+      return Math.max(1, G.merge.promoteCost(unit.gen || 0, kinds) | 0);
+    },
+
+    maybeRecruitRefund: function (state, unit) {
+      if (!state || !state.run || !unit) return;
+      var chance = state.run.recruitRefund || 0;
+      if (chance <= 0 || Math.random() >= chance) return;
+      var n = this.arquivoValue(unit);
+      if (G.merge && G.merge.addArquivo) G.merge.addArquivo(state, unit.x, unit.y, n);
+    },
+
+    raidRole: function (u) {
+      var role = u && u.def && u.def.role;
+      return role === "stealth" || role === "assassin" || role === "outlaw";
+    },
+
     cardById: function (id) {
       for (var i = 0; i < G.RUN_CARDS.length; i++) if (G.RUN_CARDS[i].id === id) return G.RUN_CARDS[i];
       return null;
@@ -1158,6 +1180,9 @@
         hp: 1,
         speed: 1,
         magnet: 0,
+        magnetMul: 1,
+        recruitRefund: 0,
+        hpFifty: false,
         dropChance: 0.16,
         explode: 0,
         ricochet: 0,
