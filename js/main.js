@@ -635,6 +635,8 @@
       document.getElementById("inspect-kicker").textContent = u.commander ? "comandante" : "aliado";
       document.getElementById("inspect-name").textContent = u.def.name;
       if (u.def.blurb) html += "<p>" + u.def.blurb + "</p>";
+      var basic = G.unitBasic(u.def);
+      if (basic) html += "<div class=\"bit\"><strong>Básico</strong><p>" + basic + "</p></div>";
       var pass = G.unitPassives(u.def);
       for (var pi = 0; pi < pass.length; pi++) {
         html += "<div class=\"bit\"><strong>Passiva · " + pass[pi].name + "</strong><p>" + pass[pi].desc + "</p></div>";
@@ -643,7 +645,11 @@
         var meta = G.activeMeta(u.def.active.id);
         html += "<div class=\"bit\"><strong>Ativa · " + u.def.active.name + "</strong><p>" + (meta.detail || u.def.active.desc) + "</p></div>";
       }
-      if (!html) html = "<p>Essa unidade não tem passiva nem ativa.</p>";
+      if (u.def.extraActive) {
+        var metaX = G.activeMeta(u.def.extraActive.id);
+        html += "<div class=\"bit\"><strong>Ativa · " + u.def.extraActive.name + "</strong><p>" + (metaX.detail || u.def.extraActive.desc) + "</p></div>";
+      }
+      if (!html) html = "<p>Essa unidade não tem dossiê listado.</p>";
     } else {
       document.getElementById("inspect-kicker").textContent = e.def.boss ? "chefe" : "inimigo";
       document.getElementById("inspect-name").textContent = e.def.name;
@@ -705,13 +711,16 @@
     var blurbEl = document.getElementById("codex-blurb");
     var list = document.getElementById("codex-stats-list");
     var sticker = document.getElementById("codex-sticker");
+    var basicBox = document.getElementById("codex-basics");
     var passBox = document.getElementById("codex-passives");
     var actBox = document.getElementById("codex-actives");
+    var basicList = document.getElementById("codex-basics-list");
     var passList = document.getElementById("codex-passives-list");
     var actList = document.getElementById("codex-actives-list");
     var passKick = document.getElementById("codex-passives-kicker");
     var actKick = document.getElementById("codex-actives-kicker");
     list.innerHTML = "";
+    basicList.innerHTML = "";
     passList.innerHTML = "";
     actList.innerHTML = "";
     codexForm = "p1";
@@ -740,16 +749,19 @@
       if (!known) {
         nameEl.textContent = "???";
         blurbEl.textContent = "Ainda não entrou no compêndio. Faz o merge pra revelar.";
+        basicBox.classList.add("hidden");
         passBox.classList.add("hidden");
         actBox.classList.add("hidden");
       } else {
         nameEl.textContent = def.name;
         blurbEl.textContent = def.blurb;
-        G.unitStatRows(def).forEach(function (line) {
-          var li = document.createElement("li");
-          li.textContent = line;
-          list.appendChild(li);
-        });
+        var basic = G.unitBasic(def);
+        if (basic) {
+          basicBox.classList.remove("hidden");
+          addSkill(basicList, "◉", "Ataque básico", "", basic);
+        } else {
+          basicBox.classList.add("hidden");
+        }
         var pass = G.unitPassives(def);
         if (pass.length) {
           passBox.classList.remove("hidden");
@@ -759,6 +771,11 @@
         } else {
           passBox.classList.add("hidden");
         }
+        G.unitStatRows(def).forEach(function (line) {
+          var li = document.createElement("li");
+          li.textContent = line;
+          list.appendChild(li);
+        });
         if (def.active) {
           var meta = G.activeMeta(def.active.id);
           actBox.classList.remove("hidden");
@@ -769,6 +786,16 @@
             "Recarga " + def.active.cd + "s",
             meta.detail || def.active.desc
           );
+          if (def.extraActive) {
+            var metaX = G.activeMeta(def.extraActive.id);
+            addSkill(
+              actList,
+              G.activeIconHtml ? G.activeIconHtml(def.extraActive.id) : metaX.icon,
+              def.extraActive.name,
+              "Recarga " + def.extraActive.cd + "s",
+              metaX.detail || def.extraActive.desc
+            );
+          }
         } else {
           actBox.classList.add("hidden");
         }
@@ -782,11 +809,13 @@
       if (!known) {
         nameEl.textContent = "???";
         blurbEl.textContent = "Ainda não entrou no arquivo. Derruba um pra registrar.";
+        basicBox.classList.add("hidden");
         passBox.classList.add("hidden");
         actBox.classList.add("hidden");
       } else {
         nameEl.textContent = edef.name + (edef.title ? " — " + edef.title : "");
         blurbEl.textContent = key === "chefe_comandante" ? kaskaBlurb(codexForm) : (edef.blurb || G.enemyKindLabel(edef.kind));
+        basicBox.classList.add("hidden");
         G.enemyStatRows(edef).forEach(function (line) {
           var li = document.createElement("li");
           li.textContent = line;
@@ -891,6 +920,13 @@
     });
     var skills = document.getElementById("merge-preview-skills");
     skills.innerHTML = "";
+    var basic = G.unitBasic(def);
+    if (basic) {
+      var rowB = document.createElement("div");
+      rowB.className = "merge-skill";
+      rowB.innerHTML = "<span class=\"ico\">◉</span><p><b>Básico</b> — " + basic + "</p>";
+      skills.appendChild(rowB);
+    }
     var pass = G.unitPassives(def);
     pass.forEach(function (p) {
       var row = document.createElement("div");
@@ -905,10 +941,17 @@
       rowA.innerHTML = "<span class=\"ico\">" + (G.activeIconHtml ? G.activeIconHtml(def.active.id) : meta.icon) + "</span><p><b>Ativa · " + def.active.name + "</b> — " + (meta.detail || def.active.desc) + "</p>";
       skills.appendChild(rowA);
     }
-    if (!pass.length && !def.active) {
+    if (def.extraActive) {
+      var metaE = G.activeMeta(def.extraActive.id);
+      var rowE = document.createElement("div");
+      rowE.className = "merge-skill";
+      rowE.innerHTML = "<span class=\"ico\">" + (G.activeIconHtml ? G.activeIconHtml(def.extraActive.id) : metaE.icon) + "</span><p><b>Ativa · " + def.extraActive.name + "</b> — " + (metaE.detail || def.extraActive.desc) + "</p>";
+      skills.appendChild(rowE);
+    }
+    if (!basic && !pass.length && !def.active && !def.extraActive) {
       var empty = document.createElement("p");
       empty.className = "codex-blurb";
-      empty.textContent = "Sem passiva nem ativa listada.";
+      empty.textContent = "Sem básico, passiva nem ativa listada.";
       skills.appendChild(empty);
     }
   }

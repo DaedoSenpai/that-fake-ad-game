@@ -13,31 +13,36 @@
       kind: "recruta", name: "Recruta", short: "REC", gen: 0,
       hp: 46, dmg: 9, range: 140, fire: 0.85, speed: 152, size: 12,
       color: "#9ad4ff", accent: "#d7f1ff", projectile: "bullet", role: "recruit",
-      blurb: "A base do esquadrão. Tiro reto, sem especialidade.",
+      blurb: "Recruta novato, sem experiência de combate, mas com potencial pra virar qualquer coisa.",
+      basic: "Tiro básico.",
       merge: ["fuzileiro", "pistoleiro", "batedor", "psiquico"]
     }),
     psiquico: u({
       kind: "psiquico", name: "Psíquico", short: "PSI", gen: 1,
       hp: 58, dmg: 12, range: 185, fire: 1.0, speed: 148, size: 12,
       color: "#b08cff", accent: "#f0e8ff", projectile: "bullet", role: "psychic",
-      blurb: "Soldado com implante psíquico. Balas curvam de leve nos inimigos.",
-      active: { id: "psych_slam", name: "Martelo mental", cd: 12, desc: "Joga um dispositivo na mira. Levanta inimigos e bate no chão: pouco dano, atordoa." },
+      blurb: "Soldado que nasceu com o dom de ser telepata.",
+      basic: "Munição teleguiada leve: curva no inimigo mais perto da mira.",
+      active: { id: "psych_slam", name: "Martelo mental", cd: 12, desc: "Dispositivo de energia cinética. Ao acertar o chão, levanta e bate os inimigos no alcance: atordoa e causa dano." },
       merge: ["escolhido"]
     }),
     escolhido: u({
       kind: "escolhido", name: "Escolhido", short: "ESC", gen: 2,
       hp: 78, dmg: 15, range: 205, fire: 1.2, speed: 152, size: 13,
       color: "#d4c090", accent: "#ffe8a8", projectile: "laser", role: "chosen",
-      blurb: "Paródia espacial com blaster. Tiros laser. A ativa vira um stormtrooper: cadência absurda, mira péssima.",
-      active: { id: "stormtrooper", name: "Stormtrooper", cd: 14, desc: "Por 6s dispara feito louco, mas a mira fica uma bosta." },
+      blurb: "Guerreiro espacial. Desde o nascimento se sentiu especial, conectado a uma força maior.",
+      basic: "Tiros laser rápidos.",
+      active: { id: "stormtrooper", name: "Stormtrooper", cd: 14, desc: "Por 10s dispara 5× mais rápido, mas a precisão fica completamente aleatória." },
       merge: ["jedi"]
     }),
     jedi: u({
       kind: "jedi", name: "Jedi", short: "JED", gen: 3,
       hp: 165, dmg: 36, range: 115, fire: 1.05, speed: 168, size: 14,
       color: "#8a6a3a", accent: "#7affc8", projectile: "none", role: "jedi",
-      blurb: "Melee com sabre de energia. Salta no inimigo e corta em arco: quem estiver na lâmina toma o golpe. 50% de chance de defletir projéteis.",
-      active: { id: "saber_throw", name: "Sabre bumerangue", cd: 11, desc: "Arremessa o sabre grande até a mira. Corta no caminho de ida e na volta." },
+      blurb: "Escolhido pela Força. Jedi em treinamento.",
+      basic: "Salta no inimigo mais perto e corta em arco, causando dano em área.",
+      active: { id: "saber_throw", name: "Sabre bumerangue", cd: 11, desc: "Arremessa o sabre até a mira. Corta na ida e na volta." },
+      extraActive: { id: "force_pull", name: "Force Pull", cd: 10, desc: "Puxa os inimigos pro centro do cast, deixa lentos por um instante e causa um pouco de dano." },
       merge: ["mestre"]
     }),
     mestre: u({
@@ -45,15 +50,17 @@
       hp: 230, dmg: 48, range: 130, fire: 1.15, speed: 172, size: 15,
       color: "#5a3a78", accent: "#e8b0ff", projectile: "none", role: "jedi",
       unique: true,
-      blurb: "Versão superior do Jedi. O corte básico é em arco. Sempre deflete projéteis. A ativa abre o arsenal da Força num menu radial: empurrão, puxão, sabre e giro — tudo maior.",
-      active: { id: "force_menu", name: "Arsenal da Força", cd: 0, desc: "Segura o direito: menu radial. Cada poder tem recarga própria." },
+      blurb: "Mestre Jedi. Treinado pela Força — e virou a mesma.",
+      basic: "Golpe em arco. Pode emendar num combo: pula rápido pro próximo inimigo.",
+      active: { id: "force_menu", name: "Arsenal da Força", cd: 0, desc: "Segura o direito: menu radial com Empurrão, Puxão, lançamento de sabre e giro da Força." },
       merge: []
     }),
     fuzileiro: u({
       kind: "fuzileiro", name: "Fuzileiro", short: "FUZ", gen: 1,
       hp: 64, dmg: 15, range: 200, fire: 0.95, speed: 150, size: 13,
       color: "#4aa3ff", accent: "#b8dcff", projectile: "bullet", role: "rifle",
-      blurb: "Fuzil da linha de frente. Preciso. Enquanto atira, o grupo perde velocidade.",
+      blurb: "Fuzileiro experiente das linhas de frente.",
+      basic: "Tiro automático com boa precisão.",
       active: { id: "suppress", name: "Fogo de supressão", cd: 15, desc: "Por 5s os tiros empurram os inimigos." },
       merge: ["sniper", "metralhador", "caminhao"]
     }),
@@ -61,15 +68,17 @@
       kind: "pistoleiro", name: "Pistoleiro", short: "PST", gen: 1,
       hp: 58, dmg: 8, range: 110, fire: 1.4, speed: 156, size: 12,
       color: "#7cffb0", accent: "#d4ffe8", projectile: "bullet", role: "pistol",
-      blurb: "Medico de combate com pistola rápida. Acertar o alvo pode soltar nodes de vida no chão.",
+      blurb: "Médico de combate.",
+      basic: "Tiro curto e bem rápido na mira.",
       merge: ["medico", "dualista", "engenheiro"]
     }),
     batedor: u({
       kind: "batedor", name: "Batedor", short: "BAT", gen: 1,
       hp: 50, dmg: 11, range: 130, fire: 1.1, speed: 190, size: 11,
       color: "#ffe08a", accent: "#fff4c8", projectile: "bullet", role: "scout",
-      blurb: "Ponta de lança. O mais rápido das unidades iniciais.",
-      active: { id: "dash", name: "Disparada", cd: 6, desc: "Avança o dobro da distância na direção do movimento. Inimigos no caminho tomam dano. Invencível durante o avanço." },
+      blurb: "Unidade extremamente rápida.",
+      basic: "Tiro curto e rápido.",
+      active: { id: "dash", name: "Disparada", cd: 6, desc: "Avança o dobro da distância na direção do movimento. Dano no contato. Invulnerável até o destino." },
       merge: ["infiltrador", "mensageiro", "droneiro", "ponta_lanca"]
     }),
     sniper: u({
@@ -77,7 +86,8 @@
       hp: 70, dmg: 34, range: 310, fire: 0.42, speed: 132, size: 13,
       color: "#5ad0ff", accent: "#c8f4ff", projectile: "bullet", role: "sniper",
       infiniteRange: true,
-      blurb: "Um atirador de elite, quanto mais longe a distancia percorrida pela bala mais dano causa.",
+      blurb: "Franco-atirador de elite.",
+      basic: "Munição .50 com grande poder destrutivo.",
       active: { id: "mark", name: "Tiro marcado", cd: 11, desc: "O próximo tiro causa 4× o dano." },
       merge: ["anti_material", "observador", "designado"]
     }),
@@ -85,31 +95,33 @@
       kind: "metralhador", name: "Metralhador", short: "MET", gen: 2,
       hp: 95, dmg: 7, range: 165, fire: 2.8, speed: 134, size: 16,
       color: "#2f7dff", accent: "#8ec2ff", projectile: "bullet", role: "mg",
-      blurb: "Unidade com metralhadora automatica. Cinco tiros em leque. O coice empurra o esquadrão pra trás.",
-      active: { id: "focus_fire", name: "Foco absoluto", cd: 12, desc: "Por 8s o leque vira uma linha reta concentrada." },
+      blurb: "Veterano de várias guerras. Trocou o rifle semiautomático por um fuzil experimental que dispara mais de um projétil por vez.",
+      basic: "5 tiros em leque à frente.",
+      active: { id: "focus_fire", name: "Foco absoluto", cd: 12, desc: "Por 8s os 5 tiros se fundem num único ponto concentrado." },
       merge: ["lanca_chamas", "canhoneiro", "giratoria"]
     }),
     caminhao: u({
       kind: "caminhao", name: "Caminhão de comando", short: "CAM", gen: 2,
       hp: 160, dmg: 0, range: 0, fire: 0, speed: 110, size: 22,
       color: "#6a8aaa", accent: "#c8dce8", projectile: "none", role: "truck",
-      blurb: "Para-choque com campo magnético. Escudo de 7 pontos. Aguenta tiros e colisões e se regenera com o tempo.",
+      blurb: "Caminhão usado como base móvel.",
       merge: ["minitanque", "quartel", "oficina"]
     }),
     medico: u({
       kind: "medico", name: "Médico de campo", short: "MED", gen: 2,
       hp: 80, dmg: 6, range: 100, fire: 1.2, speed: 148, size: 13,
       color: "#e8fff0", accent: "#ffffff", projectile: "bullet", role: "medic",
-      blurb: "Arremessa um frasco tóxico na mira. A poça não cura: só atrasa o inimigo. Acertar quem já está lento pode soltar kit de vida.",
-      active: { id: "kit", name: "Kit de emergência", cd: 13, desc: "Solta 3 nodes de cura em cima do esquadrão. Inimigos em cima das poças também dropam um node na hora." },
+      blurb: "Médico e boticário, capaz de criar misturas curativas.",
+      basic: "Arremessa frascos curativos: poças no chão. Aliados curam, inimigos ficam lentos.",
+      active: { id: "kit", name: "Kit de emergência", cd: 13, desc: "3 nodes de cura em cima do esquadrão. Inimigo em cima da poça também dropa um node na hora." },
       merge: ["cirurgiao", "capelao", "socorrista"]
     }),
     dualista: u({
       kind: "dualista", name: "Dualista", short: "DUA", gen: 2,
       hp: 72, dmg: 12, range: 125, fire: 2.1, speed: 160, size: 13,
       color: "#ffb070", accent: "#ffe0c0", projectile: "bullet", role: "dual",
-      blurb: "Dois revolvers calibre .38. Drena vida se os dois tiros acertarem o mesmo alvo.",
-      lifesteal: true,
+      blurb: "Duelista experiente, com treino farmacêutico e munição especial que drena energia dos inimigos.",
+      basic: "Dois tiros paralelos.",
       active: { id: "doubletap", name: "Canos quentes", cd: 14, desc: "Por 10s, duplica a quantidade de tiros." },
       merge: ["fora_da_lei", "revolver", "saqueador"]
     }),
@@ -117,39 +129,44 @@
       kind: "engenheiro", name: "Engenheiro", short: "ENG", gen: 2,
       hp: 88, dmg: 22, range: 140, fire: 0.55, speed: 128, size: 15,
       color: "#d4c46a", accent: "#fff3b0", projectile: "mine", role: "engineer",
-      blurb: "Planta minas no cursor do mouse.",
-      active: { id: "supercharge", name: "Supercarga", cd: 13, desc: "As minas no chão incham: aumentando a area de efeito e o dano." },
+      blurb: "Engenheiro militar.",
+      basic: "Minas terrestres que explodem no contato.",
+      active: { id: "supercharge", name: "Supercarga", cd: 13, desc: "As minas no chão ganham pernas de inseto e correm sozinhas atrás do inimigo." },
       merge: ["mineiro", "tesla", "torreta"]
     }),
     infiltrador: u({
       kind: "infiltrador", name: "Infiltrador", short: "INF", gen: 2,
       hp: 60, dmg: 16, range: 120, fire: 1.3, speed: 198, size: 12,
       color: "#8a7cff", accent: "#ddd6ff", projectile: "bullet", role: "stealth",
-      blurb: "Agente especializado em infiltração. Pistola rápida e silenciada.",
-      active: { id: "smoke", name: "Cortina", cd: 10, dur: 3.2, desc: "Joga uma bomba de fumaça na mira. Inimigos dentro se perdem por 3s, correm pra longe e se machucam entre si." },
+      blurb: "Infiltrador experiente das forças especiais da Terra.",
+      basic: "Projéteis silenciosos e quase invisíveis.",
+      active: { id: "smoke", name: "Cortina", cd: 10, dur: 3.2, desc: "Granada de fumaça. Inimigos dentro se perdem e se ferem entre si. Quando acaba, fogem de medo por 1s." },
       merge: ["assassino", "sabotador", "fantasma"]
     }),
     mensageiro: u({
       kind: "mensageiro", name: "Mensageiro", short: "MEN", gen: 2,
       hp: 70, dmg: 9, range: 90, fire: 0.85, speed: 175, size: 13,
       color: "#ffd36a", accent: "#fff0c4", projectile: "bullet", role: "courier",
-      blurb: "Deixa um rastro. Andar nele dobra a velocidade.",
+      blurb: "A unidade mais veloz do exército da Terra.",
+      basic: "SMG de cadência alta e dano baixo.",
       merge: ["radio", "oficial", "bandeira"]
     }),
     droneiro: u({
       kind: "droneiro", name: "Droneiro", short: "DRN", gen: 2,
       hp: 68, dmg: 10, range: 180, fire: 1.5, speed: 170, size: 14,
       color: "#7af0ff", accent: "#e8ffff", projectile: "bullet", flying: true, role: "drone",
-      blurb: "O drone orbita a mira e dispara a partir dela.",
-      active: { id: "rocket", name: "Míssil do drone", cd: 11, desc: "O drone dispara um míssil teleguiado na mira. Explode em área com dano dobrado." },
+      blurb: "Drone de combate altamente tecnológico.",
+      basic: "Fica no esquadrão. Um drone armado orbita a mira e atira. Se o droneiro viver, o drone é imortal.",
+      active: { id: "rocket", name: "Míssil do drone", cd: 11, desc: "O drone dispara um míssil teleguiado. Dano em área." },
       merge: ["helicoptero", "bombardeiro", "recon"]
     }),
     ponta_lanca: u({
       kind: "ponta_lanca", name: "Ponta de lança", short: "PDL", gen: 2,
       hp: 82, dmg: 20, range: 90, fire: 1.15, speed: 205, size: 12,
       color: "#ff9a3a", accent: "#ffe0b0", projectile: "bullet", role: "spear",
-      blurb: "Se joga em cima do inimigo e esmaga no impacto.",
-      active: { id: "spear_dash", name: "Investida", cd: 8, desc: "O Ponta de lança avança até a mira, atravessa inimigos e volta pro grupo. Invulnerável no avanço e na volta." },
+      blurb: "A ponta de lança do exército da Terra. Destemido e meio inconsequente.",
+      basic: "Salto no inimigo mais perto. Esmaga no impacto.",
+      active: { id: "spear_dash", name: "Impalar", cd: 8, desc: "Se joga num inimigo, impala e volta pro esquadrão." },
       merge: ["ceifador", "phalanx", "warlord"]
     }),
     ceifador: u({
@@ -157,23 +174,27 @@
       hp: 118, dmg: 34, range: 200, fire: 0.85, speed: 212, size: 13,
       aoe: 60,
       color: "#8e1230", accent: "#e11d48", projectile: "none", role: "reaper",
-      blurb: "Ceifador do comapo de batalha, com sua foice desfere grandes ataques.",
-      active: { id: "reap", name: "Ceifa", cd: 20, desc: "Avança até a mira, gira e rasga em um circulo. Causa o dano do básico +10." },
+      blurb: "O ceifador do campo. Com a foice, ceifa a vida e absorve a essência.",
+      basic: "Avança no inimigo mais perto e causa dano em área no contato.",
+      active: { id: "reap", name: "Ceifa", cd: 20, desc: "Avança até a mira e canaliza um corte circular enorme. Cada inimigo morto nela: +0,1% de dano da ativa, até +100%." },
       merge: []
     }),
     phalanx: u({
       kind: "phalanx", name: "Phalanx", short: "PHX", gen: 3,
       hp: 210, dmg: 26, range: 90, fire: 0.9, speed: 128, size: 16,
       color: "#c4a45a", accent: "#fff0c4", projectile: "none", role: "paladin",
-      blurb: "Tanque de lança e escudo-torre. Salta no inimigo e dispara um feixe de energia além do impacto.",
-      active: { id: "phalanx_wall", name: "Falange", cd: 20, desc: "Dispara um anel de soldados no campo de batalha. Dois modos: se o esquadrão entra, o anel protege o jogador. Se cai em cima do bicho, vira Termópilas e espetam o centro. Dura 15s; a recarga de 20s só começa quando acaba." },
+      blurb: "Soldado de elite da Terra, com lança de energia e um escudo gigante.",
+      basic: "Salta no inimigo mais perto. No impacto, dispara um feixe de luz dourada.",
+      active: { id: "phalanx_wall", name: "Falange", cd: 20, desc: "Anel de soldados na mira por 15s. Se o esquadrão entra, protege o jogador. Se cai no bicho, vira Termópilas e espetam o centro. A recarga só começa quando acaba." },
       merge: []
     }),
     warlord: u({
       kind: "warlord", name: "Warlord", short: "WRL", gen: 3,
       hp: 128, dmg: 8, range: 90, fire: 2.05, speed: 222, size: 15,
       color: "#7a3a22", accent: "#c41e3a", projectile: "none", role: "warlord",
-      blurb: "Senhor da guerra com dois machados e dois guerreiros. Cortes fracos e rapidíssimos. Cada abate aumenta a cadência.",
+      blurb: "Guerreiros selvagens, criados com o único propósito de matar.",
+      basic: "Dois guerreiros cortam em linha e na horizontal; o Warlord fecha com dois slashes nas diagonais. Invulnerável no ataque e na volta.",
+      active: { id: "blood_rift", name: "Rasgo de Sangue", cd: 15, desc: "Os guerreiros juntam força. Stacks deixam de dar cadência e viram 200% em ataque: golpes em X devastadores." },
       merge: []
     }),
     anti_material: u({
@@ -181,8 +202,9 @@
       hp: 90, dmg: 92, range: 340, fire: 0.34, speed: 118, size: 15,
       color: "#3ec0ff", accent: "#b8f0ff", projectile: "cannon", role: "sniper",
       infiniteRange: true,
-      blurb: "Rifle de precisão com munição de anti-materia, o disparo é tão poderoso que destroi qualquer projetil inimigo no caminho.",
-      active: { id: "blackhole", name: "Buraco negro", cd: 14, desc: "Granada de com massa quase infinita cria um buraco negro que puxa inimigos ao centro e causa dano." },
+      blurb: "Especialista em disparos a longa distância com uma sniper antimaterial.",
+      basic: "Tiro preto que perfura e consome projéteis no caminho.",
+      active: { id: "blackhole", name: "Buraco negro", cd: 14, desc: "Granada de massa minúscula. No impacto, singularidade: puxa e fere inimigos próximos." },
       merge: []
     }),
     observador: u({
@@ -190,7 +212,8 @@
       hp: 75, dmg: 22, range: 300, fire: 0.7, speed: 150, size: 13,
       color: "#80e0ff", accent: "#e8ffff", projectile: "bullet", role: "observer",
       infiniteRange: true,
-      blurb: "Atirador de suporte. O tiro é teleguiado no inimigo mais perto da mira.",
+      blurb: "Franco-atirador focado em suporte operacional.",
+      basic: "Munição tracejante magnética: o disparo curva no inimigo mais perto da mira.",
       active: { id: "flare", name: "Marcação", cd: 8, desc: "Marca o inimigo na mira. Enquanto durar, todos os tiros do esquadrão viram teleguiados nele." },
       merge: []
     }),
@@ -198,95 +221,105 @@
       kind: "lanca_chamas", name: "Lança-chamas", short: "CHM", gen: 3,
       hp: 135, dmg: 11, range: 330, fire: 2.35, speed: 135, size: 17,
       color: "#ff7a2a", accent: "#ffd27a", projectile: "flame", role: "flamer",
-      blurb: "Cone de fogo. 10% de chance de derreter cada bala física.",
-      active: { id: "napalm", name: "Napalm", cd: 12, desc: "Jato branco-quente: dobro de alcance, queimadura forte e derrete todas as balas no cone." },
+      blurb: "Piromante do esquadrão de defesa da Terra. Incinera os corpos dos inimigos.",
+      basic: "Jato de fogo em cone. Aplica queimadura por 5s.",
+      active: { id: "napalm", name: "Fósforo branco", cd: 12, desc: "Labareda em linha reta de fósforo branco. Queimaduras severas e poças de fogo no chão." },
       merge: ["inferno"]
     }),
     canhoneiro: u({
       kind: "canhoneiro", name: "Canhoneiro", short: "CAN", gen: 3,
       hp: 120, dmg: 88, range: 250, fire: 0.48, speed: 118, size: 18,
       color: "#6aa84a", accent: "#d4ffb0", projectile: "grenade", role: "grenadier",
-      blurb: "Dispara granadas em arco, causando grande explosão no impacto.",
+      blurb: "Soldado com um lança-granadas poderoso.",
+      basic: "Arremessa uma granada grande. No impacto vira 6 bolinhas; cada uma vira mais 6.",
       merge: ["missil"]
     }),
     minitanque: u({
       kind: "minitanque", name: "Mini-tanque", short: "MTK", gen: 3,
       hp: 260, dmg: 22, range: 200, fire: 0.95, speed: 85, size: 22,
       color: "#3a6ad8", accent: "#9ad4ff", projectile: "bullet", role: "minitank",
-      blurb: "Mini Canhão lento com grande poder de destruição.",
-      active: { id: "firemode", name: "Modo de tiro", cd: 0.8, desc: "Alterna entre fuzil preciso e granadas que explodem no contato." },
+      blurb: "Pequeno tanque de combate, geralmente junto da linha de frente e dos fuzileiros.",
+      basic: "Tiros de .50 e lança-granadas menores.",
+      active: { id: "firemode", name: "Modo de tiro", cd: 0.8, desc: "Alterna fuzil de boa cadência e granadas de área pequena no contato." },
       merge: ["tanque"]
     }),
     quartel: u({
       kind: "quartel", name: "Quartel móvel", short: "QRT", gen: 3,
       hp: 240, dmg: 0, range: 0, fire: 0, speed: 96, size: 24,
       color: "#7a90a8", accent: "#e0e8f0", projectile: "none", role: "bunker",
-      blurb: "Solta iscas kamikaze na mira. Elas tomam o tiro no lugar do grupo e se sobreviverem o suficiente são promovidas por seus meritos.",
-      spawn: 25,
+      blurb: "Quartel móvel especializado em deploy de soldados no campo.",
+      spawn: 20,
       merge: []
     }),
     cirurgiao: u({
       kind: "cirurgiao", name: "Cirurgião", short: "CIR", gen: 3,
       hp: 95, dmg: 12, range: 150, fire: 1.15, speed: 142, size: 14,
       color: "#ffffff", accent: "#ffd0d0", projectile: "bullet", role: "surgeon",
-      blurb: "Médico especializado em cura no campo de batalha. Todo dano causado é curado na hora.",
-      active: { id: "scalpel_rain", name: "Chuva de bisturis", cd: 15, desc: "Dano em área na mira. Aplica sangramento e cura na hora o dano causado." },
+      blurb: "Médico de combate veterano.",
+      basic: "Arremessa bisturis que sangram: do leve ao moderado, conforme quantos acertam.",
+      active: { id: "scalpel_rain", name: "Chuva de bisturis", cd: 15, desc: "Bomba de lâminas na mira. Sangramento severo e cura o esquadrão com o dano causado." },
       merge: []
     }),
     capelao: u({
       kind: "capelao", name: "Capelão", short: "CAP", gen: 3,
       hp: 110, dmg: 7, range: 110, fire: 0.9, speed: 138, size: 15,
       color: "#f0e0a0", accent: "#fff8d8", projectile: "bullet", role: "chaplain",
-      blurb: "Medico devoto a mediça e a fé, além de curar também protege o grupo com uma âncora sagrada.",
-      active: { id: "bless", name: "Âncora sagrada", cd: 10, desc: "Invoca uma âncora sagrada na mira por 9s. Área dobrada. Perto dela o esquadrão toma 35% menos dano de todas as fontes." },
+      blurb: "Médico da fé. Dedicou a vida à cura pela fé, não pela medicina.",
+      basic: "Pistola básica. 30% de chance de curar um aliado no acerto.",
+      active: { id: "bless", name: "Âncora sagrada", cd: 10, desc: "Cruz sacra no campo. Aliados dentro tomam 35% menos dano." },
       merge: []
     }),
     fora_da_lei: u({
       kind: "fora_da_lei", name: "Fora-da-lei", short: "FDL", gen: 3,
       hp: 180, dmg: 36, range: 1800, fire: 2.4, speed: 168, size: 14,
       color: "#ff8a4a", accent: "#ffd0b0", projectile: "bullet", role: "outlaw",
-      blurb: "Fora da lei com uma calibre doze. Causa grande dano de perto e quase nada à distância. Joga arriscado.",
-      lifesteal: true,
-      active: { id: "bucknade", name: "Granada de chumbo", cd: 11, desc: "Arremessa uma granada que, no impacto, atira pra todos os lados como a escopeta dele." },
+      blurb: "Criminoso conhecido, convencido a lutar pela Terra por dinheiro.",
+      basic: "Calibre doze: cada disparo libera 10 pellets de pouco alcance.",
+      active: { id: "double_shotgun", name: "Double Shotgun", cd: 11, desc: "Puxa uma segunda shotgun por 5s." },
       merge: []
     }),
     mineiro: u({
       kind: "mineiro", name: "Mineiro", short: "MIN", gen: 3,
       hp: 130, dmg: 40, range: 150, fire: 0.42, speed: 116, size: 17,
       color: "#f0c422", accent: "#fff0a8", projectile: "mine", role: "miner",
-      blurb: "Especialista em minas e explosivos.",
-      active: { id: "carpet", name: "Tapete de minas", cd: 12, desc: "Planta minas em anel na mira, ou em linha no chão." },
+      blurb: "Demolição industrial militar. Anos explodindo minas de ouro e carvão.",
+      basic: "Joga 3 minas juntas.",
+      active: { id: "carpet", name: "Tapete de minas", cd: 12, desc: "Segura e desenha com minas. Plantam no fim do traço, até 30 na linha." },
       merge: []
     }),
     tesla: u({
       kind: "tesla", name: "Tesla", short: "TSL", gen: 3,
       hp: 130, dmg: 26, range: 300, fire: 0.9, speed: 124, size: 16,
       color: "#a8f6ff", accent: "#ffffff", projectile: "tesla", role: "tesla",
-      blurb: "Especialista em Eletricidade, dispara feixes continuo de energia até o cursor do mouse, eletrificando inimigos no caminho.",
-      active: { id: "coil", name: "Bobina", cd: 8, desc: "Planta uma bobina na mira, até 300 de alcance. O feixe da Tesla carrega a bateria da bobina. Ela zapa inimigos proximos enquanto tiver carga. Duas bobinas no alcance se alimentam e demoram o dobro pra esvaziar. Máximo 2; ao replantar, a mais velha muda de lugar." },
+      blurb: "Físico aficionado por eletricidade. O exército liberou baterias gigantes de uso restrito — e isso o convenceu a salvar a Terra.",
+      basic: "Feixe até o cursor. Quica entre inimigos.",
+      active: { id: "coil", name: "Bobina", cd: 8, desc: "Planta uma bobina. Precisa carregar pra disparar raios. Duas bobinas energizadas lado a lado: mais dano e bateria mais longa." },
       merge: []
     }),
     assassino: u({
       kind: "assassino", name: "Assassino", short: "ASN", gen: 3,
       hp: 65, dmg: 35, range: 100, fire: 1.6, speed: 225, size: 12,
       color: "#6a50c8", accent: "#ddd0ff", projectile: "bullet", role: "assassin",
-      blurb: "Pistola curta e uma faca de combate. O mais veloz do esquadrão.",
-      active: { id: "execute_dash", name: "Execução", cd: 9, desc: "Solta do esquadrão, fica invulnerável e teleporta no inimigo mais perto. Se matar, pula pro próximo até falhar." },
+      blurb: "Um dos assassinos mais perigosos da Terra. Cooperou em troca de carta branca pra matar alienígenas.",
+      basic: "Pistola que interrompe o alvo 0,5s (sem skill nem tiro à distância) e faca de sangramento corpo a corpo.",
+      active: { id: "execute_dash", name: "Execução", cd: 9, desc: "Solta do grupo, fica invulnerável e teleporta no inimigo com menos vida. Se matar: +2% de dano e pula pro próximo. Termina ao falhar." },
       merge: []
     }),
     radio: u({
       kind: "radio", name: "Rádio", short: "RAD", gen: 3,
       hp: 110, dmg: 18, range: 150, fire: 0.7, speed: 160, size: 15,
       color: "#ffcc66", accent: "#fff3cc", projectile: "grenade", role: "radio",
-      blurb: "Joga caixotes que esmagam no impacto.",
-      active: { id: "crate", name: "Suprimento", cd: 9, desc: "Caixa cai de paraquedas na mira. Ao abrir, sai ao acaso: cão ou megafone (imortais por 15s) ou gerador de escudo (30 hits)." },
+      blurb: "Suporte pelo rádio. Nunca gostou das linhas de frente.",
+      basic: "Arremessa caixotes explosivos. Tem a velocidade do mensageiro e o dano sobe com a velocidade.",
+      active: { id: "crate", name: "Suprimento", cd: 9, desc: "Airdrop na mira. Sai cão de combate, megafone desorientante ou gerador de nodes (5 arquivos em 15s)." },
       merge: []
     }),
     helicoptero: u({
       kind: "helicoptero", name: "Helicóptero", short: "HEL", gen: 3,
       hp: 175, dmg: 17, range: 230, fire: 1.75, speed: 195, size: 22,
       color: "#3ef0ff", accent: "#e8ffff", projectile: "bullet", flying: true, role: "heli",
-      blurb: "Dois drones pequenos orbitam a mira e atiram de lá.",
+      blurb: "Dois mini-helicópteros de alta tecnologia. Pequenos e letais.",
+      basic: "Os dois drones atiram a partir da mira.",
       active: { id: "strafe", name: "Passagem rasa", cd: 12, desc: "Explosão em anel embaixo de cada drone pequeno perto do cursor." },
       merge: ["gunship"]
     }),
@@ -295,76 +328,84 @@
       hp: 82, dmg: 20, range: 310, fire: 1, speed: 136, size: 14,
       color: "#4ec8e8", accent: "#d0f4ff", projectile: "bullet", role: "sniper",
       infiniteRange: true,
-      blurb: "Atirador especializado em fogo de supressão continuo, utiliza uma sniper semi automatica calibre .50, atirando um cadencia semelhante a uma metralhadora automatica.",
+      blurb: "Franco-atirador veterano de curta e média distância. PSG1 semiautomática com cadência de rifle de assalto.",
+      basic: "Projétil .50 com cadência de rifle automático.",
       merge: []
     }),
     giratoria: u({
       kind: "giratoria", name: "Giratória", short: "GIR", gen: 3,
       hp: 130, dmg: 6, range: 155, fire: 4.4, speed: 118, size: 18,
       color: "#1a6aff", accent: "#9ec4ff", projectile: "bullet", role: "mg",
-      blurb: "Precisa aquecer antes de começar a atirar. possui a maior velocidade de disparo do jogo.",
+      blurb: "Soldado forte que carrega uma gatling automática altamente poderosa.",
+      basic: "Projéteis extremamente velozes.",
       merge: []
     }),
     oficina: u({
       kind: "oficina", name: "Oficina móvel", short: "OFI", gen: 3,
       hp: 190, dmg: 0, range: 0, fire: 0, speed: 104, size: 22,
       color: "#7a9aaa", accent: "#d8ece8", projectile: "none", role: "truck",
-      blurb: "Joga sucata, fluido e bobina no chão. Cada um dá um efeito diferente.",
+      blurb: "Quartel móvel especializado em coleta de recursos e disrupção.",
       merge: []
     }),
     socorrista: u({
       kind: "socorrista", name: "Socorrista", short: "SOC", gen: 3,
       hp: 92, dmg: 8, range: 110, fire: 1.35, speed: 162, size: 13,
       color: "#b8ffd4", accent: "#ffffff", projectile: "bullet", role: "medic",
-      blurb: "Apoio de resgate com gancho. Pistola curta.",
-      active: { id: "hook", name: "Gancho", cd: 7, desc: "Gancho global na mira. Ao puxar, o esquadrão fica invulnerável." },
+      blurb: "Médico veterano especializado em resgates no campo.",
+      basic: "Pistola automática de alta cadência.",
+      active: { id: "hook", name: "Gancho", cd: 7, desc: "Gruda nas bordas ou no cenário. No trajeto o esquadrão fica invulnerável. No fim: +5% de cura por segundo por 5s." },
       merge: []
     }),
     revolver: u({
       kind: "revolver", name: "Cano longo", short: "REV", gen: 3,
       hp: 88, dmg: 22, range: 145, fire: 1.15, speed: 158, size: 13,
       color: "#e8a060", accent: "#ffe8c8", projectile: "bullet", role: "dual",
-      blurb: "Tiro lento que perfura e ricocheteia. Se ricochetear em inimigos próximos o dano é triplicado.",
-      active: { id: "fan", name: "Tambor cheio", cd: 12, desc: "Fere todo inimigo perto da unidade." },
+      blurb: "Atirador que descobriu um jeito místico de fazer as balas dobrarem.",
+      basic: "Até 3 ricochetes. Cada alvo novo: +1× de dano.",
+      active: { id: "fan", name: "Tambor cheio", cd: 12, desc: "6 balas em 6 inimigos diferentes. Se o alvo morrer, o ricochete atualiza e pode pular de novo." },
       merge: []
     }),
     saqueador: u({
       kind: "saqueador", name: "Saqueador", short: "SAQ", gen: 3,
       hp: 110, dmg: 16, range: 120, fire: 1.8, speed: 150, size: 15,
       color: "#c86a3a", accent: "#ffd0a8", projectile: "bullet", role: "outlaw",
-      blurb: "Fraco no corpo a corpo. Acertar bala inimiga no ar apaga elas e cura o grupo.",
-      active: { id: "hijack", name: "Traição", cd: 14, desc: "Rouba o inimigo na mira. Ele luta do nosso lado por 30s e depois explode. Não funciona em chefes e subchefes." },
+      blurb: "Ladrão experiente sentenciado à morte. Aceitou defender a Terra por liberdade.",
+      basic: "Não tem arma própria: rouba de inimigos caídos com projétil ou arma à distância. Quem perde a arma fica parado, incrédulo.",
+      active: { id: "pilantragem", name: "Pilantragem", cd: 14, desc: "Mistura todas as armas do cofre numa aberração. Dispara tudo com as propriedades originais por 10s. Depois o cofre esvazia." },
       merge: []
     }),
     torreta: u({
       kind: "torreta", name: "Torreta", short: "TOR", gen: 3,
       hp: 140, dmg: 26, range: 200, fire: 0.9, speed: 96, size: 18,
       color: "#c8b45a", accent: "#fff3b0", projectile: "cannon", role: "minitank",
-      blurb: "Canhão pesado e automatico. Atira continuamente em uma direção.",
-      active: { id: "deploy", name: "Instalar", cd: 8, desc: "Menu radial: metralhadora, lança-chamas ou jolt. A torreta arremessa a sentry na mira." },
+      blurb: "Engenheiro especializado em torretas.",
+      basic: "Canhão automático no ombro. Atira no inimigo mais perto.",
+      active: { id: "deploy", name: "Instalar", cd: 8, desc: "Menu radial: lança-chamas (10 sucata, 360°, queima), metralhadora (10, cadência alta), Tesla Coil (12, raios que quicam) ou Shield Generator (15, escudo de 20 no grupo). 15s, menos o escudo." },
       merge: []
     }),
     sabotador: u({
       kind: "sabotador", name: "Sabotador", short: "SAB", gen: 3,
       hp: 70, dmg: 40, range: 115, fire: 1.2, speed: 188, size: 12,
       color: "#6a70c8", accent: "#d0d4ff", projectile: "mine", role: "stealth",
-      blurb: "Gruda explosivo no inimigo. Fica armado até detonar.",
-      active: { id: "detonate", name: "Detonação", cd: 1.2, desc: "Detona todos os explosivos grudados nos inimigos." },
+      blurb: "Especialista em disrupção e explosivos.",
+      basic: "C4 que gruda no alvo e explode após 5s.",
       merge: []
     }),
     fantasma: u({
       kind: "fantasma", name: "Fantasma", short: "FAN", gen: 3,
       hp: 60, dmg: 24, range: 100, fire: 1.5, speed: 215, size: 11,
       color: "#a090ff", accent: "#f0ecff", projectile: "bullet", role: "assassin",
-      blurb: "Tiro causa medo. Assombração revivida com metodos proibidos.",
-      active: { id: "haunt", name: "Assombração", cd: 12, dur: 3, desc: "Por 3s o esquadrão fica imune a tudo. Passar por cima de inimigos causa medo: eles fogem e se batem." },
+      blurb: "Fantasma de um general que lutou contra forças extraplanares e voltou pra defender o planeta.",
+      basic: "Tiro causa medo 0,5s: fogem dele e empurram quem encostar.",
+      active: { id: "haunt", name: "Assombração", cd: 12, dur: 3, desc: "Por 3s o esquadrão fica imune. Passar por cima causa medo. Aspecto macabro: tiros ganham medo por 10s." },
       merge: []
     }),
     oficial: u({
       kind: "oficial", name: "Oficial", short: "OFC", gen: 3,
       hp: 95, dmg: 10, range: 130, fire: 1.0, speed: 160, size: 14,
       color: "#f0c84a", accent: "#fff4c8", projectile: "bullet", role: "courier",
-      blurb: "Comando de campo e segundo no comando após o comandante. Possui uma pistola curta e um sinalizador que ajuda os aliados a causarem mais estrago.",
+      blurb: "Segundo no comando, abaixo só do comandante.",
+      basic: "Pistola simples.",
       active: { id: "order", name: "Sinalizador", cd: 10, desc: "Afeta o campo inteiro por 8s: +25% de dano e +35% de cadência. Aura vermelha e fumaça." },
       merge: []
     }),
@@ -373,23 +414,26 @@
       hp: 135, dmg: 6, range: 90, fire: 0.7, speed: 148, size: 15,
       color: "#e8d080", accent: "#fff8d0", projectile: "bullet", role: "radio",
       swordDmg: 52, swordRange: 150, swordFire: 0.9,
-      blurb: "Estandarte do esquadrão. Corre até o inimigo e o espetá com a bandeira, fornecendo um buff de moral para todo o esquadrão.",
-      active: { id: "standard", name: "Estandarte", cd: 12, desc: "Finca um estandarte na mira por 15s. Enquanto ele durar e o grupo estiver dentro fornece +40% de dano, cadência e velocidade. Loot dentro é puxado sozinho." },
+      blurb: "Porta-estandarte da Terra. Carrega a bandeira do planeta com bravura.",
+      basic: "Salto no inimigo, estocando com as bandeiras.",
+      active: { id: "standard", name: "Estandarte", cd: 12, desc: "Finca na mira por 15s. Dentro: +40% dano, cadência e velocidade. Loot é puxado sozinho. A recarga só começa quando acaba." },
       merge: []
     }),
     bombardeiro: u({
       kind: "bombardeiro", name: "Bombardeiro", short: "BMB", gen: 3,
       hp: 155, dmg: 28, range: 210, fire: 0.55, speed: 168, size: 20,
       color: "#5ad0c8", accent: "#d8ffff", projectile: "grenade", flying: true, role: "heli",
-      blurb: "Um drone gordinho orbita a mira e dispara de lá.",
-      active: { id: "airstrike", name: "Bombardeio", cd: 10, desc: "Segura e desenha uma linha. Explosões caem no caminho." },
+      blurb: "Drone grande especializado em drop de bombas.",
+      basic: "Bombas teleguiadas pequenas no cursor.",
+      active: { id: "airstrike", name: "Bombardeio", cd: 10, desc: "Segura e desenha uma linha. O drone joga bombas lentamente no traço." },
       merge: []
     }),
     recon: u({
       kind: "recon", name: "Reconhecimento", short: "RCN", gen: 3,
       hp: 78, dmg: 12, range: 220, fire: 1.4, speed: 186, size: 14,
       color: "#8af0d8", accent: "#f0ffff", projectile: "bullet", flying: true, role: "drone",
-      blurb: "Recon aéreo. O drone atira balas tracejantes que marcam o alvo: alvos marcados tomam mais dano.",
+      blurb: "Drone de reconhecimento furtivo, com balas tracejantes.",
+      basic: "Munição colorida que gruda no alvo: +5% de dano recebido por projétil, 5s, stacks ilimitados.",
       merge: []
     }),
     inferno: u({
@@ -397,8 +441,9 @@
       hp: 180, dmg: 15, range: 135, fire: 2.7, speed: 130, size: 19,
       color: "#ff4a18", accent: "#ffe08a", projectile: "flame", role: "inferno",
       unique: true,
-      blurb: "Piromaniaco veterno que só está em atividade por ser altamente eficiente. Quem morre queimado deixa uma poça de fogo no chão.",
-      active: { id: "firewave", name: "Maré de fogo", cd: 12, desc: "Onda de fogo branco sai do Inferno e varre o mapa inteiro." },
+      blurb: "Piromaníaco especializado em causar o caos. O exército só o mantém porque os métodos são extremamente eficientes.",
+      basic: "Cone de fogo, mais forte que o lança-chamas.",
+      active: { id: "firewave", name: "Maré de fogo", cd: 12, desc: "Onda de fogo branco varre o mapa. Derrete projéteis inimigos e aplica queimadura em todos na tela." },
       merge: []
     }),
     missil: u({
@@ -406,24 +451,27 @@
       hp: 150, dmg: 36, range: 250, fire: 0.55, speed: 120, size: 18,
       color: "#c46bff", accent: "#f0c8ff", projectile: "missile", role: "missile",
       unique: true,
-      blurb: "Saraivada de cinco misseis. Mira parada no chefe orbita. Em movimento, espalha.",
-      active: { id: "salvo", name: "Salva", cd: 13, desc: "Dispara 6 mísseis teleguiados na mira." },
+      blurb: "Soldado com uma RPG teleguiada.",
+      basic: "Mísseis teleguiados. A cada 5 disparos, solta 5 de uma vez que perseguem inimigos.",
+      active: { id: "salvo", name: "Salva", cd: 13, desc: "12 mísseis teleguiados que perseguem inimigos aleatórios no mapa." },
       merge: []
     }),
     tanque: u({
       kind: "tanque", name: "Tanque", short: "TAN", gen: 4,
       hp: 340, dmg: 28, range: 205, fire: 0.95, speed: 92, size: 26,
       color: "#1c64d8", accent: "#7ad0ff", projectile: "bullet", role: "tank",
-      blurb: "Tanque de guerra com o que há de mais avançado em armamento e blindagem.",
-      active: { id: "firemode", name: "Modo de tiro", cd: 0.8, desc: "Fuzil, granada de contato ou barragem (1× por fase)." },
+      blurb: "Tanque de guerra pesado e altamente tecnológico.",
+      basic: "Fuzil, granada e uma barragem poderosa.",
+      active: { id: "firemode", name: "Modo de tiro", cd: 0.8, desc: "Cicla fuzil, granadeira e barragem. A barragem recarrega a cada 30s e causa dano massivo no mapa inteiro." },
       merge: ["colosso"]
     }),
     gunship: u({
       kind: "gunship", name: "Canhoneira", short: "GUN", gen: 4,
       hp: 200, dmg: 22, range: 250, fire: 2.0, speed: 176, size: 24,
       color: "#2ad8ff", accent: "#f0ffff", projectile: "bullet", flying: true, role: "gunship",
-      blurb: "Canhoneira. Metralhadora teleguiada na mira.",
-      active: { id: "carpetbomb", name: "Tapete de bombas", cd: 1, desc: "Bombas caem sem parar sob a mira." },
+      blurb: "Drone secreto, usado em operações de invasão rápida.",
+      basic: "3 projéteis por vez, todos no cursor.",
+      active: { id: "runic_ammo", name: "Munição Rúnica", cd: 15, desc: "Por 10s cada disparo ganha um efeito aleatório: sangramento, lentidão, veneno, queimadura, eletrocutado, bounce, perfuração, lifesteal ou explosão." },
       merge: ["colosso"]
     }),
     colosso: u({
@@ -432,16 +480,18 @@
       aoe: 250,
       color: "#e8f6ff", accent: "#7af7ff", projectile: "none", role: "colossus",
       unique: true,
-      blurb: "Gundam de combate corpo a corpo. Salta no inimigo mais perto e cicla slam elétrico, investida de escudo (parede de energia que come bala) e rocket punch que ricocheteia. Caríssimo: 100 arquivos de guerra pra fazer — o Quartel de Blindados no QG pode baixar pra 80.",
-      active: { id: "energy_blade", name: "Lâmina de energia", cd: 30, dur: 10, desc: "Empunha a espada de energia. Ao atirar, lança até 5 slashes de luz lentos, de alcance infinito e largura enorme." },
+      blurb: "Meca de combate monstruoso, construído pra lutar contra kaijus e alienígenas.",
+      basic: "Cicla três golpes no inimigo mais perto: slam, investida de escudo e rocket punch que ricocheteia.",
+      active: { id: "energy_blade", name: "Lâmina de energia", cd: 30, dur: 10, desc: "Por 10s os golpes básicos viram slashes de energia: dano, perfuração e alcance infinitos." },
       merge: []
     }),
     comandante: u({
       kind: "comandante", name: "Comandante", short: "CMD", gen: 0,
       hp: 150, dmg: 12, range: 170, fire: 0.85, speed: 150, size: 15,
       color: "#ffd24a", accent: "#fff4c4", projectile: "bullet", role: "commander",
-      blurb: "Líder do esquadrão e esperança da humanidade. A pistola laser marca o alvo e orienta onde deve ser disparado. Inimigos derrotados se transforam em reforço que vira arquivo de guerra quando o esquadrão pega. R gasta arquivos: 1 convoca um recruta, o resto promove o esquadrão. Não ocupa vaga — se ele cair, a operação acaba.",
-      active: { id: "guerrilla", name: "Comandos de guerrilha", cd: 0, desc: "Segura o direito: menu radial. Cima, direita e esquerda. O QG troca cada fatia (A ou B). Solta na fatia; volta ao centro pra cancelar." },
+      blurb: "Líder. Se for abatido, a missão fracassa.",
+      basic: "Pistola com mira laser.",
+      active: { id: "guerrilla", name: "Comandos de guerrilha", cd: 0, desc: "Segura o direito: menu radial de ordens de guerrilha." },
       merge: []
     })
   };
@@ -501,59 +551,64 @@
   };
 
   G.ACTIVE_META = {
-    dash: { icon: "💨", color: "#ffe08a", detail: "Avança o dobro da distância. Inimigos no caminho tomam dano de contato. Invencível durante o avanço." },
-    spear_dash: { icon: "🗡", color: "#ff9a3a", detail: "Só o Ponta de lança avança até a mira, atravessa inimigos e volta pro grupo. Invulnerável no avanço e na volta." },
-    phalanx_wall: { icon: "🛡", color: "#c4a45a", detail: "Avança até a mira e forma um círculo de paladinos por 15s. Cada um aguenta 2 hits; se cair, abre brecha. Boss acerta em cheio e hit-killa os soldados. A recarga de 20s só começa quando acaba." },
+    dash: { icon: "💨", color: "#ffe08a", detail: "Avança o dobro da distância na direção do movimento. Dano no contato. Invulnerável até o destino." },
+    spear_dash: { icon: "🗡", color: "#ff9a3a", detail: "Se joga num inimigo, impala e volta pro esquadrão." },
+    phalanx_wall: { icon: "🛡", color: "#c4a45a", detail: "Anel de soldados na mira por 15s. Se o esquadrão entra, protege. Se cai no bicho, vira Termópilas. A recarga só começa quando acaba." },
     reap: {
       icon: "☽",
       iconHtml: '<svg class="scythe-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 21.2 L12.1 3.6" fill="none" stroke="#3a1420" stroke-width="2.35" stroke-linecap="round"/><path d="M12.2 3.4 C18.4 2.6 22.2 7.2 21.4 13.6 C18.6 8.4 15.2 6.2 12.2 6.8 Z" fill="#c41e3a" stroke="#ff6b81" stroke-width="1.05" stroke-linejoin="round"/><path d="M12.4 4.2 C16.8 4 19.6 7.2 19.2 11.4" fill="none" stroke="#ffe4ea" stroke-width="1.1" stroke-linecap="round"/></svg>',
       color: "#c41e3a",
-      detail: "Avança até a mira, gira e rasga um círculo de 400. Causa o dano do básico +10."
+      detail: "Avança até a mira e canaliza um corte circular enorme. Cada inimigo morto nela: +0,1% de dano da ativa, até +100%."
     },
     suppress: { icon: "🛢", color: "#4aa3ff", detail: "Por 5s os tiros empurram os inimigos." },
     focus_fire: { icon: "◎", color: "#2f7dff", detail: "Por 8s o leque vira uma linha reta concentrada." },
     blackhole: { icon: "🕳", color: "#3ec0ff", detail: "Granada de 300px que puxa inimigos ao centro e causa dano." },
     hijack: { icon: "💰", color: "#c86a3a", detail: "Rouba o inimigo na mira. Ele luta do nosso lado por 30s e depois explode. Não funciona em chefes e subchefes." },
+    pilantragem: { icon: "💰", color: "#c86a3a", detail: "Mistura todas as armas do cofre numa aberração. Dispara tudo com as propriedades originais por 10s. Depois o cofre esvazia." },
     mark: { icon: "🎯", color: "#7ad8ff", detail: "O próximo tiro causa 4× o dano." },
     order: { icon: "📣", color: "#ffb070", detail: "Afeta o campo inteiro por 8s: +25% de dano e +35% de cadência." },
     kit: { icon: "✚", color: "#7cffb0", detail: "Três nodes de cura caem em cima do esquadrão. Inimigos em cima das poças também dropam um node na hora." },
-    napalm: { icon: "🔥", color: "#fff4c8", detail: "Jato branco-quente. Dobra o alcance, queima mais e apaga todas as balas no cone." },
-    firewave: { icon: "🌋", color: "#fff4c8", detail: "Onda de fogo branco explode do Inferno e corre em círculo até as beiradas. Queima tudo no caminho e derrete bala física." },
-    smoke: { icon: "🌫", color: "#c8d0dc", detail: "Fumaça 30% maior. Inimigos dentro entram em fúria e atacam o mais próximo." },
-    bless: { icon: "✝", color: "#ffe9a0", detail: "Âncora na mira por 9s. Área dobrada. Perto dela o esquadrão toma 35% menos dano." },
-    carpet: { icon: "⚠", color: "#f0c422", detail: "Segura e desenha minas no chão." },
+    napalm: { icon: "🔥", color: "#fff4c8", detail: "Labareda em linha reta de fósforo branco. Queimaduras severas e poças de fogo no chão." },
+    firewave: { icon: "🌋", color: "#fff4c8", detail: "Onda de fogo branco varre o mapa. Derrete projéteis inimigos e aplica queimadura em todos na tela." },
+    smoke: { icon: "🌫", color: "#c8d0dc", detail: "Granada de fumaça. Inimigos dentro se perdem e se ferem entre si. Quando acaba, fogem de medo por 1s." },
+    bless: { icon: "✝", color: "#ffe9a0", detail: "Cruz sacra no campo. Aliados dentro tomam 35% menos dano." },
+    carpet: { icon: "⚠", color: "#f0c422", detail: "Segura e desenha com minas. Plantam no fim do traço, até 30 na linha." },
     storm: { icon: "⚡", color: "#a8f6ff", detail: "Choque em volta da Tesla." },
-    coil: { icon: "⚡", color: "#a8f6ff", detail: "Planta uma bobina. O feixe da Tesla carrega a bateria. Sem carga, ela desliga. Duas no alcance se alimentam e duram o dobro." },
+    coil: { icon: "⚡", color: "#a8f6ff", detail: "Planta uma bobina. Precisa carregar pra disparar raios. Duas bobinas energizadas lado a lado: mais dano e bateria mais longa." },
     pulse: { icon: "💥", color: "#7af7ff", detail: "Onda de choque em volta do Colosso. Empurra e fere." },
-    energy_blade: { icon: "⚔", color: "#7af7ff", detail: "Empunha a espada de energia. Ao atirar, lança até 5 slashes de luz lentos, de alcance infinito e largura enorme." },
-    overcharge: { icon: "⚔", color: "#7af7ff", detail: "Empunha a espada de energia. Ao atirar, lança até 5 slashes de luz lentos, de alcance infinito e largura enorme." },
+    energy_blade: { icon: "⚔", color: "#7af7ff", detail: "Por 10s os golpes básicos viram slashes de energia: dano, perfuração e alcance infinitos." },
+    overcharge: { icon: "⚔", color: "#7af7ff", detail: "Por 10s os golpes básicos viram slashes de energia: dano, perfuração e alcance infinitos." },
     scalpel_rain: { icon: "💉", color: "#ffd0d0", detail: "Chuva de bisturis na mira. Dano em área, sangramento, e o dano causado cura o esquadrão na hora." },
-    bucknade: { icon: "💣", color: "#ff8a4a", detail: "Granada que, no impacto, atira pra todos os lados como a escopeta do Fora-da-lei." },
+    bucknade: { icon: "💣", color: "#ff8a4a", detail: "Puxa uma segunda shotgun por 5s." },
+    double_shotgun: { icon: "🔫", color: "#ff8a4a", detail: "Puxa uma segunda shotgun por 5s." },
     strafe: { icon: "✈", color: "#3ef0ff", detail: "Explosão em anel embaixo de cada drone pequeno perto do cursor." },
-    salvo: { icon: "🚀", color: "#c46bff", detail: "Seis mísseis teleguiados na mira." },
-    firemode: { icon: "🔄", color: "#9ad4ff", detail: "Alterna o modo de tiro do tanque." },
-    fan: { icon: "🔫", color: "#ff8a4a", detail: "Fere todo inimigo perto da unidade." },
+    salvo: { icon: "🚀", color: "#c46bff", detail: "12 mísseis teleguiados que perseguem inimigos aleatórios no mapa." },
+    firemode: { icon: "🔄", color: "#9ad4ff", detail: "Cicla fuzil, granadeira e barragem. A barragem recarrega a cada 30s." },
+    fan: { icon: "🔫", color: "#ff8a4a", detail: "6 balas em 6 inimigos diferentes. Se o alvo morrer, o ricochete atualiza." },
     ram: { icon: "🛡", color: "#7ad0ff", detail: "Avança na mira, apaga projéteis no caminho e recarrega o canhão. Invencível durante o avanço." },
     flare: { icon: "✨", color: "#ffe08a", detail: "Marca o inimigo na mira. Enquanto durar, todos os tiros do esquadrão viram teleguiados nele." },
-    doubletap: { icon: "🔫", color: "#ffb070", detail: "Por 10s, dispara dois tiros de uma vez." },
-    supercharge: { icon: "⚡", color: "#d4c46a", detail: "As minas no chão incham: mais área e mais dano." },
-    rocket: { icon: "🚀", color: "#7af0ff", detail: "Míssil teleguiado na mira. Explode em área grande com dano dobrado." },
-    execute_dash: { icon: "🗡", color: "#c8a0ff", detail: "Solta do esquadrão, fica invulnerável e teleporta no mais perto. Se matar, continua até falhar." },
-    haunt: { icon: "👻", color: "#a090ff", detail: "Por 3s o esquadrão fica imune a tudo. Passar por cima de inimigos causa medo: eles fogem e se batem." },
-    crate: { icon: "📦", color: "#ffcc66", detail: "Caixa cai de paraquedas na mira. Ao abrir, sai ao acaso: cão mecânico (late, imortal por 15s), gerador de escudo (30 hits) ou megafone sônico (imortal por 15s, dano e confusão)." },
-    hook: { icon: "🪝", color: "#7cffb0", detail: "Gancho global. Ao puxar, o esquadrão fica invulnerável." },
-    deploy: { icon: "🗼", color: "#c8b45a", detail: "Menu radial: metralhadora, lança-chamas ou jolt. A torreta arremessa a sentry na mira, no máximo a 200px do centro do esquadrão." },
+    doubletap: { icon: "🔫", color: "#ffb070", detail: "Por 10s, duplica a quantidade de tiros." },
+    supercharge: { icon: "⚡", color: "#d4c46a", detail: "As minas no chão ganham pernas de inseto e correm sozinhas atrás do inimigo." },
+    rocket: { icon: "🚀", color: "#7af0ff", detail: "Míssil teleguiado. Explode em área." },
+    execute_dash: { icon: "🗡", color: "#c8a0ff", detail: "Solta do grupo, fica invulnerável e teleporta no inimigo com menos vida. Se matar: +2% de dano e pula pro próximo. Termina ao falhar." },
+    haunt: { icon: "👻", color: "#a090ff", detail: "Por 3s o esquadrão fica imune. Passar por cima causa medo. Aspecto macabro: tiros ganham medo por 10s." },
+    crate: { icon: "📦", color: "#ffcc66", detail: "Airdrop na mira. Sai cão de combate, megafone desorientante ou gerador de nodes (5 arquivos em 15s)." },
+    hook: { icon: "🪝", color: "#7cffb0", detail: "Gruda nas bordas ou no cenário. No trajeto o esquadrão fica invulnerável. No fim: +5% de cura por segundo por 5s." },
+    deploy: { icon: "🗼", color: "#c8b45a", detail: "Menu radial: lança-chamas (10 sucata), metralhadora (10), Tesla Coil (12) ou Shield Generator (15, escudo de 20 no grupo)." },
     detonate: { icon: "💥", color: "#ff6b6b", detail: "Detona todos os explosivos grudados nos inimigos." },
     magnet: { icon: "🚩", color: "#e8d080", detail: "Finca um estandarte na mira por 15s. +40% de dano, cadência e velocidade. Loot dentro é coletado sozinho. O cooldown só começa quando ele cai." },
     standard: { icon: "🚩", color: "#e8d080", detail: "Finca um estandarte na mira por 15s. +40% de dano, cadência e velocidade. Loot dentro é coletado sozinho. O cooldown só começa quando ele cai." },
-    airstrike: { icon: "💣", color: "#5ad0c8", detail: "Desenha uma linha. Explosões caem no caminho." },
-    carpetbomb: { icon: "✈", color: "#2ad8ff", detail: "Bombas caem sem parar sob a mira." },
+    airstrike: { icon: "💣", color: "#5ad0c8", detail: "Desenha uma linha. O drone joga bombas lentamente no traço." },
+    carpetbomb: { icon: "✈", color: "#2ad8ff", detail: "Por 10s cada disparo ganha um efeito rúnico aleatório." },
+    runic_ammo: { icon: "✦", color: "#2ad8ff", detail: "Por 10s cada disparo ganha um efeito aleatório: sangramento, lentidão, veneno, queimadura, eletrocutado, bounce, perfuração, lifesteal ou explosão." },
     archive: { icon: "⭐", color: "#ffd24a", detail: "O esquadrão pega o reforço caído e vira arquivo. R abre a lista: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Colosso custa 100." },
     guerrilla: { icon: "◎", color: "#ffd24a", detail: "Segura o direito: menu radial. Cima, direita e esquerda têm recarga própria. O QG (aba Comando) troca cada fatia entre A e B. Centro cancela." },
     psych_slam: { icon: "🔮", color: "#b08cff", detail: "Dispositivo na mira. Levanta inimigos próximos e esmaga no chão: pouco dano, atordoa por ~1,4s. Chefes levam stun curto." },
-    stormtrooper: { icon: "💥", color: "#d4c090", detail: "Por 6s a cadência explode, mas cada tiro sai com mira horrível — clássico stormtrooper." },
-    saber_throw: { icon: "⚔", color: "#7affc8", detail: "Arremessa o sabre até a mira. Lâmina larga: corta no caminho de ida e na volta." },
-    force_menu: { icon: "◎", color: "#e8b0ff", detail: "Segura o direito: menu radial. Empurrão, puxão, sabre e giro têm recarga individual. Tudo em área grande. Centro cancela." }
+    stormtrooper: { icon: "💥", color: "#d4c090", detail: "Por 10s dispara 5× mais rápido, mas a precisão fica completamente aleatória." },
+    saber_throw: { icon: "⚔", color: "#7affc8", detail: "Arremessa o sabre até a mira. Corta na ida e na volta." },
+    force_pull: { icon: "🌀", color: "#7affc8", detail: "Puxa os inimigos pro centro do cast, deixa lentos por um instante e causa um pouco de dano." },
+    force_menu: { icon: "◎", color: "#e8b0ff", detail: "Segura o direito: menu radial. Empurrão, puxão, lançamento de sabre e giro da Força." },
+    blood_rift: { icon: "🩸", color: "#c41e3a", detail: "Stacks deixam de dar cadência e convertem 200% em ataque: golpes em X devastadores." }
   };
 
   G.activeMeta = function (id) {
@@ -658,76 +713,60 @@
   };
 
   var UNIT_PASSIVES = {
-    recruta: { id: "linefire", name: "Tiro reto", desc: "Atira em linha reta na mira." },
-    fuzileiro: { id: "focus", name: "Modo foco", desc: "Cadência alta e tiro preciso na mira. Enquanto atira, o esquadrão fica 30% mais lento." },
-    pistoleiro: { id: "hitheal", name: "Kit no acerto", desc: "Acerto pode soltar um kit de vida no chão. O esquadrão se cura ao passar." },
-    batedor: { id: "scoutgun", name: "Passo leve", desc: "O mais rápido do começo. A disparada atravessa inimigos e causa dano de contato." },
-    psiquico: { id: "softseek", name: "Munição sintonizada", desc: "Balas teleguiadas leves: curvam no inimigo mais perto da mira, sem perseguir agressivo." },
-    escolhido: { id: "blaster", name: "Blaster", desc: "Tiros laser rápidos. A ativa troca precisão por volume — e a mira piora pra valer." },
-    jedi: { id: "sabercut", name: "Corte de sabre", desc: "Salta no inimigo mais perto e corta em arco. O golpe da lâmina acerta quem estiver na frente, não só o alvo." },
-    mestre: { id: "forcemaster", name: "Domínio", desc: "Como o Jedi, com mais peso e o mesmo corte em arco. A ativa abre o arsenal da Força num menu radial." },
-    sniper: { id: "rangedmg", name: "Punição de perto", desc: "Alcance infinito. A bala atravessa a tela na linha da mira. Dano sobe com a distância; de perto, fraqueja." },
-    metralhador: { id: "recoil", name: "Coice", desc: "Cinco tiros em leque na mira. O recuo empurra o esquadrão pro lado oposto." },
-    caminhao: { id: "bumper", name: "Bolha de comando", desc: "Escudo em volta do grupo (7 pontos). Segura o esquadrão dentro, empurra inimigo. Contato físico e projétil gastam o escudo. Recarrega 1 ponto a cada 5s e volta inteiro em 10s se quebrar. Merges da linha têm 10 pontos." },
-    medico: { id: "toxin", name: "Frasco tóxico", desc: "Arremessa frascos na mira. A poça só atrasa o inimigo — não cura. Acertar quem já está lento pode soltar kit de vida, como o Pistoleiro." },
-    dualista: { id: "twinhit", name: "Canos gêmeos", desc: "Dois tiros paralelos. Só drena vida se os dois acertarem o mesmo alvo." },
-    engenheiro: { id: "lobmine", name: "Mina em arco", desc: "Lança minas em arco até a mira. Armam na hora, raio 20% maior." },
-    infiltrador: { id: "sidearm", name: "Pistola rápida", desc: "Tiro curto e rápido na mira. A cortina deixa o enxame em fúria, atacando o mais próximo." },
-    mensageiro: { id: "trail", name: "Esteira", desc: "Rastro de energia no caminho. Andar nela dobra a velocidade. Dano sobe com a velocidade. Passa pra linha de merge." },
-    droneiro: { id: "orbit", name: "Drone orbital", desc: "O drone orbita a mira e dispara em quem chega perto." },
-    ponta_lanca: { id: "dive", name: "Salto", desc: "Se joga no inimigo mais próximo. Invulnerável no avanço e na volta." },
-    phalanx: { id: "lance", name: "Investida de lança", desc: "Salta no inimigo mais perto. No impacto, dispara um feixe de energia uns pixels além. A ativa vira guarda se o jogador entra, ou Termópilas se cair no bicho." },
-    warlord: { id: "warpack", name: "Tríade de guerra", desc: "Dois guerreiros cortam em linha e na horizontal; o Warlord fecha com dois slashes nas diagonais. Invulnerável no ataque e na volta. Cada abate: +10% de cadência. Todos os stacks compartilham o mesmo timer de 5s (renova no abate), até +100%." },
-    ceifador: { id: "reapdash", name: "Foice", desc: "Avança no inimigo mais perto em 200px e corta em círculo com a foice." },
-    anti_material: { id: "blackshot", name: "Munição negra", desc: "Alcance infinito. Tiro preto que perfura e consome balas. A cada 7 tiros, ganha Tiro marcado." },
-    observador: { id: "spotgun", name: "Tiro teleguiado", desc: "Alcance infinito. A bala curva no inimigo mais perto da mira." },
-    lanca_chamas: { id: "melt", name: "Queima", desc: "Cone de fogo. Aplica queimadura por 5s. 10% de chance de derreter cada bala física." },
-    canhoneiro: { id: "arcnade", name: "Bola preta", desc: "Arremessa uma bola preta. No impacto, solta bolinhas com 25% do dano." },
-    minitanque: { id: "frontarmor", name: "Bolha de comando", desc: "Escudo de 10 pontos da linha do caminhão. Ativa alterna fuzil e granada." },
-    quartel: { id: "bait", name: "Recruta de elite", desc: "A cada 25s solta um recruta. Inimigos focam nele. Se viver o bastante, vira elite de fuzileiro, dualista ou batedor." },
-    cirurgiao: { id: "scalpel", name: "Bisturi", desc: "Arremessa bisturis. Causam sangramento (+30%); o dano por segundo cura o esquadrão." },
-    capelao: { id: "sidearm", name: "Tiro abençoado", desc: "Pistola de apoio. Cada acerto pode curar uma unidade do grupo." },
-    fora_da_lei: { id: "spread", name: "Cano aberto", desc: "Escopeta bem aberta. Só rende colado no alvo. Dano e alcance dobrados." },
-    mineiro: { id: "fieldmine", name: "Campo minado", desc: "Joga 3 minas perto da mira." },
-    tesla: { id: "saber", name: "Jolt", desc: "Raio até a mira. Bateria ao lado da Tesla: enche ao atirar e desliga quando esvazia. Bobinas zapam com carga; duas no alcance se alimentam e demoram o dobro pra acabar." },
-    assassino: { id: "silence", name: "Tiro silenciador", desc: "Acerto impede inimigos que atiram de atirar. Chefes só sofrem 5 vezes, depois 1 min de imunidade." },
-    radio: { id: "crateshot", name: "Caixote", desc: "Arremessa caixotes que explodem no impacto. Esteira e dano por velocidade da linha do Mensageiro." },
-    helicoptero: { id: "delay", name: "Par de drones", desc: "Dois drones pequenos orbitam a mira e atiram a partir dela." },
-    inferno: { id: "scorch", name: "Terra queimada", desc: "O cone queima o inimigo. Quem morre queimado deixa uma poça de fogo no chão por 5s." },
-    missil: { id: "swarm", name: "Saraivada", desc: "Cinco mísseis na mira. Mira parada no chefe: orbitam. Mira em movimento: espalham e estouram." },
-    tanque: { id: "heavycannon", name: "Couraça pesada", desc: "Escudo de 10 pontos. Três modos de tiro, incluindo barragem na tela." },
-    gunship: { id: "lockgun", name: "Metralhadora teleguiada", desc: "As balas seguem a mira." },
-    colosso: { id: "melee", name: "Tríade do Colosso", desc: "Salta no inimigo mais perto e dá slam (250px, slow, rachadura elétrica). Investida de escudo: parede de energia à frente, empurra, come bala e bloqueia por um instante. Rocket punch: o punho voa e ricocheteia 10 vezes. Mantém o escudo de 10 pontos da linha do caminhão." },
-    comandante: { id: "archive", name: "Arquivo de guerra", desc: "O esquadrão pega o reforço caído e vira arquivo. R gasta: 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. Colosso custa 100." },
-    designado: { id: "marksman", name: "Fuzil longo", desc: "Alcance infinito. Atira como fuzileiro, com cadência maior." },
-    giratoria: { id: "spinup", name: "Aquecimento", desc: "Precisa aquecer. Depois o cano não para, mas o esquadrão fica bem mais lento." },
-    oficina: { id: "scrap", name: "Carrinho de sucata", desc: "Carrinho rápido que atropela inimigos, coleta moedas e explode após 5s." },
-    socorrista: { id: "sidearm", name: "Pistola de apoio", desc: "Tiro curto na mira." },
-    revolver: { id: "bankshot", name: "Ricochete", desc: "Perfura e ricocheteia em inimigos próximos. No rebote, dano triplo." },
-    saqueador: { id: "steal", name: "Roubo aéreo", desc: "Se o tiro acertar uma bala inimiga no ar, apaga ela e cura o esquadrão." },
-    torreta: { id: "cannon", name: "Canhão automático", desc: "Atira sozinha no inimigo mais próximo, na formação ou instalada no chão." },
-    sabotador: { id: "sticky", name: "Carga grudenta", desc: "Gruda explosivos visíveis nos inimigos. Eles ficam armados até detonarem." },
-    fantasma: { id: "fearshot", name: "Susto", desc: "Tiro causa medo por 0,5s. No mesmo alvo de novo, ele fica imune por 1 min." },
-    oficial: { id: "sidearm", name: "Pistola de comando", desc: "Tiro de comando na mira. Esteira e dano por velocidade da linha do Mensageiro." },
-    bandeira: { id: "bannerblade", name: "Estandarte vivo", desc: "Corre no inimigo, espetá com a bandeira e solta um buff aleatório. Esteira da linha do Mensageiro." },
-    bombardeiro: { id: "linebomb", name: "Drone gordinho", desc: "Um drone pesado orbita a mira. A ativa desenha uma linha de explosões." },
-    recon: { id: "graze", name: "Tracejante", desc: "Balas coloridas visíveis que grudam no alvo. Marcados tomam mais dano." }
+    fuzileiro: { id: "focus", name: "Modo foco", desc: "Enquanto atira, o esquadrão fica 30% mais lento." },
+    pistoleiro: { id: "hitheal", name: "Kit no acerto", desc: "Acerto pode soltar kit de vida no chão. O esquadrão se cura ao pegar." },
+    batedor: { id: "scoutgun", name: "Passo leve", desc: "A disparada atravessa inimigos e causa dano de contato." },
+    jedi: { id: "deflect", name: "Deflexão", desc: "50% de chance de defletir qualquer projétil que encoste nele, negando o dano." },
+    mestre: { id: "deflect", name: "Deflexão", desc: "Sempre deflete qualquer projétil que encoste nele, negando o dano." },
+    sniper: { id: "rangedmg", name: "Punição de perto", desc: "Quanto mais longe o projétil for, mais dano ele causa." },
+    metralhador: { id: "recoil", name: "Coice", desc: "O recuo empurra o esquadrão pro lado oposto." },
+    caminhao: { id: "bumper", name: "Bolha de comando", desc: "Escudo magnético de 7 pontos: bloqueia disparos e encontrões. Recarrega 1 a cada 5s; se quebrar, volta inteiro em 10s." },
+    medico: { id: "toxin", name: "Frasco tóxico", desc: "Se acertar um inimigo em cima da poça, ele pode soltar um node de vida." },
+    dualista: { id: "twinhit", name: "Canos gêmeos", desc: "Se os dois projéteis acertam o mesmo alvo, o dano vira vida pro dualista." },
+    engenheiro: { id: "lobmine", name: "Mina em arco", desc: "A explosão deixa o inimigo lento." },
+    infiltrador: { id: "lowprofile", name: "Low Profile", desc: "Raramente puxa agro. O foco fica com o resto do esquadrão." },
+    mensageiro: { id: "trail", name: "Esteira", desc: "Rastro no chão: +30% de velocidade. O dano do grupo sobe com a velocidade." },
+    phalanx: { id: "bastion", name: "Bastião", desc: "15% de chance de negar o dano de um aliado: spawna um Phalanx menor e ataca de volta." },
+    warlord: { id: "warpack", name: "Tríade de guerra", desc: "Cada abate: +10% de cadência. Stacks compartilham timer de 5s (renova no abate), até +100%." },
+    ceifador: { id: "reapdash", name: "Foice", desc: "Cada alvo que o ceifador elimina: +0,1% de dano, stackando infinito." },
+    anti_material: { id: "blackshot", name: "Munição negra", desc: "A cada tiro ganha uma carga. Em 7, o próximo disparo causa 4× mais dano." },
+    observador: { id: "spotgun", name: "Tiro teleguiado", desc: "Os projéteis curvam no inimigo mais perto da mira." },
+    lanca_chamas: { id: "melt", name: "Queima", desc: "10% de chance de derreter cada bala física no cone." },
+    canhoneiro: { id: "arcnade", name: "Bola preta", desc: "Os disparos se fracionam no impacto." },
+    minitanque: { id: "frontarmor", name: "Bolha de comando", desc: "Escudo magnético de 10 pontos, no mesmo esquema do caminhão." },
+    quartel: { id: "bait", name: "Recruta de elite", desc: "A cada 20s solta um fuzileiro, pistoleiro ou batedor. Se sobreviverem 30s, sobem pra patente alta." },
+    cirurgiao: { id: "scalpel", name: "Bisturi", desc: "O sangramento cura o grupo em 10% do dano causado." },
+    capelao: { id: "sidearm", name: "Tiro abençoado", desc: "Cura ao causar dano. Vida cheia vira escudo, até 30% da vida máxima do esquadrão." },
+    fora_da_lei: { id: "spread", name: "Cano aberto", desc: "Cada abate: +10% de alcance, até 10 stacks." },
+    mineiro: { id: "fieldmine", name: "Campo minado", desc: "Cada mina detonada gera de 1 a 5 de ouro." },
+    tesla: { id: "saber", name: "Jolt", desc: "Segurar o básico enche a bateria. Cheia, ganha uma granada de bateria com chain lightning." },
+    assassino: { id: "silence", name: "Tiro silenciador", desc: "Acertos impedem chefes de usar skills, no máximo 5 vezes. Depois só volta em 1 min." },
+    radio: { id: "crateshot", name: "Caixote", desc: "A cada 20s cai uma caixa com ouro e um arquivo de guerra." },
+    inferno: { id: "scorch", name: "Terra queimada", desc: "Morte por queimadura deixa uma poça de fogo no chão." },
+    missil: { id: "swarm", name: "Saraivada", desc: "Andando: 1 míssil. Parado: 3." },
+    tanque: { id: "heavycannon", name: "Couraça pesada", desc: "Escudo magnético de 12 pontos." },
+    colosso: { id: "melee", name: "Tríade do Colosso", desc: "Os três golpes + escudo que absorve 15 pontos de dano." },
+    comandante: { id: "archive", name: "Arquivo de guerra", desc: "Inimigos abatidos dropam arquivos de guerra. R gasta pra convocar unidades." },
+    giratoria: { id: "spinup", name: "Aquecimento", desc: "Cadência começa comum. Cada segundo segurando o gatilho: +2%, até +50%." },
+    oficina: { id: "scrap", name: "Carrinho de sucata", desc: "A cada 5s solta um carrinho que atropela e pega ouro. Explode ao pegar tudo ou aos 10s." },
+    socorrista: { id: "sidearm", name: "Pistola de apoio", desc: "A cada 10 inimigos derrotados, pulso de cura baseado na vida máxima do último alvo." },
+    revolver: { id: "bankshot", name: "Ricochete", desc: "Os disparos têm penetração e ricochete." },
+    saqueador: { id: "steal", name: "Roubo aéreo", desc: "Guarda as armas num cofre pessoal, até 6." },
+    torreta: { id: "cannon", name: "Canhão automático", desc: "Cada inimigo abatido enquanto essa unidade estiver viva tem chance de dropar sucata." },
+    fantasma: { id: "fearshot", name: "Susto", desc: "Completamente incorpóreo: nada acerta." },
+    oficial: { id: "sidearm", name: "Pistola de comando", desc: "Mesma esteira do mensageiro: +30% de velocidade e dano com a velocidade." },
+    bandeira: { id: "bannerblade", name: "Estandarte vivo", desc: "Ao causar dano, gera um buff aleatório no esquadrão." }
   };
   Object.keys(UNIT_PASSIVES).forEach(function (k) {
     if (G.UNIT_DEFS[k]) G.UNIT_DEFS[k].passive = UNIT_PASSIVES[k];
   });
-  if (G.UNIT_DEFS.jedi) {
-    G.UNIT_DEFS.jedi.passives = [
-      UNIT_PASSIVES.jedi,
-      { id: "deflect", name: "Deflexão", desc: "50% de chance de defletir qualquer projétil que encoste nele, negando o dano." }
-    ];
-  }
-  if (G.UNIT_DEFS.mestre) {
-    G.UNIT_DEFS.mestre.passives = [
-      UNIT_PASSIVES.mestre,
-      { id: "deflect", name: "Deflexão", desc: "Sempre deflete qualquer projétil que encoste nele, negando o dano." }
-    ];
-  }
+
+  G.unitBasic = function (def) {
+    if (!def || !def.basic) return "";
+    var t = String(def.basic).replace(/^\s+|\s+$/g, "");
+    if (!t || t === "—" || t === "-") return "";
+    return t;
+  };
 
   G.unitPassives = function (def) {
     if (def && def.passives && def.passives.length) return def.passives;
@@ -735,7 +774,10 @@
   };
 
   G.unitActives = function (def) {
-    return def.active ? [def.active] : [];
+    var list = [];
+    if (def && def.active) list.push(def.active);
+    if (def && def.extraActive) list.push(def.extraActive);
+    return list;
   };
 
   G.enemyKindLabel = function (kind) {

@@ -40,8 +40,7 @@
   }
 
   function speedDmgMul(state, kind) {
-    if (!trailLine(state)) return 1;
-    if (kind && kind !== "mensageiro" && kind !== "radio" && kind !== "oficial" && kind !== "bandeira") return 1;
+    if (!onTrail(state)) return 1;
     var sp = hypot(state.squad.vx || 0, state.squad.vy || 0);
     return 1 + Math.min(1, sp / 180);
   }
@@ -151,6 +150,31 @@
       if (u.hp <= 0) continue;
       u.hp = Math.min(u.maxHp, u.hp + amt);
     }
+  }
+
+  function squadMaxHp(state) {
+    var max = 0;
+    for (var i = 0; i < state.units.length; i++) {
+      if (state.units[i].hp > 0) max += state.units[i].maxHp || 0;
+    }
+    return max;
+  }
+
+  function faithHeal(state, amt) {
+    var room = 0;
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.hp > 0) room += Math.max(0, u.maxHp - u.hp);
+    }
+    var intoHp = Math.min(room, amt);
+    if (intoHp > 0) healSquad(state, intoHp);
+    var extra = amt - intoHp;
+    if (extra > 0) {
+      var cap = squadMaxHp(state) * 0.3;
+      state.faithShield = Math.min(cap, (state.faithShield || 0) + extra);
+    }
+    var show = lowest(state);
+    if (show) state.floaters.push(G.createFloater(show.x, show.y - 16, "+" + Math.round(amt), "#f0e0a0"));
   }
 
   function beginRetire(state, obj, dur) {
@@ -458,6 +482,12 @@
     p.stealShots = !!extra.stealShots;
     p.pairId = extra.pairId || 0;
     p.sticky = !!extra.sticky;
+    p.popCluster = !!extra.popCluster;
+    p.clusterDmg = extra.clusterDmg || 0;
+    p.stealGun = !!extra.stealGun;
+    p.bounceAdd = !!extra.bounceAdd;
+    p.baseDmg = extra.baseDmg || dmg;
+    p.runic = extra.runic || null;
     p.bleed = !!extra.bleed;
     p.enemyBounce = extra.enemyBounce || 0;
     p.bounceRange = extra.bounceRange || 0;
@@ -667,6 +697,16 @@
     if (a < Math.PI / 3 || a >= (Math.PI * 5) / 3) return "square";
     if (a < Math.PI) return "triangle";
     return "circle";
+  }
+
+  function turretSlice(dx, dy) {
+    var dist = hypot(dx, dy);
+    if (dist < 28) return null;
+    var a = Math.atan2(dy, dx);
+    if (a >= -Math.PI * 0.75 && a < -Math.PI * 0.25) return "triangle";
+    if (a >= -Math.PI * 0.25 && a < Math.PI * 0.25) return "circle";
+    if (a >= Math.PI * 0.25 && a < Math.PI * 0.75) return "square";
+    return "diamond";
   }
 
   function guerrillaOpenMenu(state) {
@@ -908,7 +948,7 @@
 
   function placePuddle(state, x, y, r, heal, t) {
     var h = heal || 0;
-    zone(state, { kind: "heal", x: x, y: y, r: r || 38, heal: h, t: t || 4.5, max: t || 4.5, toxin: h <= 0 });
+    zone(state, { kind: "heal", x: x, y: y, r: r || 38, heal: h, t: t || 4.5, max: t || 4.5, toxin: true });
   }
 
   function enemyInPuddle(state, e) {
@@ -989,7 +1029,7 @@
 
   function plantMineAt(state, u, x, y) {
     if (!state.mines) state.mines = [];
-    var cap = 10 + (state.run.minesPlus || 0) * 2;
+    var cap = 30 + (state.run.minesPlus || 0) * 2;
     state.mines.push({
       x: x,
       y: y,
@@ -1032,11 +1072,18 @@
     var skip = {
       firemode: 1,
       carpetbomb: 1,
+      runic_ammo: 1,
       dash: 1,
       spear_dash: 1,
       reap: 1,
       execute_dash: 1,
-      hook: 1
+      hook: 1,
+      pilantragem: 1,
+      hijack: 1,
+      double_shotgun: 1,
+      bucknade: 1,
+      blood_rift: 1,
+      force_pull: 1
     };
     for (var i = 0; i < list.length && fired < 2; i++) {
       var u = list[i];
@@ -1056,6 +1103,8 @@
         else if ((fh.push || 0) <= 0) ok = forceFireAt(state, mestre, "push", p.x, p.y);
         else if ((fh.pull || 0) <= 0) ok = forceFireAt(state, mestre, "pull", p.x, p.y);
       } else if (id === "deploy") {
+        if ((state.scrap || 0) < 10) continue;
+        state.scrap -= 10;
         deployTurret(state, "mg", p);
         putActiveOnCd(state, "deploy");
         ok = true;
@@ -1127,11 +1176,6 @@
     }
     if (id === "carpet" && u.kind === "mineiro") {
       state.mineDraw = { last: { x: aim(state).x, y: aim(state).y }, spent: 0 };
-      return;
-    }
-    if (id === "carpetbomb") {
-      state.gunBombs = true;
-      putSelectedOnCd(state);
       return;
     }
     C().useActive(state, state.skillSlot | 0);
@@ -1237,7 +1281,7 @@
         fire: 6.5,
         dmg: Math.round(u.def.dmg * 0.45),
         range: 210,
-        t: 18,
+        t: 15,
         size: 14,
         noAggro: true,
         label: "metralhadora",
@@ -1256,11 +1300,30 @@
         fire: 6,
         dmg: Math.round(u.def.dmg * 0.35),
         range: 110,
-        t: 16,
+        t: 15,
         size: 15,
         noAggro: true,
         label: "lança-chamas",
         color: "#ff7a2a"
+      };
+    }
+    if (variant === "shield") {
+      return {
+        kind: "shield_gen",
+        x: pos.x,
+        y: pos.y,
+        hp: 20,
+        maxHp: 20,
+        cooldown: 0,
+        fire: 0,
+        dmg: 0,
+        range: 86,
+        t: 9999,
+        size: 16,
+        pulse: 0,
+        color: "#7ad4ff",
+        label: "escudo",
+        followSquad: true
       };
     }
     return {
@@ -1274,7 +1337,7 @@
       fire: 3.2,
       dmg: Math.round(u.def.dmg * 0.42),
       range: 210,
-      t: 16,
+      t: 15,
       size: 14,
       noAggro: true,
       label: "jolt",
@@ -1317,6 +1380,11 @@
     var u = lead(state, "torreta");
     if (!u) return;
     var pos = at || turretPlaceAt(state);
+    if (variant === "shield") {
+      for (var si = 0; si < (state.deploys || []).length; si++) {
+        if (state.deploys[si].kind === "shield_gen" && !state.deploys[si].retiring) beginRetire(state, state.deploys[si], 0.4);
+      }
+    }
     var spec = turretDeploySpec(u, variant, pos);
     startTurretToss(state, u, spec);
     state.deploys.push(spec);
@@ -1333,8 +1401,16 @@
     if (!m || !m.hover) return;
     var u = lead(state, "torreta");
     if (!u || u.activeCd > 0) return;
-    var map = { square: "jolt", triangle: "flame", circle: "mg" };
-    deployTurret(state, map[m.hover] || "mg", { x: m.x, y: m.y });
+    var map = { square: "jolt", triangle: "flame", circle: "mg", diamond: "shield" };
+    var costs = { flame: 10, mg: 10, jolt: 12, shield: 15 };
+    var variant = map[m.hover] || "mg";
+    var cost = costs[variant] || 10;
+    if ((state.scrap || 0) < cost) {
+      state.floaters.push(G.createFloater(u.x, u.y - 16, "sem sucata", "#c8b45a"));
+      return;
+    }
+    state.scrap -= cost;
+    deployTurret(state, variant, { x: m.x, y: m.y });
     putSelectedOnCd(state);
   }
 
@@ -1421,10 +1497,9 @@
     var ignoreSlow = !!(opts && opts.ignoreSlow);
     var mul = 1;
     if ((state.spearRamT || 0) <= 0 && !ignoreSlow) {
-      if ((has(state, "fuzileiro") || has(state, "designado")) && state.pointer && state.pointer.fireHold) mul *= 0.7;
-      if (has(state, "giratoria") && (state.girSpin || 0) > 1.2) mul *= 0.42;
+      if ((has(state, "fuzileiro")) && state.pointer && state.pointer.fireHold) mul *= 0.7;
     }
-    if (onTrail(state)) mul *= 2;
+    if (onTrail(state)) mul *= 1.3;
     if (!ignoreSlow && (state.honeyT || 0) > 0) mul *= 0.42;
     var onCrack = false;
     var onSand = false;
@@ -1490,6 +1565,7 @@
 
   function blockHurt(state, unit, opts) {
     if (unit.team !== "player") return false;
+    if (unit.kind === "fantasma") return true;
     var cover = radioShieldAt(state, unit.x, unit.y);
     if (cover) {
       hitRadioShield(state, cover, unit.x, unit.y);
@@ -1504,6 +1580,32 @@
     if (unit.warCombo) return true;
     if (unit.kind === "assassino" && (state.assassinHunt && state.assassinHunt.id === unit.id)) return true;
     return false;
+  }
+
+  function tryBastion(state, unit) {
+    if (!has(state, "phalanx")) return false;
+    if (Math.random() >= 0.15) return false;
+    var tgt = C().nearest(state.enemies, unit.x, unit.y);
+    state.minions = state.minions || [];
+    state.minions.push({
+      kind: "bastion",
+      x: unit.x,
+      y: unit.y,
+      hp: 24,
+      maxHp: 24,
+      size: 9,
+      t: 4,
+      vx: 0,
+      vy: 0,
+      def: { size: 9 },
+      team: "player"
+    });
+    if (tgt) {
+      C().hurt(state, tgt, Math.round(18 * C().dmgMul(state)), unit.x, unit.y, true);
+      G.burst(state, tgt.x, tgt.y, "#c4a45a", 10, 70);
+    }
+    G.burst(state, unit.x, unit.y, "#fff0c4", 8, 50);
+    return true;
   }
 
   function bumperIgnores(e) {
@@ -1569,18 +1671,17 @@
   }
 
   function applySilence(state, e) {
-    if (!shooterEnemy(e) || e.hp <= 0) return;
-    if (e.def.boss) {
+    if (!e || e.hp <= 0) return;
+    if (e.def && e.def.boss) {
       if ((e.silenceImmuneT || 0) > 0) return;
       e.silenceHits = (e.silenceHits || 0) + 1;
-      e.silenceT = Math.max(e.silenceT || 0, 3);
+      e.silenceT = Math.max(e.silenceT || 0, 0.5);
       if (e.silenceHits >= 5) {
         e.silenceImmuneT = 60;
         e.silenceHits = 0;
-        state.floaters.push(G.createFloater(e.x, e.y - 22, "imune", "#c8a0ff"));
       }
     } else {
-      e.silenceT = Math.max(e.silenceT || 0, 3);
+      e.silenceT = Math.max(e.silenceT || 0, 0.5);
     }
   }
 
@@ -2124,6 +2225,21 @@
               var missAng = Math.atan2(L.ty - L.y0, L.tx - L.x0);
               saberCleave(state, u, u.x, u.y, missAng, 96, 1.7, { wide: true, swing: true });
             }
+            if (u.kind === "mestre" && L.saberBasic && !L.comboed && Math.random() < 0.55) {
+              var nxt = C().nearest(state.enemies, u.x, u.y, L.eid);
+              if (nxt && hypot(nxt.x - u.x, nxt.y - u.y) < 240) {
+                L.comboed = true;
+                L.phase = "out";
+                L.t = 0;
+                L.dur = 0.16;
+                L.x0 = u.x;
+                L.y0 = u.y;
+                L.tx = nxt.x;
+                L.ty = nxt.y;
+                L.eid = nxt.id;
+                continue;
+              }
+            }
             L.phase = "back";
             L.t = 0;
             L.dur = 0.22;
@@ -2221,6 +2337,10 @@
             L.t = 0;
             L.dur = 1.28;
             L.startAng = u.scytheSpin || 0;
+            L.phase = "rip";
+            L.t = 0;
+            L.dur = 1.28;
+            L.startAng = u.scytheSpin || 0;
           }
         } else if (L.phase === "rip") {
           u.x = L.tx;
@@ -2231,6 +2351,7 @@
             u.leap = null;
             u.leapZ = 0;
             u.leapCd = 0.5;
+            u.ceifaActive = false;
           }
         } else {
           var hx = state.squad.x - u.x;
@@ -2241,6 +2362,7 @@
             u.leap = null;
             u.leapZ = 0;
             u.leapCd = L.reapBasic ? 0 : 0.8;
+            if (u.kind === "ceifador") u.ceifaActive = false;
           } else {
             u.x += (hx / hl) * backSpd * dt;
             u.y += (hy / hl) * backSpd * dt;
@@ -2303,7 +2425,7 @@
 
   function scytheSlash(state, u, x, y, r, mul, ang, opt) {
     opt = opt || {};
-    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * (mul || 1.2) * speedDmgMul(state, u.kind)) + (opt.extra || 0);
+    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * (mul || 1.2) * speedDmgMul(state, u.kind) * (1 + (u.ceifaStacks || 0) * 0.001 + (u.ceifaActiveBonus || 0))) + (opt.extra || 0);
     var epic = opt.epic != null ? !!opt.epic : r >= 180;
     var pull = !!opt.pull;
     for (var i = 0; i < state.enemies.length; i++) {
@@ -2889,6 +3011,7 @@
 
   function reapCharge(state, u) {
     var p = aim(state);
+    u.ceifaActive = true;
     u.leap = {
       phase: "out",
       t: 0,
@@ -3504,7 +3627,13 @@
   }
 
   function warlordHaste(u) {
+    if ((u.bloodRiftT || 0) > 0) return 1;
     return 1 + 0.1 * Math.min(10, u.warStacks || 0);
+  }
+
+  function warlordDmgMul(u) {
+    if ((u.bloodRiftT || 0) > 0) return 1 + 0.2 * Math.min(10, u.warStacks || 0);
+    return 1;
   }
 
   function ensureWarBand(u) {
@@ -3535,7 +3664,7 @@
     var y0 = y - s * len * 0.18;
     var x1 = x + c * len;
     var y1 = y + s * len;
-    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * (mul || 1));
+    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * (mul || 1) * warlordDmgMul(u));
     state.vfx = state.vfx || [];
     state.vfx.push({
       warSlash: true,
@@ -3565,13 +3694,36 @@
     if ((e.burnT > 0 || e.burnDps > 0) && !e.stolen && has(state, "inferno")) {
       spawnInfernoPuddle(state, e.x, e.y);
     }
+    stealWeaponFrom(state, e);
+    if (has(state, "torreta") && Math.random() < 0.35) {
+      state.scrap = (state.scrap || 0) + 1;
+      state.floaters.push(G.createFloater(e.x, e.y - 10, "sucata", "#c8b45a"));
+    }
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.hp <= 0 || u.kind !== "warlord" || u.stowed) continue;
-      u.warStacks = Math.min(10, (u.warStacks || 0) + 1);
-      u.warFrenzyT = 5;
-      if (u.warStacks === 1 || u.warStacks === 10) {
-        state.floaters.push(G.createFloater(u.x, u.y - 20, u.warStacks === 10 ? "fúria máx" : "+cadência", "#c41e3a"));
+      if (u.hp <= 0 || u.stowed) continue;
+      if (u.kind === "warlord") {
+        u.warStacks = Math.min(10, (u.warStacks || 0) + 1);
+        u.warFrenzyT = 5;
+        if (u.warStacks === 1 || u.warStacks === 10) {
+          state.floaters.push(G.createFloater(u.x, u.y - 20, u.warStacks === 10 ? "fúria máx" : "+cadência", "#c41e3a"));
+        }
+      }
+      if (u.kind === "fora_da_lei") {
+        u.outlawRange = Math.min(10, (u.outlawRange || 0) + 1);
+      }
+      if (u.kind === "socorrista") {
+        u.socKills = (u.socKills || 0) + 1;
+        if (u.socKills % 10 === 0) {
+          var pulse = Math.max(8, Math.round((e.maxHp || 40) * 0.12));
+          healSquad(state, pulse);
+          G.burst(state, e.x, e.y, "#b8ffd4", 16, 90);
+          state.floaters.push(G.createFloater(e.x, e.y - 18, "pulso", "#b8ffd4"));
+        }
+      }
+      if (u.kind === "ceifador") {
+        u.ceifaStacks = (u.ceifaStacks || 0) + 1;
+        if (u.ceifaActive) u.ceifaActiveBonus = Math.min(1, (u.ceifaActiveBonus || 0) + 0.001);
       }
     }
   }
@@ -3666,8 +3818,14 @@
         if (Cmb.t < dur) continue;
         if (Cmb.phase === 0) warSlashLine(state, u, band[0].x, band[0].y, Cmb.ang, 56, 0.42, "#a84828");
         if (Cmb.phase === 1) warSlashLine(state, u, band[1].x, band[1].y, Cmb.ang + Math.PI / 2, 56, 0.42, "#c41e3a");
-        if (Cmb.phase === 3) warSlashLine(state, u, u.x, u.y, Cmb.ang + Math.PI / 4, 68, 1, "#c41e3a");
-        if (Cmb.phase === 4) warSlashLine(state, u, u.x, u.y, Cmb.ang - Math.PI / 4, 68, 1, "#7a3a22");
+        if (Cmb.phase === 3) {
+          warSlashLine(state, u, u.x, u.y, Cmb.ang + Math.PI / 4, 68, 1, "#c41e3a");
+          if ((u.bloodRiftT || 0) > 0) warSlashLine(state, u, u.x, u.y, Cmb.ang - Math.PI / 4, 78, 1.35, "#ff6a4a");
+        }
+        if (Cmb.phase === 4) {
+          warSlashLine(state, u, u.x, u.y, Cmb.ang - Math.PI / 4, 68, 1, "#7a3a22");
+          if ((u.bloodRiftT || 0) > 0) warSlashLine(state, u, u.x, u.y, Cmb.ang + Math.PI / 4, 78, 1.35, "#ff6a4a");
+        }
         Cmb.phase += 1;
         Cmb.t = 0;
         if (Cmb.phase === 2) {
@@ -4156,6 +4314,17 @@
     }
   }
 
+  function lowestHpEnemy(state, seen) {
+    var best = null;
+    for (var i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (e.hp <= 0 || e.scenery) continue;
+      if (seen && seen[e.id]) continue;
+      if (!best || e.hp < best.hp) best = e;
+    }
+    return best;
+  }
+
   function startAssassinHunt(state, u) {
     u.detached = true;
     u.leap = null;
@@ -4175,7 +4344,7 @@
     u.detached = true;
     hunt.wait -= dt;
     if (hunt.wait > 0) return;
-    var tgt = C().nearest(state.enemies, u.x, u.y);
+    var tgt = lowestHpEnemy(state, hunt.seen);
     if (!tgt) {
       u.detached = false;
       state.assassinHunt = null;
@@ -4184,7 +4353,7 @@
     u.x = tgt.x;
     u.y = tgt.y;
     clampField(state, u);
-    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * 2.6);
+    var dmg = Math.round(u.def.dmg * C().dmgMul(state) * 2.6 * (1 + (u.execDmg || 0)));
     C().hurt(state, tgt, dmg, u.x, u.y, true);
     G.burst(state, tgt.x, tgt.y, "#c8a0ff", 14, 120);
     if (tgt.hp > 0) {
@@ -4192,7 +4361,47 @@
       state.assassinHunt = null;
       state.floaters.push(G.createFloater(u.x, u.y - 16, "falhou", "#c8a0ff"));
     } else {
+      u.execDmg = (u.execDmg || 0) + 0.02;
+      hunt.seen = hunt.seen || {};
+      hunt.seen[tgt.id] = 1;
       hunt.wait = 0.12;
+    }
+  }
+
+  function tickAssassinMelee(state, dt) {
+    var firing = !!(state.pointer && state.pointer.fireHold);
+    for (var i = 0; i < state.units.length; i++) {
+      var u = state.units[i];
+      if (u.kind !== "assassino" || u.hp <= 0 || u.stowed) continue;
+      if (state.assassinHunt && state.assassinHunt.id === u.id) continue;
+      u.knifeCd = (u.knifeCd || 0) - dt;
+      if (!firing) {
+        u.detached = false;
+        continue;
+      }
+      var tgt = C().nearest(state.enemies, u.x, u.y);
+      if (!tgt) {
+        u.detached = false;
+        continue;
+      }
+      u.detached = true;
+      var d = hypot(tgt.x - u.x, tgt.y - u.y);
+      var reach = 26 + (tgt.def.size || 10);
+      if (d > reach) {
+        var a = Math.atan2(tgt.y - u.y, tgt.x - u.x);
+        var spd = (u.def.speed || 225) * 1.35;
+        u.x += Math.cos(a) * spd * dt;
+        u.y += Math.sin(a) * spd * dt;
+        clampField(state, u);
+      } else if (u.knifeCd <= 0) {
+        u.knifeCd = 0.38;
+        var dmg = Math.round(u.def.dmg * C().dmgMul(state) * 0.85);
+        C().hurt(state, tgt, dmg, u.x, u.y, true);
+        tgt.bleedT = Math.max(tgt.bleedT || 0, 3.2);
+        tgt.bleedDps = Math.max(tgt.bleedDps || 0, dmg * 0.55);
+        applySilence(state, tgt);
+        G.burst(state, tgt.x, tgt.y, "#c8a0ff", 6, 40);
+      }
     }
   }
 
@@ -4243,6 +4452,23 @@
     });
   }
 
+  function spawnNodeGen(state, crate) {
+    popDeployFromCrate(state, {
+      kind: "node_gen",
+      x: crate.x,
+      y: crate.y,
+      hp: 40,
+      maxHp: 40,
+      t: 15,
+      maxT: 15,
+      size: 14,
+      spitT: 3,
+      spitLeft: 5,
+      color: "#ffd24a",
+      label: "gerador"
+    }, crate);
+  }
+
   function spawnShieldGen(state, crate, dmg) {
     popDeployFromCrate(state, {
       kind: "shield_gen",
@@ -4254,7 +4480,7 @@
       fire: 0,
       dmg: dmg,
       range: 86,
-      t: 18,
+        t: 15,
       size: 16,
       pulse: 0,
       color: "#7ad4ff",
@@ -4294,6 +4520,9 @@
     } else if (payload === "shield") {
       spawnShieldGen(state, z, z.dmg || 18);
       state.floaters.push(G.createFloater(z.x, z.y - 18, "gerador", "#7ad4ff"));
+    } else if (payload === "nodes") {
+      spawnNodeGen(state, z);
+      state.floaters.push(G.createFloater(z.x, z.y - 18, "gerador", "#ffd24a"));
     } else {
       spawnMegaphone(state, z, z.dmg || 18);
       state.floaters.push(G.createFloater(z.x, z.y - 18, "megafone", "#ffb24a"));
@@ -4326,6 +4555,10 @@
 
   function tickShieldGen(state, t, dt) {
     t.pulse = (t.pulse || 0) + dt;
+    if (t.followSquad && state.squad) {
+      t.x += (state.squad.x - t.x) * Math.min(1, dt * 10);
+      t.y += (state.squad.y - t.y) * Math.min(1, dt * 10);
+    }
     var r = t.range || 86;
     var now = state.time || 0;
     for (var i = 0; i < state.enemies.length; i++) {
@@ -4450,7 +4683,7 @@
     }
     G.clampPlay(p, state);
     var roll = Math.random();
-    var payload = roll < 1 / 3 ? "dog" : roll < 2 / 3 ? "shield" : "horn";
+    var payload = roll < 1 / 3 ? "dog" : roll < 2 / 3 ? "horn" : "nodes";
     zone(state, {
       kind: "supply_drop",
       x: p.x,
@@ -4488,7 +4721,7 @@
     if (state.turretMenu && state.pointer && state.pointer.altHold) {
       var tm = state.turretMenu;
       var tp = aim(state);
-      tm.hover = guerrillaSlice(tp.x - tm.x, tp.y - tm.y);
+      tm.hover = turretSlice(tp.x - tm.x, tp.y - tm.y);
     }
     zoneAura(state);
     tickBumper(state, dt);
@@ -4519,7 +4752,7 @@
     if ((state.suppressT || 0) > 0) state.suppressT = Math.max(0, state.suppressT - dt);
     if ((state.mgFocusT || 0) > 0) state.mgFocusT = Math.max(0, state.mgFocusT - dt);
 
-    if (has(state, "giratoria") && state.pointer && state.pointer.fireHold) state.girSpin = Math.min(2.4, (state.girSpin || 0) + dt);
+    if (has(state, "giratoria") && state.pointer && state.pointer.fireHold) state.girSpin = Math.min(25, (state.girSpin || 0) + dt);
     else state.girSpin = Math.max(0, (state.girSpin || 0) - dt * 1.4);
 
     if (trailLine(state)) {
@@ -4546,7 +4779,7 @@
     if (state.mineDraw && state.pointer && state.pointer.altHold && has(state, "mineiro")) {
       var min = lead(state, "mineiro");
       var d = hypot(p.x - state.mineDraw.last.x, p.y - state.mineDraw.last.y);
-      if (min && d > 18 && state.mineDraw.spent < 14) {
+      if (min && d > 18 && state.mineDraw.spent < 30) {
         plantMineAt(state, min, p.x, p.y);
         state.mineDraw.last = { x: p.x, y: p.y };
         state.mineDraw.spent++;
@@ -4607,7 +4840,10 @@
         state.squad.y += (hy / hl) * 760 * dt;
         state.run.smokeT = Math.max(state.run.smokeT || 0, 0.12);
         h.t -= dt;
-        if (hl < 18 || h.t <= 0) state.hook = null;
+        if (hl < 18 || h.t <= 0) {
+          state.hook = null;
+          state.hookRegenT = 5;
+        }
         clampField(state, state.squad);
       }
     }
@@ -4615,13 +4851,13 @@
     updateDrones(state, dt);
     if (has(state, "oficina")) {
       var ofi = lead(state, "oficina");
-      if (ofi && state.pointer && state.pointer.fireHold) {
+      if (ofi) {
         ofi._cartT = (ofi._cartT == null ? 0.4 : ofi._cartT) - dt;
         if (ofi._cartT <= 0) {
           var carts = 0;
           for (var ci = 0; ci < state.minions.length; ci++) if (state.minions[ci].kind === "cart") carts++;
           if (carts < 1) spawnScrapCart(state, ofi);
-          ofi._cartT = 6.5;
+          ofi._cartT = 5;
         }
       }
     }
@@ -4727,7 +4963,7 @@
       hp: 48,
       maxHp: 48,
       size: 11,
-      t: 5,
+      t: 10,
       vx: 0,
       vy: 0,
       def: { size: 11 },
@@ -4736,18 +4972,106 @@
     state.floaters.push(G.createFloater(ofi.x, ofi.y - 16, "carrinho", "#7a9aaa"));
   }
 
-  function spawnCluster(state, x, y, dmg) {
-    var n = 7;
+  function spawnCluster(state, x, y, dmg, gen) {
+    gen = gen || 0;
+    if (gen >= 2) return;
+    var n = 6;
     var base = dmg / Math.max(0.01, C().dmgMul(state));
+    var mul = gen === 0 ? 0.28 : 0.14;
     for (var i = 0; i < n; i++) {
-      var a = (Math.PI * 2 * i) / n;
+      var a = (Math.PI * 2 * i) / n + gen * 0.22;
       var fake = { x: x, y: y, def: { dmg: base, projectile: "bullet", range: 90 }, kind: "canhoneiro", marked: 0, id: -11 };
-      bolt(state, fake, a, { r: 4, speed: 240, dmgMul: 0.25, color: "#141414", lifeDist: 92, kind: "bullet" });
+      bolt(state, fake, a, {
+        r: gen ? 3 : 5,
+        speed: 240,
+        dmgMul: mul,
+        color: "#141414",
+        lifeDist: gen ? 64 : 88,
+        kind: "bullet",
+        popCluster: gen === 0,
+        clusterDmg: dmg
+      });
     }
   }
 
   function tankModeOf(u) {
     return u.fireMode || 0;
+  }
+
+  function applyRunic(extra) {
+    var ids = ["bleed", "slow", "poison", "burn", "shock", "bounce", "pierce", "lifesteal", "boom"];
+    extra.runic = ids[(Math.random() * ids.length) | 0];
+    if (extra.runic === "pierce") extra.pierce = true;
+    if (extra.runic === "bounce") extra.enemyBounce = Math.max(extra.enemyBounce || 0, 2);
+    extra.color = "#c8a0ff";
+  }
+
+  function applyRunicHit(state, p, hit) {
+    var id = p.runic;
+    if (id === "bleed") {
+      hit.bleedT = 5;
+      hit.bleedDps = Math.max(hit.bleedDps || 0, (p.dmg || 8) * 0.7);
+    } else if (id === "slow") {
+      hit.slowT = Math.max(hit.slowT || 0, 2.2);
+    } else if (id === "poison") {
+      hit.poisonT = Math.max(hit.poisonT || 0, 4);
+      hit.poisonDps = Math.max(hit.poisonDps || 0, (p.dmg || 8) * 0.4);
+    } else if (id === "burn") {
+      hit.burnT = 5;
+      hit.burnDps = Math.max(hit.burnDps || 0, (p.dmg || 8) * 0.8);
+    } else if (id === "shock") {
+      hit.stunT = Math.max(hit.stunT || 0, 0.45);
+    } else if (id === "lifesteal") {
+      healSquad(state, Math.round((p.dmg || 8) * 0.35));
+    } else if (id === "boom") {
+      C().explode(state, hit.x, hit.y, 28, Math.round((p.dmg || 8) * 0.55), "player");
+    }
+  }
+
+  function stealWeaponFrom(state, e) {
+    if (!e || !has(state, "saqueador")) return;
+    state.lootVault = state.lootVault || [];
+    if (state.lootVault.length >= 6) return;
+    if (e.def && e.def.boss) return;
+    var ranged = e.def && e.def.projectile && e.def.projectile !== "none";
+    var k = e.def && e.def.kind;
+    if (!ranged && k !== "ranged" && k !== "sniper" && k !== "artillery" && k !== "drone") return;
+    state.lootVault.push({
+      kind: e.def.projectile === "grenade" || e.def.projectile === "missile" ? e.def.projectile : "bullet",
+      color: (e.def && e.def.color) || "#c86a3a",
+      homing: k === "drone" || e.def.projectile === "missile",
+      r: 4,
+      boomR: e.def.projectile === "grenade" || e.def.projectile === "missile" ? 28 : 0
+    });
+    e.disarmed = true;
+    e.stunT = Math.max(e.stunT || 0, 2.8);
+    state.floaters.push(G.createFloater(e.x, e.y - 16, "roubado", "#c86a3a"));
+  }
+
+  function fireSaqueador(state, u, ang) {
+    var vault = state.lootVault || [];
+    if ((u.pilantraT || 0) > 0 && vault.length) {
+      for (var vi = 0; vi < vault.length; vi++) fireVaultShot(state, u, ang + (vi - (vault.length - 1) / 2) * 0.06, vault[vi]);
+      return;
+    }
+    if (vault.length) {
+      u.vaultI = (u.vaultI || 0) + 1;
+      fireVaultShot(state, u, ang, vault[u.vaultI % vault.length]);
+      return;
+    }
+    bolt(state, u, ang, { stealGun: true, dmgMul: 0.4, r: 3.5, color: "#c86a3a" });
+  }
+
+  function fireVaultShot(state, u, ang, w) {
+    if (!w) return;
+    bolt(state, u, ang, {
+      kind: w.kind || "bullet",
+      color: w.color,
+      homing: !!w.homing,
+      boomR: w.boomR || 0,
+      r: w.r || 4,
+      dmgMul: 0.85
+    });
   }
 
   function updateMinions(state, dt) {
@@ -4759,27 +5083,33 @@
         var elites = 0;
         for (var ei = 0; ei < state.minions.length; ei++) if (state.minions[ei].kind === "elite") elites++;
         if (elites < 4) {
+          var spawnKinds = ["fuzileiro", "pistoleiro", "batedor"];
+          var eliteClass = spawnKinds[(Math.random() * spawnKinds.length) | 0];
+          var hp = eliteClass === "fuzileiro" ? 95 : eliteClass === "pistoleiro" ? 80 : 78;
+          var dmg = eliteClass === "fuzileiro" ? 20 : eliteClass === "pistoleiro" ? 12 : 15;
+          var fire = eliteClass === "fuzileiro" ? 1.2 : eliteClass === "pistoleiro" ? 1.6 : 1.35;
+          var range = eliteClass === "fuzileiro" ? 240 : eliteClass === "pistoleiro" ? 140 : 180;
           state.minions.push({
             kind: "elite",
-            eliteClass: "recruta",
+            eliteClass: eliteClass,
             x: q.x + (Math.random() - 0.5) * 18,
             y: q.y + (Math.random() - 0.5) * 18,
-            hp: 70,
-            maxHp: 70,
-            size: 11,
+            hp: hp,
+            maxHp: hp,
+            size: 12,
             t: 999,
             aliveT: 0,
             vx: 0,
             vy: 0,
             cooldown: 0.2,
-            fire: 1.05,
-            dmg: 14,
-            range: 170,
+            fire: fire,
+            dmg: dmg,
+            range: range,
             lure: true,
-            def: { size: 11, dmg: 14, projectile: "bullet", range: 170 },
+            def: { size: 12, dmg: dmg, projectile: "bullet", range: range },
             team: "player"
           });
-          state.floaters.push(G.createFloater(q.x, q.y - 18, "recruta de elite", "#9ad4ff"));
+          state.floaters.push(G.createFloater(q.x, q.y - 18, eliteClass.replace("_", " "), "#9ad4ff"));
         }
       }
     }
@@ -4806,6 +5136,12 @@
             G.audio.coin();
             state.floaters.push(G.createFloater(coin.x, coin.y, "+" + (coin.value || 1), "#ffd24a"));
             state.drops.splice(state.drops.indexOf(coin), 1);
+            m.gotCoin = true;
+            var coinsLeft = 0;
+            for (var cl = 0; cl < (state.drops || []).length; cl++) {
+              if (state.drops[cl].kind === "coin") coinsLeft++;
+            }
+            if (coinsLeft <= 0) m.t = 0;
           }
         } else {
           var roam = Math.atan2((state.squad.y || 0) - m.y, (state.squad.x || 0) - m.x);
@@ -4840,30 +5176,21 @@
       }
       if (m.kind === "elite" || m.kind === "cmd_recruit") {
         m.aliveT = (m.aliveT || 0) + dt;
-        if (m.kind === "elite" && !m.promoted && m.aliveT >= 16) {
-          var promo = ["fuzileiro", "dualista", "batedor"][(Math.random() * 3) | 0];
+        if (m.kind === "elite" && !m.promoted && m.aliveT >= 30) {
+          var from = m.eliteClass || "fuzileiro";
+          var options = (G.UNIT_DEFS[from] && G.UNIT_DEFS[from].merge) || [];
+          var promo = options.length ? options[(Math.random() * options.length) | 0] : from;
+          var pdef = G.UNIT_DEFS[promo];
           m.promoted = true;
           m.eliteClass = promo;
-          if (promo === "fuzileiro") {
-            m.hp = m.maxHp = 95;
-            m.dmg = 20;
-            m.fire = 1.2;
-            m.range = 240;
-            m.size = 12;
-          } else if (promo === "dualista") {
-            m.hp = m.maxHp = 88;
-            m.dmg = 16;
-            m.fire = 2.0;
-            m.range = 190;
-            m.size = 12;
-          } else {
-            m.hp = m.maxHp = 78;
-            m.dmg = 15;
-            m.fire = 1.35;
-            m.range = 180;
-            m.size = 11;
+          if (pdef) {
+            m.hp = m.maxHp = Math.round(pdef.hp * 0.55);
+            m.dmg = pdef.dmg;
+            m.fire = pdef.fire || 1;
+            m.range = pdef.range || 180;
+            m.size = Math.min(16, pdef.size || 12);
           }
-          m.def = { size: m.size, dmg: m.dmg, projectile: "bullet", range: m.range };
+          m.def = { size: m.size, dmg: m.dmg, projectile: (pdef && pdef.projectile) || "bullet", range: m.range };
           state.floaters.push(G.createFloater(m.x, m.y - 18, "promovido", "#ffd24a"));
           G.burst(state, m.x, m.y, "#ffd24a", 12, 80);
         }
@@ -4893,6 +5220,18 @@
         if (m.hp <= 0) state.minions.splice(i, 1);
         continue;
       }
+      if (m.kind === "bastion") {
+        var bt = C().nearest(state.enemies, m.x, m.y);
+        if (bt) {
+          var ba = angTo(m, bt);
+          m.x += Math.cos(ba) * 170 * dt;
+          m.y += Math.sin(ba) * 170 * dt;
+          clampField(state, m);
+        }
+        m.t -= dt;
+        if (m.hp <= 0 || m.t <= 0) state.minions.splice(i, 1);
+        continue;
+      }
       var p = aim(state);
       var a2 = angTo(m, p);
       m.vx = Math.cos(a2) * 210;
@@ -4911,6 +5250,20 @@
       var t = state.deploys[i];
       if (t.retiring) {
         if (tickRetire(t, dt)) state.deploys.splice(i, 1);
+        continue;
+      }
+      if (t.kind === "node_gen") {
+        t.t -= dt;
+        t.spitT = (t.spitT || 3) - dt;
+        if (t.spitT <= 0 && (t.spitLeft || 0) > 0) {
+          t.spitT = 3;
+          t.spitLeft -= 1;
+          if (G.merge && G.merge.addArquivo) G.merge.addArquivo(state, t.x, t.y - 8);
+          G.burst(state, t.x, t.y, "#ffd24a", 8, 50);
+        }
+        if (t.t <= 0 || t.hp <= 0) {
+          beginRetire(state, t, 0.5);
+        }
         continue;
       }
       if (t.kind === "coil_tower") {
@@ -5012,7 +5365,7 @@
         continue;
       }
       if (t.landSquash) t.landSquash = Math.max(0, t.landSquash - dt * 5.4);
-      t.t -= dt;
+      if (t.kind !== "shield_gen") t.t -= dt;
       t.cooldown -= dt;
       if (t.kind !== "shield_gen" && !t.immortal) {
         for (var ei2 = 0; ei2 < state.enemies.length; ei2++) {
@@ -5250,8 +5603,22 @@
     for (var t = 1; t < teslas.length; t++) if (teslas[t].id < leadU.id) leadU = teslas[t];
     var batt = leadU.teslaBatt == null ? 1 : leadU.teslaBatt;
     var holding = !!(state.pointer && state.pointer.fireHold);
+    var prev = batt;
     if (holding) batt = Math.min(1, batt + 0.48 * dt);
     else if (batt > 0) batt = Math.max(0, batt - 0.15 * dt);
+    if (holding && prev < 0.99 && batt >= 0.99) {
+      throwArc(state, leadU, aim(state), {
+        kind: "grenade",
+        land: "tesla_batt",
+        color: "#a8f6ff",
+        boomR: 72,
+        r: 8,
+        dur: 0.5,
+        dmg: Math.round(leadU.def.dmg * 1.8 * C().dmgMul(state))
+      });
+      batt = 0.12;
+      G.burst(state, leadU.x, leadU.y, "#a8f6ff", 12, 80);
+    }
     for (var s = 0; s < teslas.length; s++) teslas[s].teslaBatt = batt;
     return holding || batt > 0.02;
   }
@@ -5407,7 +5774,7 @@
     var BUMPER_MERGE_MAX = 10;
 
   function hasBumper(state) {
-    return hasAny(state, ["caminhao", "minitanque", "tanque", "quartel", "oficina", "colosso"]);
+    return hasAny(state, ["caminhao", "minitanque", "tanque", "colosso"]);
   }
 
   function tickTimedFlags(state, dt) {
@@ -5424,15 +5791,38 @@
     decay("coloOverT", function () {
       endColoBlade(state, "lâmina off");
     });
+    if ((state.tankBarrageCd || 0) > 0) state.tankBarrageCd = Math.max(0, state.tankBarrageCd - dt);
+    if ((state.hauntShotT || 0) > 0) state.hauntShotT = Math.max(0, state.hauntShotT - dt);
+    if ((state.hookRegenT || 0) > 0) {
+      state.hookRegenT = Math.max(0, state.hookRegenT - dt);
+      healSquad(state, squadMaxHp(state) * 0.05 * dt);
+    }
+    if (has(state, "radio")) {
+      var rad = lead(state, "radio");
+      if (rad) {
+        rad._crateT = (rad._crateT == null ? 20 : rad._crateT) - dt;
+        if (rad._crateT <= 0) {
+          rad._crateT = 20;
+          var cx = rad.x + (Math.random() - 0.5) * 40;
+          var cy = rad.y + (Math.random() - 0.5) * 40;
+          state.drops.push(G.createDrop(cx, cy, "coin", { value: 4 }));
+          if (G.merge && G.merge.addArquivo) G.merge.addArquivo(state, cx + 8, cy - 6);
+          state.floaters.push(G.createFloater(cx, cy - 14, "caixa", "#ffcc66"));
+        }
+      }
+    }
     if ((state.bannerFireT || 0) > 0) {
       zone(state, { kind: "fire", x: state.squad.x, y: state.squad.y, r: 22, t: 0.35, dmg: 10 });
     }
     tickAssassinHunt(state, dt);
+    tickAssassinMelee(state, dt);
   }
 
   function bumperCap(state) {
     var extra = runRank(state.run && state.run.impact);
-    if (hasAny(state, ["minitanque", "tanque", "quartel", "oficina", "colosso"])) return BUMPER_MERGE_MAX + extra;
+    if (has(state, "colosso")) return 15 + extra;
+    if (has(state, "tanque")) return 12 + extra;
+    if (has(state, "minitanque")) return BUMPER_MERGE_MAX + extra;
     return BUMPER_MAX + extra;
   }
 
@@ -5742,7 +6132,7 @@
         }
       }
       if (z.kind === "heal") {
-        if (!z.toxin && still && hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r) {
+        if ((z.heal || 0) > 0 && still && hypot(state.squad.x - z.x, state.squad.y - z.y) < z.r) {
           healSquad(state, z.heal * dt);
         }
         for (var he = 0; he < state.enemies.length; he++) {
@@ -5907,6 +6297,14 @@
           continue;
         }
         if (z.kind === "phalanx") releasePhalanxActive(state);
+        if (z.kind === "smoke") {
+          for (var smi = 0; smi < state.enemies.length; smi++) {
+            var sme = state.enemies[smi];
+            if (sme.hp <= 0) continue;
+            if (hypot(sme.x - z.x, sme.y - z.y) > (z.r || 80) + (sme.def.size || 10)) continue;
+            applyFear(state, sme, 1);
+          }
+        }
         if (z.kind === "standard") {
           for (var bi = 0; bi < state.units.length; bi++) {
             var bu = state.units[bi];
@@ -5933,7 +6331,11 @@
       s.x = e.x;
       s.y = e.y;
       s.t -= dt;
-      if (s.t <= 0) state.stickies.splice(i, 1);
+      if (s.t <= 0) {
+        C().explode(state, s.x, s.y, 46, s.dmg, "player");
+        state.stickies.splice(i, 1);
+        G.audio.explosion();
+      }
     }
   }
 
@@ -5965,8 +6367,7 @@
       if (kind === "tesla" || kind === "colosso") continue;
       if (kind === "bombardeiro" || kind === "droneiro" || kind === "helicoptero" || kind === "recon") continue;
       if (kind === "bandeira") continue;
-      if (!firing && kind !== "giratoria" && kind !== "torreta") continue;
-      if (kind === "giratoria" && (state.girSpin || 0) < (G.upgrades && G.upgrades.girSpinNeed ? G.upgrades.girSpinNeed() : 2)) continue;
+      if (!firing && kind !== "torreta") continue;
       if (u.cooldown > 0) continue;
       var turretTgt = null;
       if (kind === "torreta") {
@@ -5977,8 +6378,8 @@
       var rate = C().fireMul(state);
       if (G.upgrades && G.upgrades.quartelFireMul) rate *= G.upgrades.quartelFireMul(u);
       if ((kind === "fuzileiro" || kind === "designado") && state.pointer && state.pointer.fireHold) rate *= 1.65;
-      if (kind === "giratoria") rate *= 1.8;
-      if ((u.stormT || 0) > 0) rate *= 3.6;
+      if (kind === "giratoria") rate *= 1 + Math.min(0.5, (state.girSpin || 0) * 0.02);
+      if ((u.stormT || 0) > 0) rate *= 5;
       if (u.veilFogT > 0) rate *= 0.55;
       u.cooldown = 1 / (u.def.fire * rate);
 
@@ -6052,6 +6453,11 @@
         var oy = Math.sin(ang + Math.PI / 2) * 5;
         bolt(state, u, ang, { ox: ox, oy: oy, pairId: pair });
         bolt(state, u, ang, { ox: -ox, oy: -oy, pairId: pair });
+        if ((u.doubleShotT || 0) > 0) {
+          var pair2 = ++state.pairSeq;
+          bolt(state, u, ang + 0.08, { ox: ox, oy: oy, pairId: pair2 });
+          bolt(state, u, ang + 0.08, { ox: -ox, oy: -oy, pairId: pair2 });
+        }
       } else if (kind === "engenheiro") {
         throwArc(state, u, aim(state), { kind: "mine", land: "mine", dmg: u.def.dmg });
       } else if (kind === "canhoneiro") {
@@ -6061,46 +6467,76 @@
       } else if (kind === "lanca_chamas" || kind === "inferno") {
         C().flameAt(state, u, aim(state));
       } else if (kind === "fora_da_lei") {
-        for (var f = -4; f <= 4; f++) bolt(state, u, ang + f * 0.22, { r: 2.5, dmgMul: 0.42, lifeDist: 2000 });
+        var pellets = 10;
+        var spread = 0.2;
+        var rangeMul = 1 + 0.1 * Math.min(10, u.outlawRange || 0);
+        var lifeD = Math.round(110 * rangeMul);
+        for (var f = 0; f < pellets; f++) {
+          var fa = ang + (f - (pellets - 1) / 2) * spread;
+          bolt(state, u, fa, { r: 2.5, dmgMul: 0.42, lifeDist: lifeD });
+        }
+        if ((u.doubleGunT || 0) > 0) {
+          for (var f2 = 0; f2 < pellets; f2++) {
+            var fa2 = ang + 0.08 + (f2 - (pellets - 1) / 2) * spread;
+            bolt(state, u, fa2, { r: 2.5, dmgMul: 0.42, lifeDist: lifeD });
+          }
+        }
       } else if (kind === "cirurgiao") {
         bolt(state, u, ang, { kind: "scalpel", r: 4, speed: 380, color: "#ffd0d0", bleed: true, lifeDist: 220 });
       } else if (kind === "revolver") {
-        bolt(state, u, ang, { pierce: true, hitsLeft: 5, enemyBounce: 3, bounceMul: 3, r: 4, speed: 320, lifeDist: 820 });
+        bolt(state, u, ang, { pierce: true, hitsLeft: 5, enemyBounce: 3, bounceMul: 1, bounceAdd: true, baseDmg: u.def.dmg, r: 4, speed: 320, lifeDist: 820 });
       } else if (kind === "torreta") {
         bolt(state, u, ang, { kind: "cannon", r: 5, speed: 340 });
       } else if (kind === "saqueador") {
-        bolt(state, u, ang, { stealShots: true, dmgMul: 0.55, r: 4 });
+        fireSaqueador(state, u, ang);
       } else if (kind === "sabotador") {
         bolt(state, u, ang, { sticky: true, kind: "grenade", r: 5, speed: 300 });
       } else if (kind === "missil") {
-        var boss = null;
-        for (var b = 0; b < state.enemies.length; b++) if (state.enemies[b].def.boss && state.enemies[b].hp > 0) boss = state.enemies[b];
-        var overBoss = boss && hypot(aim(state).x - boss.x, aim(state).y - boss.y) < 70 && (state.mouseSpd || 0) < 90;
-        var spread = (state.mouseSpd || 0) > 220;
-        for (var mi = 0; mi < 5; mi++) {
-          bolt(state, u, ang + (spread ? (mi - 2) * 0.28 : (mi - 2) * 0.06), {
+        u.missilShots = (u.missilShots || 0) + 1;
+        var moving = hypot(state.squad.vx || 0, state.squad.vy || 0) > 28;
+        var nMis = moving ? 1 : 3;
+        if (u.missilShots >= 5) {
+          nMis = 5;
+          u.missilShots = 0;
+        }
+        var foes = [];
+        for (var mb = 0; mb < state.enemies.length; mb++) {
+          if (state.enemies[mb].hp > 0 && !state.enemies[mb].scenery) foes.push(state.enemies[mb]);
+        }
+        for (var mi = 0; mi < nMis; mi++) {
+          var home = foes.length ? foes[(Math.random() * foes.length) | 0] : null;
+          bolt(state, u, ang + (mi - (nMis - 1) / 2) * 0.08, {
             kind: "missile",
-            homing: !spread,
-            homeCursor: !spread,
+            homing: true,
+            homeId: home ? home.id : 0,
+            homeCursor: !home,
             boomR: 36,
-            orbitBoss: overBoss ? boss : null,
-            spreadExplode: spread,
             r: 5,
             speed: 200,
-            life: spread ? 0.55 : 2.2
+            life: 2.2
           });
         }
       } else if (kind === "gunship") {
-        bolt(state, u, ang, { homing: true, homeCursor: true, r: 3, speed: 480 });
+        for (var gs = 0; gs < 3; gs++) {
+          var gex = {
+            homing: true,
+            homeCursor: true,
+            r: 3,
+            speed: 480,
+            ox: Math.cos(ang + Math.PI / 2) * (gs - 1) * 5,
+            oy: Math.sin(ang + Math.PI / 2) * (gs - 1) * 5
+          };
+          if ((u.runicT || 0) > 0) applyRunic(gex);
+          bolt(state, u, ang, gex);
+        }
       } else if (kind === "minitanque" || kind === "tanque") {
         var mode = u.fireMode || state.tankFireMode || 0;
         if (kind === "tanque" && mode === 2) {
-          if (state.tankBarrageUsed) {
+          if ((state.tankBarrageCd || 0) > 0) {
             u.cooldown = 0.35;
             continue;
           }
-          state.tankBarrageUsed = true;
-          u.barrageUsed = true;
+          state.tankBarrageCd = 30;
           var bdmg = Math.round(160 * C().dmgMul(state));
           for (var be = 0; be < state.enemies.length; be++) {
             var ben = state.enemies[be];
@@ -6136,7 +6572,7 @@
       } else {
         bolt(state, u, ang, {});
       }
-      if (u.doubleShotT > 0) bolt(state, u, ang + 0.08, {});
+      if (u.doubleShotT > 0 && kind !== "dualista") bolt(state, u, ang + 0.08, {});
       if (state.run && runRank(state.run.dual)) bolt(state, u, ang + 0.12, { dmgMul: 0.8 });
       if (state.run && runRank(state.run.dual) >= 2) bolt(state, u, ang - 0.12, { dmgMul: 0.8 });
       sfx = true;
@@ -6156,7 +6592,7 @@
 
   function onBulletHit(state, p, hit) {
     if (p.ownerKind === "recon" && hit.team === "enemy") {
-      hit.reconMark = Math.min(15, (hit.reconMark || 0) + 1);
+      hit.reconMark = (hit.reconMark || 0) + 1;
       hit.reconMarkT = 5;
       hit.reconDarts = hit.reconDarts || [];
       hit.reconDarts.push({
@@ -6171,6 +6607,7 @@
     }
     if (p.ownerKind === "assassino" && hit.team === "enemy") applySilence(state, hit);
     if (p.ownerKind === "fantasma" && hit.team === "enemy") tryShotFear(state, hit);
+    if ((state.hauntShotT || 0) > 0 && hit.team === "enemy") tryShotFear(state, hit);
     if (p.ownerKind === "cirurgiao" && hit.team === "enemy") {
       hit.bleedT = 5;
       hit.bleedDps = Math.max(hit.bleedDps || 0, p.dmg * 0.91);
@@ -6179,13 +6616,9 @@
       hit.burnT = 5;
       hit.burnDps = Math.max(hit.burnDps || 0, (p.dmg || 8) * 0.9);
     }
-    if (p.ownerKind === "capelao" && hit.team === "enemy" && Math.random() < 0.34) {
-      var blessed = lowest(state);
-      if (blessed) {
-        var healAmt = Math.max(8, Math.round(p.dmg * 1.4));
-        blessed.hp = Math.min(blessed.maxHp, blessed.hp + healAmt);
-        state.floaters.push(G.createFloater(blessed.x, blessed.y - 16, "+" + healAmt, "#f0e0a0"));
-      }
+    if (p.ownerKind === "capelao" && hit.team === "enemy" && Math.random() < 0.3) {
+      var healAmt = Math.max(8, Math.round(p.dmg * 1.4));
+      faithHeal(state, healAmt);
     }
     if (p.ownerKind === "pistoleiro" && hit.team === "enemy" && Math.random() < 0.28) {
       state.drops.push(G.createDrop(hit.x, hit.y, "hp", { value: 14 }));
@@ -6197,13 +6630,28 @@
       var key = p.pairId + ":" + hit.id;
       state.dualHits[key] = (state.dualHits[key] || 0) + 1;
       if (state.dualHits[key] >= 2) {
-        var ally = lowest(state);
-        if (ally) ally.hp = Math.min(ally.maxHp, ally.hp + p.dmg * 0.22);
+        var owner = null;
+        for (var di = 0; di < state.units.length; di++) {
+          if (state.units[di].id === p.fromId) owner = state.units[di];
+        }
+        if (owner && owner.hp > 0) {
+          owner.hp = Math.min(owner.maxHp, owner.hp + p.dmg);
+          state.floaters.push(G.createFloater(owner.x, owner.y - 14, "+" + Math.round(p.dmg), "#ffb070"));
+        }
         delete state.dualHits[key];
       }
     }
+    if (p.stealGun && hit.team === "enemy") {
+      stealWeaponFrom(state, hit);
+    }
+    if (p.runic && hit.team === "enemy") {
+      applyRunicHit(state, p, hit);
+    }
+    if (p.popCluster) {
+      spawnCluster(state, hit.x, hit.y, p.clusterDmg || p.dmg, 1);
+    }
     if (p.sticky && hit.team === "enemy") {
-      state.stickies.push({ eid: hit.id, x: hit.x, y: hit.y, dmg: Math.round(p.dmg * 1.6), t: 8 });
+      state.stickies.push({ eid: hit.id, x: hit.x, y: hit.y, dmg: Math.round(p.dmg * 1.6), t: 5 });
       return true;
     }
     return false;
@@ -6232,7 +6680,7 @@
           } else if (ar.land === "puddle") {
             splashMedicFlask(state, p, ar.tx, ar.ty);
             var pudR = 40 * (1 + 0.25 * (runRank(state.run && state.run.fieldMed) >= 2 ? 1 : 0));
-            placePuddle(state, ar.tx, ar.ty, pudR, 0, 4.8);
+            placePuddle(state, ar.tx, ar.ty, pudR, 10, 4.8);
           } else if (ar.land === "buckshot") {
             fireBucknade(state, p, ar.tx, ar.ty);
           } else if (ar.land === "blackhole") {
@@ -6242,6 +6690,11 @@
             zone(state, { kind: "blackhole", x: ar.tx, y: ar.ty, r: 300, t: 2.38, max: 2.38, dmg: p.dmg, seed: Math.random() * 80 });
           } else if (ar.land === "psych_slam") {
             applyPsychSlam(state, ar.tx, ar.ty, p.dmg, p.boomR || 96);
+          } else if (ar.land === "tesla_batt") {
+            C().explode(state, ar.tx, ar.ty, p.boomR || 72, p.dmg, p.team, "#a8f6ff");
+            G.burst(state, ar.tx, ar.ty, "#a8f6ff", 18, 140);
+            var first = C().nearest(state.enemies, ar.tx, ar.ty);
+            if (first) fireJoltChain(state, { x: ar.tx, y: ar.ty }, first, p.dmg, 8);
           } else {
             C().explode(state, ar.tx, ar.ty, p.boomR || 62, p.dmg, p.team);
             if (p.cluster || ar.land === "cluster") spawnCluster(state, ar.tx, ar.ty, p.dmg);
@@ -6300,7 +6753,12 @@
         }
         if (bounced) {
           p.wallBounce--;
-          p.dmg = Math.round(p.dmg * (p.bounceMul || 3));
+          if (p.bounceAdd) {
+            p.bounceN = (p.bounceN || 0) + 1;
+            p.dmg = Math.round((p.baseDmg || p.dmg) * (1 + p.bounceN));
+          } else {
+            p.dmg = Math.round(p.dmg * (p.bounceMul || 3));
+          }
           p.life = Math.max(p.life, 0.5);
           if (p.kind === "colo_fist") {
             p.hitIds = {};
@@ -6522,8 +6980,10 @@
       bhNade.blackhole = true;
       return true;
     }
-    if (id === "hijack") {
-      stealEnemy(state, u);
+    if (id === "hijack" || id === "pilantragem") {
+      u.pilantraT = 10;
+      state.floaters.push(G.createFloater(u.x, u.y - 18, "pilantragem", "#c86a3a"));
+      G.burst(state, u.x, u.y, "#c86a3a", 14, 90);
       return true;
     }
     if (id === "storm" || id === "coil") return placeCoilTower(state, u);
@@ -6593,15 +7053,18 @@
       scalpelRain(state, u);
       return true;
     }
-    if (id === "bucknade") {
-      throwArc(state, u, aim(state), { kind: "grenade", land: "buckshot", color: "#ff8a4a", boomR: 28, r: 8, dur: 0.55, dmg: Math.round(u.def.dmg * C().dmgMul(state)) });
+    if (id === "bucknade" || id === "double_shotgun") {
+      for (var ds = 0; ds < state.units.length; ds++) {
+        if (state.units[ds].hp > 0 && state.units[ds].kind === "fora_da_lei") state.units[ds].doubleGunT = 5;
+      }
+      state.floaters.push(G.createFloater(u.x, u.y - 18, "double shotgun", "#ff8a4a"));
       return true;
     }
     if (id === "energy_blade" || id === "overcharge") {
       state.coloOverT = 10;
       state.coloOverMax = 10;
-      state.coloSlashLeft = COLO_SLASH_N;
-      state.coloSlashMax = COLO_SLASH_N;
+      state.coloSlashLeft = 9999;
+      state.coloSlashMax = 9999;
       for (var ci = 0; ci < state.units.length; ci++) {
         if (state.units[ci].kind === "colosso" && state.units[ci].hp > 0) {
           state.units[ci].coloGlow = true;
@@ -6710,6 +7173,7 @@
     }
     if (id === "haunt") {
       state.hauntT = 3;
+      state.hauntShotT = 10;
       state.phaseOn = true;
       state.run.smokeT = Math.max(state.run.smokeT || 0, 3);
       for (var hi = 0; hi < state.enemies.length; hi++) state.enemies[hi].hauntTagged = false;
@@ -6721,7 +7185,21 @@
       return true;
     }
     if (id === "salvo") {
-      for (var n = 0; n < 6; n++) bolt(state, u, mouseAng(state, u) + (n - 2.5) * 0.1, { kind: "missile", homing: true, homeCursor: true, boomR: 32, r: 5 });
+      var foes2 = [];
+      for (var sv = 0; sv < state.enemies.length; sv++) {
+        if (state.enemies[sv].hp > 0 && !state.enemies[sv].scenery) foes2.push(state.enemies[sv]);
+      }
+      for (var n = 0; n < 12; n++) {
+        var home2 = foes2.length ? foes2[(Math.random() * foes2.length) | 0] : null;
+        bolt(state, u, mouseAng(state, u) + (n - 5.5) * 0.08, {
+          kind: "missile",
+          homing: true,
+          homeId: home2 ? home2.id : 0,
+          homeCursor: !home2,
+          boomR: 32,
+          r: 5
+        });
+      }
       return true;
     }
     if (id === "psych_slam") return startPsychSlam(state, u);
@@ -6732,6 +7210,38 @@
       }
       state.floaters.push(G.createFloater(u.x, u.y - 18, "stormtrooper", "#d4c090"));
       G.burst(state, u.x, u.y, "#ff9a3a", 14, 100);
+      return true;
+    }
+    if (id === "force_pull") {
+      return forcePullWell(state, u);
+    }
+    if (id === "blood_rift") {
+      for (var wr = 0; wr < state.units.length; wr++) {
+        if (state.units[wr].hp > 0 && state.units[wr].kind === "warlord") state.units[wr].bloodRiftT = 10;
+      }
+      state.floaters.push(G.createFloater(u.x, u.y - 18, "rasgo de sangue", "#c41e3a"));
+      return true;
+    }
+    if (id === "runic_ammo" || id === "carpetbomb") {
+      for (var ru = 0; ru < state.units.length; ru++) {
+        if (state.units[ru].hp > 0 && state.units[ru].kind === "gunship") state.units[ru].runicT = 10;
+      }
+      state.floaters.push(G.createFloater(u.x, u.y - 18, "muniçao runica", "#2ad8ff"));
+      return true;
+    }
+    if (id === "fan") {
+      var picks = [];
+      for (var f = 0; f < state.enemies.length; f++) {
+        if (state.enemies[f].hp > 0 && !state.enemies[f].scenery) picks.push(state.enemies[f]);
+      }
+      picks.sort(function (a, b) {
+        return hypot(a.x - u.x, a.y - u.y) - hypot(b.x - u.x, b.y - u.y);
+      });
+      var nFan = Math.min(6, picks.length);
+      for (var fi = 0; fi < nFan; fi++) {
+        var angF = Math.atan2(picks[fi].y - u.y, picks[fi].x - u.x);
+        bolt(state, u, angF, { pierce: true, hitsLeft: 4, enemyBounce: 3, bounceAdd: true, bounceMul: 1, r: 4, speed: 360 });
+      }
       return true;
     }
     if (id === "saber_throw") return throwSaber(state, u);
@@ -8910,9 +9420,10 @@
       ctx.stroke();
       ctx.restore();
       var tItems = [
-        { id: "square", icon: "⚡", name: "Jolt", col: "#a8f6ff", ready: true, a0: -Math.PI / 2 - Math.PI / 3, a1: -Math.PI / 2 + Math.PI / 3 },
-        { id: "triangle", icon: "🔥", name: "Chamas", col: "#ff7a2a", ready: true, a0: -Math.PI / 2 + Math.PI / 3, a1: -Math.PI / 2 + Math.PI },
-        { id: "circle", icon: "🔫", name: "Metralhadora", col: "#c8b45a", ready: true, a0: -Math.PI / 2 + Math.PI, a1: -Math.PI / 2 + Math.PI * 5 / 3 }
+        { id: "triangle", icon: "🔥", name: "Chamas 10", col: "#ff7a2a", a0: -Math.PI * 0.75, a1: -Math.PI * 0.25 },
+        { id: "circle", icon: "🔫", name: "MG 10", col: "#c8b45a", a0: -Math.PI * 0.25, a1: Math.PI * 0.25 },
+        { id: "square", icon: "⚡", name: "Tesla 12", col: "#a8f6ff", a0: Math.PI * 0.25, a1: Math.PI * 0.75 },
+        { id: "diamond", icon: "🛡", name: "Escudo 15", col: "#7ad4ff", a0: Math.PI * 0.75, a1: Math.PI * 1.25 }
       ];
       ctx.save();
       ctx.translate(tgm.x, tgm.y);
@@ -9409,6 +9920,8 @@
     shieldProtects: shieldProtects,
     phalanxSmash: phalanxSmash,
     onEnemyKilled: onEnemyKilled,
+    spawnCluster: spawnCluster,
+    tryBastion: tryBastion,
     selectedUnit: selectedUnit,
     selectedId: selectedId,
     meltCone: meltCone,

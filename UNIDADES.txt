@@ -1,0 +1,683 @@
+COMANDANTE
+
+Líder. Se for abatido a missão é fracassada. Possui uma pistola com mira laser.
+
+Básico
+Pistola com mira laser
+
+Passiva · Arquivo de guerra
+Ao abater unidades inimigas as mesmas dropam arquivos de guerra, esses arquivos podem ser utilizados para convocar unidades apertando a Letra R.
+
+Ativa · Comandos de guerrilha
+Segura o botão direito: Surge um menu radial onde o comandante pode dar ordens de guerrilha.
+
+
+LINHA DO RECRUTA
+
+Recruta
+Recruta novado, sem experiencia de combate mas com potencial para se tornar qualquer coisa.
+
+Básico
+Tiro basico.
+
+PASSIVA REMOVIDA POR SER IRRELEVANTE.
+
+Ativa
+—
+
+Vira: Fuzileiro, Pistoleiro, Batedor, Psíquico
+
+
+LINHA DO FUZILEIRO
+
+Fuzileiro
+Fuzileiro experiente das linhas de frente 
+
+Básico
+Tiro automatico com boa precisão
+
+Passiva · Modo foco
+Enquanto atira, o esquadrão fica 30% mais lento.
+
+Ativa · Fogo de supressão (15s)
+Por 5s os tiros empurram os inimigos.
+
+Vira: Sniper, Metralhador, Caminhão de comando
+
+Sniper
+Unidade franco atirador de elite.
+
+Básico
+Munição .50 com grande poder destrutivo
+
+Passiva · Punição de perto
+Quanto mais longe o projetil for, mais dano ele causa
+
+Ativa · Tiro marcado (11s)
+O próximo tiro causa 4× o dano.
+
+Vira: Antimaterial, Observador, Atirador designado
+
+Antimaterial
+Unidade especializada em disparos a longa distancia com uma poderosa sniper com munição Antimaterial
+
+Básico
+Tiro preto que perfura e consome projéteis no caminho.
+
+Passiva · Munição negra
+A cada tiro ganha uma carga ao chegar em 7 o proximo disparo causa 4x mais dano
+
+Ativa · Buraco negro (14s)
+Granada com massa comprida em uma area minuscula, no impacto gera uma singularidade similar a um buraco negro, causando dando e sugando todos os inimigos proximos 
+
+Observador
+Franco atirador focado em suporte operacional 
+
+Básico
+Munição tracejante que possui propriedades magnéticas, puxando o disparo par ao inimigo mais proximo
+
+Passiva · Tiro teleguiado
+Seus projetéis possuem propriedades teleguiadas
+
+Ativa · Marcação (8s)
+Marca o inimigo na mira. Enquanto durar, todos os tiros do esquadrão viram teleguiados nele.
+
+Atirador designado
+Franco atirador veterano, especializado em combate curta e media distancia, possuindo um PSG1 semi automatica com cadencia similar a um rifle de assalto.
+
+Básico
+Projetil .50 com cadencia de um rifle automatico
+
+PASSIVA REMOVIDA POR SER REDUNDANTE. apesar que o range ainda é infinito, igual a todos os outros dessa linha
+
+Ativa
+—
+
+Metralhador
+Veterano de varias guerras, abandonou seu rifle semi automatico para utilizar um fuzil experimental com capacidade de disparar mais de um projetil por vez
+
+Básico
+5 tiros em leque a frente da unidade 
+
+Passiva · Coice
+O recuo empurra o esquadrão pro lado oposto.
+
+Ativa · Foco absoluto (12s)
+Por 8s o leque vira uma disparo concentrado onde os 5 tiros se fundem em 1 ponto
+
+Vira: Lança-chamas, Canhoneiro, Giratória
+
+Lança-chamas
+Piromante do esquadrão de defesa da terra, responsavel por incinerar os corpos de seus inimigos 
+
+Básico
+Jato de fogo em cone. Aplica queimadura por 5s.
+
+Passiva · Queima
+10% de chance de derreter cada bala física no cone.
+
+Ativa · Fosforo branco (12s)
+Dispara em linha reta uma poderosa labareda feita de fosforo branco, causando queimaduras severas e deixando poças de fogo no chão
+
+Vira: Inferno
+
+Inferno
+Piromaniaco especializado em causar o cãos, altamente perigoso o exerciso só o matem pois seus metodos são extremamente eficientes 
+
+Básico
+Cone de fogo, mais forte que o lança-chamas.
+
+Passiva · Terra queimada
+Morte por queimadura deixa uma poça de fogo no chão
+
+Ativa · Maré de fogo (12s)
+Onda de fogo branco sai dele e varre o mapa. Derrete projetéis inimigos além de causar queimaduras em todos os inimigos em tela.
+
+Canhoneiro
+Soldado utilizando um poderoso lança granadas 
+
+Básico
+Arremeça uma grande granada que ao explodir viram 6 bolinhas menores, que viram mais 6 bolinhas menores
+
+Passiva · Bola preta
+Seus disparos se fracionam no impacto.
+
+Ativa
+—
+
+Vira: Míssil
+
+Míssil
+Soldado que utiliza uma RPG termoquiada.
+
+Básico
+Seus disparos são misseis teleguiados, após 5 disparos ele solta 5 misséis de uma unica vez, os mesmos seguem os inimigos.
+
+Passiva · Saraivada
+Se a unidade estiver andando ela dispara apenas um missel, se a mesma se manter parada, ele sempre dispara 3.
+
+Ativa · Salva (13s)
+Saraiva de 12 misseis teleguiados que perseguem inimigos aleatorios pelo mapa.
+
+Giratória
+Soldado forte que carrega uma gatling gun automatica altamente poderosa
+
+Básico
+Dispara projetéis extremamente velozes
+
+Passiva · Aquecimento
+Ao começar a disparar sua cadencia é comum, para cada segundo que segura o dedo a cadencia de tiro sobe em 2% até um maximo de 50%.
+
+Ativa
+—
+
+Caminhão de comando
+Caminhão utilizado como base movel
+
+Básico
+—
+
+Passiva · Bolha de comando
+Possui um escudo magnético que bloqueia disparos e encontrões. Esse escudo possui 7 pontos de vida e carrega um ponto a cada 5 segundos, caso quebrado o mesmo se regenera por completo em 10.
+
+Ativa
+—
+
+Vira: Mini-tanque, Quartel móvel, Oficina móvel
+
+Mini-tanque
+Um pequeno tanque de combate, geralmente utilizado juntamente a linha de frente e seus fuzileiros.
+
+Básico
+Tiros de .50 e lança granadas menores
+
+Passiva · Bolha de comando
+Possui um escudo magnético que funciona como o caminhao de comando, possuindo 10 pontos de vida ao invês de 7
+
+Ativa · Modo de tiro (0,8s)
+Alterna entre fuzil, possuindo uma cadencia de disparos boa e um lançador de granadas que causam dano em uma pequena area ao contato.
+
+Vira: Tanque
+
+Tanque
+Tanque de Guerra pesado e altamente tecnologico
+
+Básico
+Possui fuzil, granada e uma poderosa barragem.
+
+Passiva · Couraça pesada
+Possui a passiva do caminhão de comando mas ao invês de ter 7 pontos de vida, possui 12
+
+Ativa · Modo de tiro (0,8s)
+Cicla entre os modos de fuzil, granadeira, e uma poderosa barragem de disparos que pode ser usada a cada 30 segundos e causa dano massivo no mapa inteiro.
+
+Vira: Colosso
+
+Quartel móvel
+Quartel movel especializado em deploy de soldados no campo de batalha
+
+Básico
+—
+
+Passiva · Recruta de elite
+A cada 20 segundos solta um fuzileiro, pistoleiro ou batedor, se os mesmos sobreviverem por 30 segundos, são promovidos para suas patentes mais altas.
+
+Ativa
+—
+
+Oficina móvel
+Quartel movel especializado na coleta de recursos e disrupção
+
+Básico
+—
+
+Passiva · Carrinho de sucata
+A cada 5 segundos solta um carrinho que atrople os inimigos e coleta moedas de ouro, ao coletar todas as moedas ou ao passar de 10 segundos explode, causando dano em uma pequena area.
+
+Ativa
+—
+
+Colosso
+Meca de combate monstruoso, construido especialmente para lutar contra kaijus e alienigenas.
+
+Básico
+Cicla três golpes no inimigo mais perto: slam, investida de escudo e rocket punch que ricocheteia entre inimigos
+
+Passiva · Tríade do Colosso
+Os três golpes + escudo que absorve 15 pontos de dano
+
+Ativa · Lâmina de energia (30s)
+Por 10s, seus golpes basicos são trocados por poderosos slashes de energia, que causam dano, possuem perfuração e alcance infinitos.
+
+
+LINHA DO PISTOLEIRO
+
+Pistoleiro
+Médico de combate.
+
+Básico
+Tiro curto e bem rapido na mira
+
+Passiva · Kit no acerto
+Acerto pode soltar kit de vida no chão. O esquadrão se cura ao pegar.
+
+Ativa
+—
+
+Vira: Médico de campo, Dualista, Engenheiro
+
+Médico de campo
+Medico e apotecario, capaz de criar misturas curativas.
+
+Básico
+Arremessa frascos curativos deixando poças no chão, aliados que passam por cima são curados e inimigos recebem lentidão
+
+Passiva · Frasco tóxico
+Se acertar um inimigo que esteja encima de um poça, o mesmo pode soltar um node de vida.
+
+Ativa · Kit de emergência (13s)
+3 nodes de cura em cima do esquadrão. Inimigo em cima da poça também dropa um node na hora.
+
+Vira: Cirurgião, Capelão, Socorrista
+
+Cirurgião
+Medico de combate veterano.
+
+Básico
+Arremessa bisturis que causam sangramento que vai do leve ao moderado dependendo de quantos bisturis foram acertados.
+
+Passiva · Bisturi
+O sangramento cura o grupo em 10% do dano causado.
+
+Ativa · Chuva de bisturis (15s)
+Joga uma bomba adaptada com diversas laminas extremamente afiadas, ao acertar causa sangramento severo e cura o esquadrão baseado no dano causado.
+
+Capelão
+Medico dá fé, dedicou sua vida a cura por meio da fé e não da medicina 
+
+Básico
+Pistola basica, ao acertar tem chance de 30% de curar diretamente uma unidade aliada
+
+Passiva · Tiro abençoado
+Capaz de curar ao causar dano e se a vida do esquadrão já estiver completa, gera um escudo com o maximo de 30% da vida maxima do esquadrão.
+
+Ativa · Âncora sagrada (10s)
+Joga uma cruz sacra no meio do campo de batalha, aliados dentro da mesma recebem 35% a menos de dano graças a proteção divina.
+
+Socorrista
+Medico veterano especializado em resgastes no campo.
+
+Básico
+Possui uma pistola automatica que dispara com alta cadencia.
+
+Passiva · Pistola de apoio
+A cada 10 inimigos derrotados, solta um pulso a partir do inimigo que cura todo o grupo baseado na vida maxima do alvo derrotado.
+
+Ativa · Gancho (7s)
+Possui um gancho de resgate, utilizando é possivel grudar nas bordas do mapa ou no cenario, durante a locomoção o esquadrão fica invulneravel e ao final ganhama um buff de 5% de cura por segundo por 5 segundos.
+
+Dualista
+Duelista experiente, possui treinamento farmaceutico e utiliza munição especial, capaz de drenar energia dos inimigos
+
+Básico
+Dois tiros paralelos.
+
+Passiva · Canos gêmeos
+Caso ambos os projeteis acertem o mesmo alvo, o dano causado é convertido em vida para o duelista.
+
+Ativa · Canos quentes (14s)
+Por 10s, duplica a quantidade de tiros.
+
+Vira: Fora-da-lei, Cano longo, Saqueador
+
+Fora-da-lei
+Um criminoso conhecido que foi convencido a lutar pela terra por dinheiro.
+
+Básico
+Possui uma calibre doze extremamente poderosa, cada disparo libera 10 pallets com pouco alcance.
+
+Passiva · Cano aberto
+Ao um inimigo ser derrotado, ganha um buff de alcance aumentado, cada abate aumenta o range em 10% até um maximo de 10 stacks.
+
+Ativa · Double Shotgun (11s)
+Puxa uma segunda shotgun por 5 segundos.
+
+Cano longo
+Atirador que descobriu uma forma mistica de fazer balas "dobrarem"
+
+Básico
+Seus disparos possuem a propriedae inata de ricochete podendo pular entre alvos até 3 vezes, para cada alvo o multiplicador de dano aumenta em 1x
+
+Passiva · Ricochete
+Seus disparos possuem tanto a propriedade de penetração quanto a de ricochete.
+
+Ativa · Tambor cheio (12s)
+Dispara 6 balas em 6 inimigos diferentes, se o alvo for morto o efeito de ricochete é atualizado, podendo ricochetear mais.
+
+Saqueador
+Um ladrão extremamente experiente sentenciado a morte, aceitou defender a terra por liberdade.
+
+Básico
+Saqueador não possui uma arma, ele rouba a arma de inimigos caidos e usa elas contra eles, qualquer inimigo que possua projetéis ou armas a distancia pode ter sua arma roubada, inimigos que tenham suas armas retiradas ficama parados incredulos.
+
+Passiva · Roubo aéreo
+Ao roubar uma arma ele guarda ela em um "cofre" pessoal, um maximo de 6 armas podem ser guardadas.
+
+Ativa · Pilantragem 
+Abre o cofre pessoal e mistura todas as armas que ele coletou até o momento para criar uma aberração de arma. A mesma dispara todos os projetéis mantendo suas propriedades também, efeito dura 10 segundos, após isso todas as armas no cofre são perdidas.
+
+Engenheiro
+Engenheiro militar.
+
+Básico
+Joga minas terrestres que explodem ao contato com as unidades inimigas
+
+Passiva · Mina em arco
+Causa lentidão quando uma mina explode e causa dano a um inimigo.
+
+Ativa · Supercarga (13s)
+Utilizando tecnologia alienigena faz com que todas as minas em campo ganhem vida e sigam os inimigos, as mesmas ganham pernas de inseto e se comportam de forma automatica, sempre em direção a um inimigo.
+
+Vira: Mineiro, Tesla, Torreta
+
+Mineiro
+Mineiro especializado em demolição industrial militar, trabalhou por anos explodindo minas de ouro e carvão.
+
+Básico
+Joga 3 minas proxima uma a outra.
+
+Passiva · Campo minado
+Para cada mina detonada o mineiro gera entre 1 a 5 de ouro para o esquadrão.
+
+Ativa · Tapete de minas (12s)
+Segure a habilidade para desenhar com as minas, as mesmas serão plantadas ao final do desenho, tendo um limite de 30 minas em linha.
+
+Tesla
+Fisico aficionado por eletricdade, exercito disponibilizou para o mesmo baterias gigantes e de uso restrito, o que o convenceu a trabalhar para salvar a terra.
+
+Básico
+Dispara um feixe de energia até o cursor, o mesmo quica entre inimigos.
+
+Passiva · Jolt
+Quanto mais tempo o ataque basico é utilizado mais a bateria do tesla se enche, quando completa o mesmo ganha uma granada em forma de bateria, que ao jogar causa um grande efeito de chain lightning.
+
+Ativa · Bobina (8s)
+Planta uma grande bobina em um local do mapa, a mesma dispara raios em inimigos proximos e precisa ser carregada para funcionar, bobinas descarregadas apenas ficam em campo sem fazer nada, se uma for colocada ao lado da outra e ambas forem energizadas elas causam mais dano e suas baterias duram mais.
+
+Torreta
+Engenheiro especializado em torretas.
+
+Básico
+Possui um canhão automatico que fica em seu ombro, atira no inimigo mais proximo.
+
+Passiva · Canhão automático
+Cada inimigo abatido enquanto essa unidade estiver viva tem chance de dropar sucata.
+
+Ativa · Instalar (8s)
+Ao utilizar a habilidade um menu radial com 4 opções será mostrada, utilize sucata para instalar torretas poderosas para lhe ajudar.
+Lança chamas - 10x Sucata - Possui um range curto mas acerta em 360 graus causando queimadura em quem for acertado.
+Metralhadora - 10X Sucata - Cadencia de tiro e dano bem altos.
+Tesla Coil - 12x Sucata - Dispara feixes de energia que quicam entre os inimigos.
+Shield Generator - 15x Sucata - Se gruda no grupo gerando um escudo descartavel que possui 20 pontos de vida e bloqueia disparos e contato, apenas um pode ser ativado por vez.
+
+Todas as torretas possuem duração de 15 segundos com excessão do Shield Generator.
+
+LINHA DO BATEDOR
+
+Batedor
+Unidade extremamente rapida.
+
+Básico
+Tiro curto e rápido.
+
+Passiva · Passo leve
+A disparada atravessa inimigos e causa dano de contato.
+
+Ativa · Disparada (6s)
+Avança o dobro da distância na direção do movimento, causa dano ao contato e concede invulnerabilidade até chegar no destino final da disparada.
+
+Vira: Infiltrador, Mensageiro, Droneiro, Ponta de lança
+
+Infiltrador
+Infiltrador experiente das forças especiais da terra.
+
+Básico
+Disparo projetéis silenciosos e quase invisiveis.
+
+Passiva · Low Profile
+Raramente é detectada por inimigos, todo o foco fica com o resto do esquadrão.
+
+Ativa · Cortina (10s)
+Dispara uma granada de fumaça em uma area, dentro dessa area inimigos ficam perdidos e começam a ferir uns aos outros, após o termino do efeito os mesmos fogem de medo por 1 segundo.
+
+Vira: Assassino, Sabotador, Fantasma
+
+Assassino
+Um dos assassinos mais perigosos da terra, concordou em cooperar em troca de carta branca para matar alienigenas.
+
+Básico
+Possui uma pistola que ao acertar interrompo o alvo, impossibilitando do mesmo de usar skills ou atirar a distancia por 0,5 segundos e uma faca que causa sangramento e faz com que ele vá em range corpo a corpo.
+
+Passiva · Tiro silenciador
+Acertos impedem chefes de usarem suas skills, esse efeito acontece no maximo 5 vezes e após só volta a funcionar após 1 minuto.
+
+Ativa · Execução (9s)
+Solta do grupo, fica invulnerável e teleporta no inimigo com menos vida presente na tela, se matar ganha um buff que aumenta seu dano em 2%, se o alvo morrer ele pula para o proximo com menos vida ganhando o mesmo buff, esse efeito termina ao falhar em assassinar um alvo.
+
+Sabotador
+Especialista em disrupção e explosivos.
+
+Básico
+Seus disparos são C4 que grudam no alvo e explodem após 5 segundos.
+
+Fantasma
+O fantasma de um general que a anos lutou contra forças extra planares e ressucitou para lutar mais uma vez por seu planeta amado.
+
+Básico
+Tiro causa medo por 0,5s, fugindo da fantasma e empurrando outros inimigos se encostarem no alvo do fear.
+
+Passiva · Susto
+É completamente incorporea, logo, não pode ser atingida por nada.
+
+Ativa · Assombração (12s)
+Por 3s o esquadrão fica imune a tudo. Passar por cima de inimigos causa medo: eles fogem e se batem, o aspecto do esquadrão fica mais macabro e seus tiros ganham a propriedade de medo por 10 segundos.
+
+Mensageiro
+A unidade mais veloz do exercito da terra.
+
+Básico
+Smg com cadencia automatica e dano baixo
+
+Passiva · Esteira
+Ao se mover deixa um rastro no ao passar por cima do mesmo o time ganha um buff de velocidade movimento de 30%, o dano do grupo aumenta de forma proporcional a velocidade.
+
+Ativa
+—
+
+Vira: Rádio, Oficial, Porta-estandarte
+
+Rádio
+Suporte pelo rapido, nunca gostou das linhas de frente 
+
+Básico
+Arremessa caixotes explosivos, possui a velocidade do mensageiro assim como sua capacidade de aumentar o dano baseado em velocidade.
+
+Passiva · Caixote
+A cada 20 segundos uma pequena caixa cai, contendo ouro e um arquivo de guerra.
+
+Ativa · Suprimento (9s)
+Ao ser ativada um airdrop cai na mira, dentro dessa caixa podem sair um cão de combate, um megafone desorientante ou um gerador de nodes, que dentro de 15 segundos cospe 5 arquivos de guerra.
+
+Oficial
+Segundo em comando, abaixo apenas do comandante.
+
+Básico
+Pistola simples. 
+
+Passiva · Pistola de comando
+Possui a mesma passiva do mensageiro.
+
+Ativa · Sinalizador (10s)
+Dispara um sinalizador que ilumina o campo inteiro por 8s: +25% de dano e +35% de cadência.
+
+Porta-estandarte
+Porta estandarte da orgulhosa terra, agem com bravura sempre carregando a bandeira do planeta.
+
+Básico
+Salto no inimigo estocando com suas bandeiras
+
+Passiva · Estandarte vivo
+Ao causar dano gera um buff aleatório no esquadrão.
+
+Ativa · Estandarte (12s)
+Finca na mira por 15s. quem ficar dentro ganah +40% dano, cadência e velocidade. Loot é puxado sozinho. A recarga só começa quando o estandarte acaba.
+
+Droneiro
+Drone de combate altamente tecnologico.
+
+Básico
+A unidade fica junto ao squad, mas um pequeno drone armado fica junto a mira do esquadrão, atirando e causando dano, caso o droneiro não seja derrotado o drone é imortal
+
+Ativa · Míssil do drone (11s)
+Dispara um missil teleguiado, causando dano em area.
+
+Vira: Helicóptero, Bombardeiro, Reconhecimento
+
+Helicóptero
+Dois mini helicopteros de alta tecnologia, pequeno e letal!
+
+Básico
+Os dois drones atiram a partir da mira.
+
+Ativa · Passagem rasa (12s)
+Explosão em anel embaixo de cada drone pequeno perto do cursor.
+
+Vira: Canhoneira
+
+Canhoneira
+Um drone esquecido e secreto, usado a muitos anos em operações de invasões rapidas.
+
+Básico
+Dispara 3 projetéis por vez, todos no local do cursor.
+
+Ativa · Munição Runica (15sec)
+Ao ativar utiliza munições runicas embuidas com efeitos detrimentais aleatorios, os efeitos incluem, sangramento, lentidão, veneno, queimadura, eletrocutado, bounce, perfuração, lifesteal e explosão. a cada disparo um desses efeitos ocorrerá de forma aleatoria. duração de 10 segundos.
+
+Vira: Colosso
+
+Bombardeiro
+Um grande drone especializado no drop de bombas.
+
+Básico
+Drone pesado que dispara pequenas bombas teleguiadas no cursor.
+
+Ativa · Bombardeio (10s)
+Segurando a habilidade é possivel desenhar uma linha, onde o drone irá lentamente jogar bombas nessa mesma linha.
+
+Reconhecimento
+Drone de reconhecimento furtivo e com balas tracejantes
+
+Básico
+Munições coloridas que grudam no alvo e aumenta o dano que o mesmo recebe em 5% para cada projetil alojado, tem duração de 5 segundos e pode ser stackado de forma ilimitada.
+
+Ponta de lança
+A ponta de lança do exercito da terra, destemido e meio incosequente 
+
+Básico
+Salto no inimigo mais próximo. Esmaga no impacto.
+
+Ativa · Imapalar (8s)
+Se joga em um inimigo causando dano no mesmo, impalando o mesmo e voltando para o esquadrão em seguida.
+
+Vira: Ceifador, Phalanx, Warlord
+
+Ceifador
+O ceifador do campo de batalha, com sua foice ele ceifa a vida e absorve sua essencia 
+
+Básico
+Avança no inimigo mais proximo e causa dano em area ao contato.
+
+Passiva · Foice
+Cada alvo que o ceifador elimina aumenta seu dano em 0,1%, stackando infinitamente.
+
+Ativa · Ceifa (20s)
+Avança até um local e canalisa sua energia para causar um gigantesco corte em circulo, se qualquer inimigo for morte por esse move, o dano do mesmo aumenta em 0,1% até um maximo de + 100% de dano na ativa
+
+Phalanx
+O soldado de elite da terra, munido de uma lança de energia e um gigantesco escudo.
+
+Básico
+Salta no inimigo mais perto. No impacto, dispara um feixe de luz dourada
+
+Passiva · Bastião
+Ocacionalmente com uma chance de 15% spawna um phalanx menor sempre que um aliado iria tomar dano, negando o dano que a unidade iria tomar e atacando de volta.
+
+Ativa · Falange (20s)
+Anel de soldados na mira por 15s. Se o esquadrão entra no anel protege o jogador. Se cai no bicho, vira Termópilas e espetam o centro. A recarga só começa quando acaba.
+
+Warlord
+Guerreiros selvagens, criados com o unico proposito de matar.
+
+Básico
+Dois guerreiros cortam em linha e na horizontal; o Warlord fecha com dois slashes nas diagonais. Invulnerável no ataque e na volta.
+
+Passiva · Tríade de guerra
+Cada abate: +10% de cadência. Stacks compartilham timer de 5s (renova no abate), até +100%.
+
+Ativa
+Rasgo de Sangue 15s
+Os guerreiros se juntam e trocam velocidade por poder de fogo, eles seus stacks perdem a função de aumentar sua cadencia e ao invês disso convertem 200% do mesmo em ataque, causando golpes devastadores em formato de 10X
+
+
+
+LINHA DO PSÍQUICO
+
+Psíquico
+Um soldado que nasceu com o dom de ser telepata.
+
+Básico
+Munição teleguiada leve: curva no inimigo mais perto da mira
+
+Ativa · Martelo mental (12s)
+Um potente dispositivo que armazena energia cinética, ao acertar o chão levanta e bate com todos os inimigos no range no chão, atordoando e causando dano
+
+Vira: Escolhido
+
+Escolhido
+Um guerreiro espacial, desde seu nascimento sempre se sentiu especial, conectado com uma força maior
+
+Básico
+Tiros laser rápidos.
+
+Ativa · Stormtrooper (14s)
+Por 10s dispara 5x mais rapido mas a precisão fica completamente aleatoria.
+
+Vira: Jedi
+
+Jedi
+Escolhido pela força, jedi em treinamento
+
+Básico
+Salta no inimigo mais perto e corta em arco, causando dano em area
+
+Passiva · Deflexão
+50% de chance de defletir qualquer projétil que encoste nele, negando o dano.
+
+Ativa · Sabre bumerangue (11s)
+Arremessa o sabre até a mira. Corta na ida e na volta.
+Ativa - Force Pull (10s)
+Puxa os inimigos para o centro do cast da skill, deixando eles lentos por um breve momento e causando um pouco de dano.
+
+Vira: Mestre
+
+Mestre
+Um mestre Jedi, treinado pela força e se tornando a mesma.
+
+Básico
+Um golpe em arco que causa dano e tem chance de emendar em um combo onde ele pula para o proximo inimigo bem rapido.
+
+Passiva · Deflexão
+Sempre deflete qualquer projétil que encoste nele, negando o dano.
+
+Ativa · Arsenal da Força
+Segurar o botão direito do mouse abre um menu radial, ele possui as seguinte skills Empurrão, puxão, lançamento de sabre e giro da força

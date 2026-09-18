@@ -2110,7 +2110,7 @@ h2 {
   line-height: 1.3;
   min-height: calc(1.3em * 2);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -2160,10 +2160,6 @@ h2 {
   font-size: 11px;
   line-height: 1.3;
   color: var(--muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .merge-skill b {
@@ -3040,7 +3036,7 @@ h2 {
 
 .codex-stats-list {
   list-style: none;
-  margin: 0;
+  margin: 12px 0 0;
   padding: 0;
   display: grid;
   gap: 4px;
@@ -3101,7 +3097,9 @@ h2 {
 #inspect-tip {
   position: fixed;
   z-index: 8;
-  width: min(280px, 86vw);
+  width: min(320px, 86vw);
+  max-height: min(70vh, 520px);
+  overflow: auto;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;

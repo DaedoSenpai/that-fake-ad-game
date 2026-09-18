@@ -344,7 +344,7 @@
               <div class="merge-preview-info">
                 <p class="kicker" id="merge-preview-kicker">dossiê</p>
                 <h3 id="merge-preview-name">Passe o mouse numa carta</h3>
-                <p id="merge-preview-blurb" class="codex-blurb">Passiva, ativa e stats aparecem aqui antes de você escolher.</p>
+                <p id="merge-preview-blurb" class="codex-blurb">Descrição, básico, passiva e ativa aparecem aqui antes de você escolher.</p>
                 <ul id="merge-preview-stats" class="codex-stats-list"></ul>
               </div>
               <div id="merge-preview-skills" class="merge-preview-skills"></div>
@@ -434,7 +434,10 @@
               <p class="kicker" id="codex-kicker">arquivo</p>
               <h2 id="codex-name">Unidade</h2>
               <p id="codex-blurb" class="codex-blurb"></p>
-              <ul id="codex-stats-list" class="codex-stats-list"></ul>
+              <div id="codex-basics" class="codex-active hidden">
+                <p class="kicker" id="codex-basics-kicker">Básico</p>
+                <div id="codex-basics-list"></div>
+              </div>
               <div id="codex-passives" class="codex-active hidden">
                 <p class="kicker" id="codex-passives-kicker">Passiva</p>
                 <div id="codex-passives-list"></div>
@@ -443,6 +446,7 @@
                 <p class="kicker" id="codex-actives-kicker">Ativa</p>
                 <div id="codex-actives-list"></div>
               </div>
+              <ul id="codex-stats-list" class="codex-stats-list"></ul>
             </div>
           </div>
           <button id="btn-codex-close" class="btn primary" type="button">Fechar</button>

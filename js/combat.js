@@ -23,16 +23,25 @@
   function nearest(list, x, y, ignoreId) {
     var best = null;
     var bestD = 1e9;
+    var fallback = null;
+    var fallbackD = 1e9;
     for (var i = 0; i < list.length; i++) {
       var e = list[i];
       if (e.id === ignoreId || !unitHittable(e)) continue;
       var d = (e.x - x) * (e.x - x) + (e.y - y) * (e.y - y);
+      if (e.kind === "infiltrador") {
+        if (d < fallbackD) {
+          fallbackD = d;
+          fallback = e;
+        }
+        continue;
+      }
       if (d < bestD) {
         bestD = d;
         best = e;
       }
     }
-    return best;
+    return best || fallback;
   }
 
   function nearestEdge(list, x, y, ignoreId) {
@@ -332,6 +341,21 @@
     if (fromPlayer && unit.stolen) return;
     var trueDmg = opts && opts.trueDmg;
     if (unit.team === "player") {
+      if (unit.kind === "fantasma") {
+        unit.flash = 0.06;
+        return;
+      }
+      if (G.tactics && G.tactics.tryBastion && G.tactics.tryBastion(state, unit)) return;
+      if ((state.faithShield || 0) > 0 && !trueDmg) {
+        var soakF = Math.min(amount, state.faithShield);
+        state.faithShield -= soakF;
+        amount -= soakF;
+        G.burst(state, unit.x, unit.y, "#f0e0a0", 4, 28);
+        if (amount <= 0.05) {
+          unit.flash = 0.08;
+          return;
+        }
+      }
       if (G.tactics && G.tactics.blockHurt && G.tactics.blockHurt(state, unit, opts)) return;
       if (state.run.smokeT > 0) return;
       if (!trueDmg) {
@@ -398,7 +422,7 @@
         return;
       }
       if ((unit.reconMarkT || 0) > 0 && (unit.reconMark || 0) > 0) {
-        amount *= 1 + Math.min(15, unit.reconMark) * 0.01;
+        amount *= 1 + (unit.reconMark || 0) * 0.05;
       }
       if (unit.parked) amount *= 0.4;
       if (unit.kaskaVuln || unit.kaskaStep === "stun") amount *= 1.35;
@@ -8634,6 +8658,14 @@
       if (u.activeHeld) {
         /* banner planted: CD does not tick */
       } else if (u.activeCd > 0) u.activeCd -= dt;
+      if ((u.extraActiveCd || 0) > 0) u.extraActiveCd = Math.max(0, u.extraActiveCd - dt);
+      if ((u.doubleGunT || 0) > 0) u.doubleGunT = Math.max(0, u.doubleGunT - dt);
+      if ((u.runicT || 0) > 0) u.runicT = Math.max(0, u.runicT - dt);
+      if ((u.pilantraT || 0) > 0) {
+        u.pilantraT = Math.max(0, u.pilantraT - dt);
+        if (u.pilantraT <= 0) state.lootVault = [];
+      }
+      if ((u.bloodRiftT || 0) > 0) u.bloodRiftT = Math.max(0, u.bloodRiftT - dt);
       if (u.activeFlash > 0) u.activeFlash -= dt;
       if (u.throwT > 0) u.throwT -= dt;
       if (u.veilFogT > 0) u.veilFogT -= dt;
@@ -9626,6 +9658,7 @@
       var b = G.playfield(state);
       if (p.life <= 0 || p.x < b.x0 - 36 || p.y < b.y0 - 36 || p.x > b.x1 + 36 || p.y > b.y1 + 36) {
         if (p.kind === "missile") explode(state, p.x, p.y, p.boomR || 72, p.dmg, p.team);
+        if (p.popCluster && G.tactics && G.tactics.spawnCluster) G.tactics.spawnCluster(state, p.x, p.y, p.clusterDmg || p.dmg, 1);
         state.projectiles.splice(i, 1);
         continue;
       }
@@ -9723,7 +9756,13 @@
         }
         if (next) {
           p.enemyBounce--;
-          p.dmg = Math.round(p.dmg * (p.bounceMul || 3));
+          if (p.bounceAdd) {
+            p.bounceN = (p.bounceN || 0) + 1;
+            p.dmg = Math.round((p.baseDmg || p.dmg) * (1 + p.bounceN));
+          } else {
+            p.dmg = Math.round(p.dmg * (p.bounceMul || 3));
+          }
+          if (p.bounceAdd && hit.hp <= 0) p.enemyBounce = Math.max(p.enemyBounce, 3);
           p.hitsLeft = Math.max(p.hitsLeft, 1);
           var nx = next.x - p.x;
           var ny = next.y - p.y;
@@ -9789,6 +9828,14 @@
         continue;
       }
       if (m.arm > 0) continue;
+      if (m.chase) {
+        var chaseTgt = nearest(state.enemies, m.x, m.y);
+        if (chaseTgt) {
+          var ca = Math.atan2(chaseTgt.y - m.y, chaseTgt.x - m.x);
+          m.x += Math.cos(ca) * 130 * dt;
+          m.y += Math.sin(ca) * 130 * dt;
+        }
+      }
       for (var j = 0; j < state.enemies.length; j++) {
         var e = state.enemies[j];
         if (e.hp <= 0) continue;
@@ -9797,6 +9844,12 @@
         if (dx * dx + dy * dy <= m.r * m.r) {
           G.audio.explosion();
           explode(state, m.x, m.y, m.r + 8, m.dmg, "player");
+          e.slowT = Math.max(e.slowT || 0, 1.4);
+          if (G.tactics && G.tactics.has && G.tactics.has(state, "mineiro")) {
+            var gold = 1 + ((Math.random() * 5) | 0);
+            state.run.coins = (state.run.coins || 0) + gold;
+            state.floaters.push(G.createFloater(m.x, m.y - 12, "+" + gold, "#ffd24a"));
+          }
           state.mines.splice(i, 1);
           break;
         }
@@ -10021,6 +10074,23 @@
       g[0].stackDur = dur;
       list.push(g[0]);
     }
+    for (var ei = 0; ei < state.units.length && list.length < 9; ei++) {
+      var xu = state.units[ei];
+      if (xu.hp <= 0 || !xu.def.extraActive) continue;
+      xu.extraSlot = list.length;
+      list.push({
+        extraHost: xu,
+        extraKey: true,
+        hp: xu.hp,
+        kind: xu.kind,
+        x: xu.x,
+        y: xu.y,
+        def: { active: xu.def.extraActive },
+        activeCd: xu.extraActiveCd || 0,
+        activeHeld: false,
+        stackN: 1
+      });
+    }
     return list;
   }
 
@@ -10069,19 +10139,25 @@
   function useActive(state, index) {
     var list = activesOf(state);
     var u = list[index];
-    if (!u || u.activeCd > 0) return false;
+    var host = (u && u.extraHost) || u;
+    if (!u || (u.extraKey ? (host.extraActiveCd || 0) > 0 : u.activeCd > 0)) return false;
     var id = u.def.active.id;
-    var pack = unitsWithActive(state, id);
+    var pack = u.extraKey ? [host] : unitsWithActive(state, id);
     var sm = stackMul(pack.length);
     var cd = u.def.active.cd;
-    if (G.upgrades && G.upgrades.activeCdMul) cd *= G.upgrades.activeCdMul(u);
-    for (var gj = 0; gj < pack.length; gj++) {
-      pack[gj].activeCd = cd;
-      pack[gj].activeFlash = 0.45;
+    if (G.upgrades && G.upgrades.activeCdMul) cd *= G.upgrades.activeCdMul(host);
+    if (u.extraKey) {
+      host.extraActiveCd = cd;
+      host.activeFlash = 0.45;
+    } else {
+      for (var gj = 0; gj < pack.length; gj++) {
+        pack[gj].activeCd = cd;
+        pack[gj].activeFlash = 0.45;
+      }
     }
     var meta = G.activeMeta(id);
-    var tgt = aimTarget(state, u) || aimGhost(state);
-    var handled = G.tactics && G.tactics.useActive && G.tactics.useActive(state, id, u);
+    var tgt = aimTarget(state, host) || aimGhost(state);
+    var handled = G.tactics && G.tactics.useActive && G.tactics.useActive(state, id, host);
     if (!handled) {
       if (id === "mark") {
         u.marked = 4 * sm;
@@ -10092,7 +10168,7 @@
         flameAt(state, u, tgt, { burnMul: u.kind === "lanca_chamas" ? 2 * sm : 1, napalm: true });
         var nang = Math.atan2(tgt.y - u.y, tgt.x - u.x);
         if (G.tactics && G.tactics.meltCone) {
-          G.tactics.meltCone(state, { chance: 1, unit: u, range: u.def.range, ang: nang });
+          G.tactics.meltCone(state, { chance: 0.1, unit: u, range: u.def.range, ang: nang });
         }
         var nrange = u.def.range * (1 + runRank(state.run.flame) * 0.12);
         for (var np = 1; np <= 5; np++) {
@@ -10121,22 +10197,30 @@
       } else if (id === "strafe") {
         explode(state, u.x, u.y, Math.round(70 * sm), Math.round(28 * dmgMul(state) * sm), "player");
       } else if (id === "fan") {
+        var picks = [];
         for (var f = 0; f < state.enemies.length; f++) {
           var en = state.enemies[f];
-          if (en.hp > 0 && dist(u, en) < 130 * sm) hurt(state, en, Math.round(u.def.dmg * dmgMul(state) * sm), u.x, u.y, true);
+          if (en.hp > 0 && !en.scenery) picks.push(en);
+        }
+        picks.sort(function (a, b) { return dist(u, a) - dist(u, b); });
+        var nFan = Math.min(6, picks.length);
+        for (var fi = 0; fi < nFan; fi++) {
+          var angF = Math.atan2(picks[fi].y - host.y, picks[fi].x - host.x);
+          if (G.tactics && G.tactics.bolt) {
+            /* tactics bolt not exported */
+          }
+          C().hurt(state, picks[fi], Math.round(host.def.dmg * dmgMul(state) * sm), host.x, host.y, true);
         }
       } else if (id === "doubletap") {
         for (var dtap = 0; dtap < pack.length; dtap++) pack[dtap].doubleShotT = 10 * sm;
       } else if (id === "supercharge") {
         state.mines = state.mines || [];
         var charged = 0;
-        var chMul = 1.4 * sm;
         for (var sc = 0; sc < state.mines.length; sc++) {
           var mine = state.mines[sc];
-          if (mine.team !== "player" || mine.charged || mine.retiring) continue;
-          mine.charged = true;
-          mine.r = (mine.r || 36) * chMul;
-          mine.dmg = Math.round((mine.dmg || 20) * chMul);
+          if (mine.team !== "player" || mine.chase || mine.retiring) continue;
+          mine.chase = true;
+          mine.life = Math.max(mine.life || 8, 8);
           charged++;
           G.burst(state, mine.x, mine.y, "#fff3b0", 8, 40);
         }
