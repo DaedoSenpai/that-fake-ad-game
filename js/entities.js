@@ -455,7 +455,7 @@
   G.soldierCount = function (state) {
     var n = 0;
     for (var i = 0; i < state.units.length; i++) {
-      if (state.units[i].hp > 0 && !state.units[i].commander) n++;
+      if (state.units[i].hp > 0 && !state.units[i].commander && !state.units[i].benched) n++;
     }
     return n;
   };
@@ -474,11 +474,16 @@
   };
 
   G.countKind = function (state, kind) {
-    if (!state || !state.units) return 0;
+    if (!state) return 0;
     var n = 0;
-    for (var i = 0; i < state.units.length; i++) {
-      if (state.units[i].hp > 0 && state.units[i].kind === kind) n++;
+    function tally(list) {
+      if (!list) return;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].hp > 0 && list[i].kind === kind) n++;
+      }
     }
+    tally(state.units);
+    tally(state.run && state.run.bench);
     return n;
   };
 
@@ -567,7 +572,7 @@
     };
   };
 
-  // Full monitor playable box in CSS pixels (screen space)
+
   G.monitorField = function (state, inset) {
     var pad = inset == null ? 14 : inset;
     var W = state.W || 1280;
@@ -580,7 +585,7 @@
     };
   };
 
-  // Visible world rectangle matching the monitor edges under current camera
+
   G.visibleWorldField = function (state, screenInset) {
     var pad = screenInset == null ? 14 : screenInset;
     var z = state.camZoom || 1;
@@ -630,7 +635,7 @@
     var b = G.playfield(state);
     var cage = state.arklanCage;
     if (cage && cage.wall > 0.15) {
-      // Cage is the monitor edge — prefer it over zoomed playfield
+
       b = {
         x0: cage.x0,
         y0: cage.y0,
@@ -2233,7 +2238,7 @@
 
 
   function drawArklan(ctx, e, s, ph) {
-    // P2 uses the same armored morph look (no separate sentry mesh)
+
     var glow = e.devourGlow || 0;
     var hungry = glow > 0.15;
     var rumble = Math.max(0, Math.min(1, e.rumblePulse || 0));
@@ -2242,7 +2247,7 @@
       var grow = 1 + rumble * 0.7;
       var biteTele = rumble > 0.05;
       var biteR = (e.chompBiteR || s * 1.55) * (0.85 + rumble * 0.2);
-      // Danger plate — where the bite WILL land
+
       if (biteTele) {
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
@@ -2302,7 +2307,7 @@
         ctx.ellipse(0, s * 0.05, s * (0.95 + rumble * 0.55), s * (0.38 + rumble * 0.22), 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
-        // Crack lines in the sand
+
         var crack;
         for (crack = 0; crack < 5; crack++) {
           var ca = crack * 1.25 + ph * 2;
@@ -2380,7 +2385,7 @@
     oval(ctx, s * 0.28, 0, s * 0.82, s * 0.82, hungry ? "#3a1008" : "#3a2410");
     oval(ctx, s * 0.38, 0, s * 0.68, s * 0.68, hungry ? "#1a0806" : "#241808");
 
-    // Maw open amount (cutscene suck / devour drama)
+
     var maw = Math.max(0, Math.min(1, e.mawOpen || 0));
     var jawSpread = s * (0.52 + maw * 0.72);
     var throatR = s * (0.48 + maw * 0.55);
@@ -2394,7 +2399,7 @@
     ctx.ellipse(s * (0.58 + maw * 0.2), 0, throatR, jawSpread, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Inner throat swirl when sucking
+
     if (maw > 0.15) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
@@ -2418,7 +2423,7 @@
       ctx.restore();
     }
 
-    // Teeth — fan wider as maw opens
+
     var toothN = maw > 0.25 ? 16 : 12;
     for (var td = 0; td < toothN; td++) {
       var ta = (-1.05 - maw * 0.55) + (td / (toothN - 1)) * (2.1 + maw * 1.1);
@@ -2433,7 +2438,7 @@
       ctx.fill();
     }
 
-    // eyes: 3 above + 3 below the maw, mirrored — push out when maw opens
+
     var eyeGlow = hungry || maw > 0.2 ? "#ffb070" : "#ffe8a0";
     for (var side = -1; side <= 1; side += 2) {
       for (var ey = 0; ey < 3; ey++) {
@@ -2445,7 +2450,7 @@
       }
     }
 
-    // Mandible lips — split open with maw
+
     var lipOut = s * (0.95 + maw * 0.55);
     var lipY = s * (0.55 + maw * 0.55);
     ctx.fillStyle = hungry || maw > 0.2 ? "#5a1810" : "#3a2410";
@@ -2474,7 +2479,7 @@
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // Suction funnel in front of the maw (sprite-level)
+
     if (maw > 0.12) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
@@ -2490,7 +2495,7 @@
       ctx.lineTo(s * 0.55, jawSpread * 0.55);
       ctx.closePath();
       ctx.fill();
-      // spiral streaks into the throat
+
       for (var st = 0; st < 6; st++) {
         var stA = ph * 14 + st * 1.05;
         var stY = Math.sin(stA) * jawSpread * (0.35 + maw * 0.4);
@@ -2520,7 +2525,7 @@
       ctx.restore();
     }
 
-    // Metal armor erupting from within (P2 morph / armored form)
+
     var mech = e.arklanArmor ? 1 : Math.max(0, Math.min(1, e.arklanMech || 0));
     if (mech > 0.02) {
       ctx.save();
@@ -2531,7 +2536,7 @@
         var rise = (1 - pk) * s * 0.55;
         var px = -s * 1.15 + pl * s * 0.32;
         ctx.globalAlpha = 0.55 + pk * 0.45;
-        // plate body
+
         var pg = ctx.createLinearGradient(px, -s * 0.55 - rise, px + s * 0.28, s * 0.55);
         pg.addColorStop(0, "#d8e4f0");
         pg.addColorStop(0.35, "#8a9aaa");
@@ -2545,14 +2550,14 @@
         ctx.lineTo(px + s * 0.04, s * 0.55);
         ctx.closePath();
         ctx.fill();
-        // rivets
+
         ctx.fillStyle = "#e8f0f8";
         ctx.globalAlpha = 0.35 + pk * 0.4;
         ctx.beginPath();
         ctx.arc(px + s * 0.12, -s * 0.15 - rise * 0.4, 2.2, 0, Math.PI * 2);
         ctx.arc(px + s * 0.14, s * 0.18, 2, 0, Math.PI * 2);
         ctx.fill();
-        // inner flesh seam (armor coming out)
+
         if (pk < 0.85) {
           ctx.strokeStyle = "rgba(180, 70, 30, " + ((1 - pk) * 0.55) + ")";
           ctx.lineWidth = 2;
@@ -2562,7 +2567,7 @@
           ctx.stroke();
         }
       }
-      // jaw / crown plating (skip while maw is open — keep the suck readable)
+
       if (mech > 0.45 && (e.mawOpen || 0) < 0.2) {
         ctx.globalAlpha = 0.35 + mech * 0.5;
         ctx.fillStyle = "#6a7888";
@@ -2588,7 +2593,7 @@
       ctx.strokeStyle = "rgba(200, 220, 240, " + (0.35 * mech) + ")";
       ctx.lineWidth = 2.2;
       ctx.stroke();
-      // optic glow
+
       ctx.globalCompositeOperation = "lighter";
       ctx.fillStyle = "rgba(120, 220, 255, " + (0.25 + mech * 0.45) + ")";
       for (var side2 = -1; side2 <= 1; side2 += 2) {
@@ -5250,20 +5255,55 @@
       ctx.fill();
       ctx.restore();
     } else if (p.kind === "missile") {
+      var mang = Math.atan2(p.vy, p.vx);
+      var msp = Math.sqrt(p.vx * p.vx + p.vy * p.vy) || 1;
       ctx.save();
       ctx.translate(p.x, p.y);
-      ctx.rotate(Math.atan2(p.vy, p.vx));
-      ctx.fillStyle = "rgba(255, 180, 80, 0.45)";
+      ctx.rotate(mang);
+      ctx.globalCompositeOperation = "lighter";
+      var flame = ctx.createRadialGradient(-14, 0, 1, -14, 0, 16);
+      flame.addColorStop(0, "rgba(255, 240, 200, 0.95)");
+      flame.addColorStop(0.35, "rgba(255, 140, 50, 0.7)");
+      flame.addColorStop(1, "rgba(180, 60, 255, 0)");
+      ctx.fillStyle = flame;
       ctx.beginPath();
-      ctx.arc(-10, 0, 6, 0, Math.PI * 2);
+      ctx.ellipse(-12 - Math.min(8, msp * 0.02), 0, 14 + Math.min(6, msp * 0.015), 5.5, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#e8b0ff";
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = "#3a2458";
       ctx.beginPath();
-      ctx.moveTo(10, 0);
-      ctx.lineTo(-10, -5);
-      ctx.lineTo(-10, 5);
+      ctx.moveTo(-6, -5);
+      ctx.lineTo(-11, -9);
+      ctx.lineTo(-8, -2);
       ctx.closePath();
       ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-6, 5);
+      ctx.lineTo(-11, 9);
+      ctx.lineTo(-8, 2);
+      ctx.closePath();
+      ctx.fill();
+      var body = ctx.createLinearGradient(-10, 0, 12, 0);
+      body.addColorStop(0, "#5a3088");
+      body.addColorStop(0.45, "#d4a0ff");
+      body.addColorStop(1, "#fff0ff");
+      ctx.fillStyle = body;
+      ctx.beginPath();
+      ctx.moveTo(12, 0);
+      ctx.lineTo(-8, -4.2);
+      ctx.lineTo(-10, 0);
+      ctx.lineTo(-8, 4.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#ffe08a";
+      ctx.beginPath();
+      ctx.moveTo(12, 0);
+      ctx.lineTo(5, -2.2);
+      ctx.lineTo(5, 2.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+      ctx.fillRect(-4, -1.2, 8, 2.4);
       ctx.restore();
     } else if (p.kind === "laser") {
       ctx.strokeStyle = p.color || "#7af7ff";
@@ -6319,7 +6359,7 @@
     var i;
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    // Always draw on the monitor edges (screen space) — ignore world camera / stage zoom
+
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -6357,7 +6397,7 @@
     }
     ctx.globalCompositeOperation = "source-over";
 
-    // Corner pylons in screen space (monitor corners)
+
     var corners = [
       { x: x0, y: y0, ang: Math.atan2(y0 - state.H / 2, x0 - state.W / 2) },
       { x: x1, y: y0, ang: Math.atan2(y0 - state.H / 2, x1 - state.W / 2) },
@@ -7412,7 +7452,7 @@
       ctx.globalAlpha = 0.95 * fade;
       ctx.globalCompositeOperation = "lighter";
 
-      // soft cone wash
+
       ctx.beginPath();
       ctx.moveTo(w.x, w.y);
       ctx.arc(w.x, w.y, w.r + 18, a0, a1);
@@ -7430,7 +7470,7 @@
       ctx.fillStyle = wash;
       ctx.fill();
 
-      // advancing crest band
+
       ctx.beginPath();
       var steps = 36;
       var s;
@@ -7482,7 +7522,7 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // grit flecks on crest
+
       for (var fleck = 0; fleck < 14; fleck++) {
         var fa = a0 + (a1 - a0) * ((fleck + (time * 2.2) % 1) / 14);
         var fr = w.r - 6 + Math.sin(fleck * 2.1 + time * 10) * 10;

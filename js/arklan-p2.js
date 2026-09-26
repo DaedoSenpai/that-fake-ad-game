@@ -1,4 +1,4 @@
-/* Arklan P2 — sentry kit + gullet side-scroller */
+
 (function (G) {
 
   function api() {
@@ -10,7 +10,7 @@
     return G.playfield(state);
   }
 
-  /** Distance from boss to farthest arena corner (+pad) — attacks must cover the cage */
+
   function cageReach(state, e, pad) {
     var b = cageBox(state);
     var x = e && e.x != null ? e.x : (b.x0 + b.x1) / 2;
@@ -39,9 +39,9 @@
     e.arklanMech = 1;
     e.x += (c.x - e.x) * Math.min(1, 4 * dt);
     e.y += (c.y - e.y) * Math.min(1, 4 * dt);
-    // Keep desert zoom locked during arena fight (not gullet)
+
     if (!state.arklanGullet) restoreDesertZoom(state);
-    // Face squad slowly — flame overrides rot while spinning
+
     if (e.wormAct !== "flame") {
       var want = Math.atan2(state.squad.y - e.y, state.squad.x - e.x);
       var cur = e.rot || 0;
@@ -63,7 +63,7 @@
     if (!state.arklanEyes) state.arklanEyes = [];
     var eyes = state.arklanEyes;
     var b = cageBox(state);
-    // Spawn up to 5 on walls
+
     e.eyeSpawnT = (e.eyeSpawnT || 0) - dt;
     if (eyes.length < 5 && e.eyeSpawnT <= 0) {
       e.eyeSpawnT = 4.5 + Math.random() * 2.5;
@@ -118,7 +118,7 @@
         continue;
       }
 
-      // —— Charge: lock aim + ground mark for 1s, then fire (no bullet spam) ——
+
       if ((eye.chargeT || 0) > 0) {
         eye.chargeT -= dt;
         eye.glow = 1;
@@ -148,7 +148,7 @@
       eye.look = Math.atan2(state.squad.y - eye.y, state.squad.x - eye.x);
       eye.fireT -= dt;
       if (eye.fireT <= 0) {
-        // Lock on current squad position → mark ground → wait 1s → beam
+
         var CHARGE = 1.0;
         eye.markX = state.squad.x;
         eye.markY = state.squad.y;
@@ -384,7 +384,7 @@
       for (var i = 0; i < pool.length; i++) if (pool[i] !== e.wormLast) filtered.push(pool[i]);
       pool = filtered.length ? filtered : pool;
     }
-    // After big skills, bias basics
+
     if ((e.forceBasic || 0) > 0) {
       e.forceBasic -= 1;
       pool = ["bolt", "bolt", "laser", "wave"];
@@ -403,7 +403,7 @@
       e.mawOpen = Math.max(0, e.mawOpen - dt * 1.5);
     }
 
-    // Pending laser fire
+
     if (e.laserPending) {
       e.laserPending.t -= dt;
       if (e.laserPending.t <= 0) {
@@ -504,7 +504,7 @@
       if (e.flameTick <= 0) {
         e.flameTick = 0.05;
         A.hurtLane(state, e.x, e.y, e.flameAng, flameLen, 32, Math.round(e.def.dmg * 0.42));
-        // sand particles along cone
+
         for (var f = 0; f < 3; f++) {
           var fa = e.flameAng + (Math.random() - 0.5) * 0.35;
           var fr = 40 + Math.random() * Math.max(80, flameLen * 0.85);
@@ -545,7 +545,7 @@
             A.hurtSquadArea
               ? A.hurtSquadArea(state, tent.x, tent.y, tent.slamR, Math.round(e.def.dmg * 1.1), tent.x, tent.y)
               : null;
-            // fallback hurt units in radius
+
             for (var ui = 0; ui < state.units.length; ui++) {
               var u = state.units[ui];
               if (u.hp <= 0 || u.stowed) continue;
@@ -588,11 +588,11 @@
       var dx = e.x - state.squad.x;
       var dy = e.y - state.squad.y;
       var dist = Math.hypot(dx, dy) || 1;
-      // Stronger pull when broken (player must enter on purpose)
+
       var mul = e.arklanBroken ? 0.55 : 1;
       state.squad.x += (dx / dist) * pull * mul * dt;
       state.squad.y += (dy / dist) * pull * mul * dt;
-      // Debris: big slow pedregulhos (dodgeable)
+
       e.devourRockT = (e.devourRockT || 0) - dt;
       if (e.devourRockT <= 0) {
         e.devourRockT = 0.55 + Math.random() * 0.25;
@@ -613,7 +613,7 @@
           sy = b2.y0 + 20 + Math.random() * Math.max(20, b2.y1 - b2.y0 - 40);
         }
         var toA = Math.atan2(state.squad.y - sy, state.squad.x - sx);
-        // drift slightly toward maw too so they funnel in
+
         var toM = Math.atan2(e.y - sy, e.x - sx);
         var mix = toA + Math.atan2(Math.sin(toM - toA), Math.cos(toM - toA)) * 0.25;
         var spd = 75 + Math.random() * 45;
@@ -653,7 +653,7 @@
           startGullet(state, e);
           return;
         }
-        // Survived contact without broken — spit damage and end
+
         for (var hi = 0; hi < state.units.length; hi++) {
           var hu = state.units[hi];
           if (hu.hp <= 0 || hu.stowed) continue;
@@ -669,7 +669,7 @@
         e.wormAct = "";
         e.mawOpen = 0;
         e.wormT = e.arklanBroken ? 0.8 : 1.2;
-        // If broken, keep trying devour soon
+
         if (e.arklanBroken) e.wormT = 0.45;
       }
       return;
@@ -712,7 +712,7 @@
     e.flash = 0.8;
     e.wormAct = "";
     e.wormT = 0.6;
-    // Don't let stage-clear treat 0 HP as "wave done"
+
     state.waitingClear = false;
     state.clearTimer = 0;
     state.stageOutro = null;
@@ -751,7 +751,7 @@
       flash: 0
     };
     var g = state.arklanGullet;
-    // Readable course — gaps, fewer shooters, not bullet hell
+
     for (var i = 0; i < 42; i++) {
       var fx = 480 + i * 130 + Math.random() * 40;
       var kinds = ["mite", "tooth", "mite", "spore", "platelet", "mite"];
@@ -805,7 +805,7 @@
     state.camZoom = 1;
     state.arklanCage = null;
     state.banner = { text: "", t: 0 };
-    // Boarding cinematic timeline — ship sits on flesh floor (hull bottom ~+22)
+
     var floorY0 = state.H * 0.72;
     g.cin = {
       beat: "swallow",
@@ -837,7 +837,7 @@
       fade: 0,
       iris: 0
     };
-    // Pre-seed blood vessels along throat walls
+
     for (var vi = 0; vi < 28; vi++) {
       g.cin.vessels.push({
         side: vi % 2,
@@ -891,7 +891,7 @@
     var pl = ensureGulletPlane(g);
     if ((pl.invuln || 0) > 0 || (pl.dashT || 0) > 0) return;
     if ((pl.shieldT || 0) > 0) {
-      // Shield eats the hit and converts to card
+
       pl.card = Math.min(1, (pl.card || 0) + 0.18);
       pl.flash = 0.25;
       G.burst(state, state.squad.x, state.squad.y, "#ff7ad9", 10, 55);
@@ -979,7 +979,7 @@
       G.burst(state, sh.x, sh.y, "#ff7ad9", wasPink ? 18 : 10, wasPink ? 90 : 55);
       G.burst(state, sh.x, sh.y, "#ffe08a", 8, 50);
       G.burst(state, state.squad.x, state.squad.y, "#7af0ff", 6, 40);
-      // Parry restores squad HP — pink hits heal more
+
       gulletHealSquad(state, wasPink ? 14 : 6);
       state.shake = Math.max(state.shake || 0, wasPink ? 7 : 4);
       if (G.audio && G.audio.ui) G.audio.ui();
@@ -1008,7 +1008,7 @@
     pl.peaCd = Math.max(0, (pl.peaCd || 0) - dt);
     pl.bombCd = Math.max(0, (pl.bombCd || 0) - dt);
 
-    // LMB — peashooter stream (infinite range across the gullet)
+
     if (ptr.fireHold && pl.peaCd <= 0 && (pl.dashT || 0) <= 0) {
       pl.peaCd = 0.09;
       g.shots.push({
@@ -1024,7 +1024,7 @@
       pl.card = Math.min(1, (pl.card || 0) + 0.008);
     }
 
-    // RMB — charge lobber (hold builds, release or auto at full)
+
     if (ptr.altHold) {
       pl.charge = Math.min(1, (pl.charge || 0) + dt * 0.85);
     } else if ((pl.charge || 0) > 0.15 && pl.bombCd <= 0) {
@@ -1053,7 +1053,7 @@
       pl.charge = 0;
     }
 
-    // EX card super (E when full)
+
     var k = state.keys || {};
     var eDown = !!(k.KeyE);
     if (eDown && !pl.wasE && (pl.card || 0) >= 1 && (pl.dashT || 0) <= 0) {
@@ -1079,7 +1079,7 @@
     pl.wasE = eDown;
   }
 
-  /** Cuphead-plane craft: free 2D + dash + energy shield. */
+
   function steerGulletCraft(state, dt) {
     var g = state.arklanGullet;
     var pl = ensureGulletPlane(g);
@@ -1124,7 +1124,7 @@
       }
     }
 
-    // Shift = dash; Space = energy shield parry
+
     var shiftDown = !!(k.ShiftLeft || k.ShiftRight);
     var spaceDown = !!k.Space;
     if (shiftDown && !pl.wasShift && pl.dashCd <= 0 && pl.dashT <= 0) {
@@ -1173,7 +1173,7 @@
 
 
   function gulletBossRadius(state, kind) {
-    // Giant organs — fill most of the screen; heart a touch smaller than the valve
+
     var m = Math.min(state.W, state.H);
     var k = kind === "heart" ? 0.5 : 0.54;
     return Math.max(200, Math.min(m * k, state.H * 0.58));
@@ -1320,7 +1320,7 @@
     c.beatT = (c.beatT || 0) + dt;
     c.fade = Math.max(0, (c.fade || 0) - dt * 0.45);
     c.flash = Math.max(0, (c.flash || 0) - dt * 0.55);
-    // Keep craft parked left during reveals
+
     state.squad.x += (state.W * 0.22 - state.squad.x) * Math.min(1, 2.4 * dt);
     state.squad.y += (state.H * 0.5 - state.squad.y) * Math.min(1, 1.6 * dt);
     clampGulletCraft(state);
@@ -1464,21 +1464,21 @@
     var py = Math.max(0.18, Math.min(0.82, state.squad.y / state.H));
     var last = hz.gapAim != null ? hz.gapAim : hz.gapY;
     var bite = hz.bite | 0;
-    // Safe gap jumps to a different band each chomp — standing still gets crushed
+
     var bands = [0.2, 0.32, 0.5, 0.68, 0.8];
     var pick;
     var mode = bite % 4;
     if (mode === 0) {
-      // Opposite side of the craft
+
       pick = py < 0.5 ? 0.72 + Math.random() * 0.08 : 0.2 + Math.random() * 0.08;
     } else if (mode === 1) {
-      // Extreme top or bottom (away from player)
+
       pick = py > 0.45 ? 0.2 + Math.random() * 0.06 : 0.78 + Math.random() * 0.06;
     } else if (mode === 2) {
-      // Mid band, but not on the player
+
       pick = 0.5 + (py > 0.5 ? -0.12 : 0.12) + (Math.random() - 0.5) * 0.08;
     } else {
-      // Farthest band from both player and last gap
+
       var bi;
       var best = bands[0];
       var bestScore = -1;
@@ -1492,7 +1492,7 @@
       }
       pick = best;
     }
-    // Never land within ~0.1 of the craft — standing still must be unsafe
+
     if (Math.abs(pick - py) < 0.12) {
       pick = py < 0.5 ? Math.min(0.82, py + 0.28 + Math.random() * 0.12) : Math.max(0.18, py - 0.28 - Math.random() * 0.12);
     }
@@ -1507,7 +1507,7 @@
       hz.t = (hz.t || 0) + dt;
       hz.life -= dt;
       if (hz.kind === "crush") {
-        // Multi-chomp jaws: long telegraph → slam → hold → release → repeat
+
         hz.biteT = (hz.biteT || 0) + dt;
         var bites = hz.bites || 3;
         var bite = hz.bite | 0;
@@ -1518,7 +1518,7 @@
         var cycle = tell + slam + hold + openT;
         var ct = hz.biteT;
         if (hz.gapAim == null) hz.gapAim = pickCrushGapAim(state, hz);
-        // Slow drift to the committed gap so the safe lane is readable
+
         if (!hz.active || ct < tell) {
           hz.gapY += (hz.gapAim - hz.gapY) * Math.min(1, 1.65 * dt);
         } else {
@@ -1529,11 +1529,11 @@
         hz.telling = false;
         if (bite < bites) {
           if (ct < tell) {
-            // Stay mostly open early, then slowly show the bite lane
+
             var tk = ct / tell;
             hz.squeeze = 0.08 + tk * 0.42;
             hz.telling = true;
-            // Soft warning pulse in the last third
+
             if (tk > 0.55) {
               state.shake = Math.max(state.shake || 0, 2 + (tk - 0.55) * 6);
             }
@@ -1556,7 +1556,7 @@
             hz.bite = bite + 1;
             hz.biteT = 0;
             hz.slammed = false;
-            // Mild tighten — still room to dodge
+
             hz.gapH = Math.max(0.16, (hz.gapH || 0.22) * 0.94);
             hz.gapAim = pickCrushGapAim(state, hz);
           }
@@ -1565,7 +1565,7 @@
         }
         var gap = hz.gapY;
         var half = hz.gapH * (1.2 - (hz.squeeze || 0) * 0.28);
-        // Visual half uses squeeze; damage uses tight gap when active
+
         hz.visHalf = half;
         var top = gap - (hz.active ? half * 0.9 : half);
         var bot = gap + (hz.active ? half * 0.9 : half);
@@ -1578,7 +1578,7 @@
         hz.y += hz.vy * dt;
         if (hz.y < 70 || hz.y > state.H - 70) hz.vy *= -1;
         hz.spin = (hz.spin || 0) + dt * 16;
-        // Drift toward player slightly
+
         hz.x += ((state.squad.x + 40) - hz.x) * Math.min(1, 0.55 * dt);
         if (Math.abs(hz.x - state.squad.x) < 24 && Math.abs(hz.y - state.squad.y) < 30) {
           gulletHurtCraft(state, 12, hz.x, hz.y);
@@ -1608,7 +1608,7 @@
         var topH = Math.max(36, (gap - half) * squeeze + (1 - squeeze) * 20);
         var botY = gap + half;
         var botH = Math.max(36, (H - botY) * squeeze + (1 - squeeze) * 20);
-        // Top wall fake3D
+
         var tg = ctx.createLinearGradient(0, 0, 0, topH);
         tg.addColorStop(0, "#1a0606");
         tg.addColorStop(0.7, "#5a2018");
@@ -1617,7 +1617,7 @@
         ctx.fillRect(0, 0, W, topH);
         ctx.fillStyle = "rgba(255, 160, 140, 0.12)";
         ctx.fillRect(0, topH - 8, W, 8);
-        // Teeth along edge
+
         var tx;
         for (tx = 0; tx < W; tx += 28) {
           ctx.fillStyle = "#e8dcc8";
@@ -1645,7 +1645,7 @@
           var aimY = (hz.gapAim != null ? hz.gapAim : hz.gapY) * H;
           var aimHalf = (hz.gapH || 0.22) * H * 1.15;
           var warn = hz.telling ? 0.55 + Math.sin(time * 10) * 0.35 : 0.35;
-          // Final bite lane preview (where you MUST be)
+
           ctx.fillStyle = "rgba(255, 210, 74, " + (0.08 + warn * 0.1) + ")";
           ctx.fillRect(0, aimY - aimHalf, W, aimHalf * 2);
           ctx.strokeStyle = "rgba(255, 210, 74, " + (0.45 + warn * 0.4) + ")";
@@ -1653,17 +1653,17 @@
           ctx.lineWidth = 3;
           ctx.strokeRect(10, aimY - aimHalf, W - 20, aimHalf * 2);
           ctx.setLineDash([]);
-          // Danger slabs telegraph
+
           ctx.fillStyle = "rgba(255, 60, 40, " + (0.1 + warn * 0.12) + ")";
           ctx.fillRect(0, 0, W, Math.max(0, aimY - aimHalf));
           ctx.fillRect(0, aimY + aimHalf, W, Math.max(0, H - (aimY + aimHalf)));
-          // Current moving gap outline
+
           ctx.strokeStyle = "rgba(255, 140, 100, " + (0.35 + Math.sin(time * 14) * 0.2) + ")";
           ctx.setLineDash([6, 5]);
           ctx.lineWidth = 2;
           ctx.strokeRect(16, gap - half, W - 32, half * 2);
           ctx.setLineDash([]);
-          // Edge arrows pointing to the safe lane
+
           if (hz.telling) {
             ctx.fillStyle = "rgba(255, 220, 120, " + (0.5 + Math.sin(time * 12) * 0.3) + ")";
             ctx.beginPath();
@@ -1684,7 +1684,7 @@
         ctx.save();
         ctx.translate(hz.x, hz.y);
         ctx.rotate(hz.spin || 0);
-        // Shadow
+
         ctx.fillStyle = "rgba(0,0,0,0.35)";
         ctx.beginPath();
         ctx.ellipse(4, 10, 26, 10, 0, 0, Math.PI * 2);
@@ -1740,7 +1740,7 @@
     else v.weakPetal = -1;
 
     state.squad.x = Math.min(state.squad.x, state.W * 0.48);
-    // Vacuum pull
+
     if ((v.suck || 0) > 0) {
       var pull = 260 + (v.enraged ? 120 : 0);
       state.squad.x += pull * dt;
@@ -1750,7 +1750,7 @@
     clampGulletCraft(state);
     tickGulletHazards(state, g, dt);
 
-    // Shots
+
     var s;
     for (s = g.shots.length - 1; s >= 0; s--) {
       var sh = g.shots[s];
@@ -1773,7 +1773,7 @@
       }
       var hole = Math.max(36, 24 + v.open * (v.r * 0.55));
       var hitCore = v.guard <= 0 && Math.hypot(sh.x - v.x, sh.y - v.y) < hole + 6 + (sh.r || 0);
-      // Bonus: hit glowing weak petal
+
       var weakBonus = 0;
       if ((v.weakPetal | 0) >= 0 && v.open > 0.35) {
         var petals = v.petals || 7;
@@ -1799,7 +1799,7 @@
       }
     }
 
-    // Only the closed ring bites — hole is hollow on a giant sphincter
+
     var bodyDist = Math.hypot(state.squad.x - v.x, state.squad.y - v.y);
     var holeR = Math.max(28, 18 + v.open * (v.r * 0.55));
     if (v.open < 0.34 && bodyDist < v.r * 0.98 && bodyDist > holeR * 0.55) {
@@ -1807,7 +1807,7 @@
       state.squad.x -= 200 * dt;
     }
 
-    // Enrage at half
+
     if (!v.enraged && v.hp < v.maxHp * 0.5) {
       v.enraged = true;
       v.phase = "enrage";
@@ -1930,7 +1930,7 @@
         v.guard = 0;
       }
     } else if (v.phase === "clamp") {
-      // Double bite
+
       if (v.t < 0.22) v.open = Math.max(0.05, 0.6 - v.t * 2.5);
       else if (v.t < 0.45) v.open = 0.05;
       else if (v.t < 0.65) v.open = Math.min(0.7, (v.t - 0.45) * 3);
@@ -2020,7 +2020,7 @@
       }
     } else if (v.phase === "crush") {
       v.open = 0.3 + Math.sin(v.t * 8) * 0.08;
-      // Keep firing while jaws chomp — no dead air
+
       if (v.t % 0.32 < dt) {
         var pinkC = Math.random() < 0.4;
         g.shots.push({
@@ -2089,7 +2089,7 @@
     h.pulseFlash = Math.max(0, (h.pulseFlash || 0) - dt);
     h.suck = Math.max(0, (h.suck || 0) - dt);
     clampGulletCraft(state);
-    // Keep craft on the left third — giant heart owns the right
+
     state.squad.x = Math.min(state.squad.x, state.W * 0.52);
     if ((h.suck || 0) > 0) {
       var pull = 180 + (h.enraged ? 90 : 0);
@@ -2100,7 +2100,7 @@
     clampGulletCraft(state);
     tickGulletHazards(state, g, dt);
 
-    // Tendrils — orbit then lunge at craft
+
     var ti;
     for (ti = (h.tendrils || []).length - 1; ti >= 0; ti--) {
       var td = h.tendrils[ti];
@@ -2122,7 +2122,7 @@
       }
       if (td.t > td.life) h.tendrils.splice(ti, 1);
     }
-    // Mites — weave then dive
+
     for (ti = (h.mites || []).length - 1; ti >= 0; ti--) {
       var m = h.mites[ti];
       m.life -= dt;
@@ -2148,7 +2148,7 @@
       }
       if (m.life <= 0) h.mites.splice(ti, 1);
     }
-    // Lasers — track in telegraph, lock when firing
+
     for (ti = (h.lasers || []).length - 1; ti >= 0; ti--) {
       var lz = h.lasers[ti];
       lz.t += dt;
@@ -2316,7 +2316,7 @@
       h.y = state.H * 0.5 + Math.sin(g.t * 2.1) * 28;
       h.tilt = 0.15 + Math.sin(g.t * 1.4) * 0.12;
       h.x = state.W * 0.74 + Math.sin(g.t * 0.7) * 10;
-      // Ambient drip pressure so the arena never goes quiet
+
       if (h.t % 0.55 < dt && Math.random() < 0.55) {
         g.shots.push({
           x: 40 + Math.random() * (state.W * 0.55),
@@ -2378,7 +2378,7 @@
               wide: 18
             });
           }
-          // One horizontal sweep beam
+
           h.lasers.push({
             x0: state.W + 20,
             y0: state.squad.y,
@@ -2454,7 +2454,7 @@
         h.t = 0;
       }
     } else if (h.phase === "suck") {
-      // Diastole: pull in, then cough a cone of gore
+
       if (h.t < 0.85) {
         h.suck = 0.4;
         h.pulseFlash = 0.35;
@@ -2494,7 +2494,7 @@
         h.suck = 0;
       }
     } else if (h.phase === "slam") {
-      // Body lunge left then recoil — forces horizontal dodge
+
       if (h.t < 0.45) {
         h.pulseFlash = 0.4;
         h.x = state.W * 0.74 - (h.t / 0.45) * 18;
@@ -2523,7 +2523,7 @@
       h.tilt = 0.25;
       if (h.t % 0.09 < dt) {
         var rx = 30 + Math.random() * (state.W * 0.62);
-        // Bias columns toward craft
+
         if (Math.random() < 0.45) rx = state.squad.x + (Math.random() - 0.5) * 90;
         var pinkR = Math.random() < 0.35;
         g.shots.push({
@@ -2595,7 +2595,7 @@
       }
     } else if (h.phase === "tendril") {
       h.y = state.H * 0.5 + Math.sin(h.t * 3) * 18;
-      // Mid-attack: convert whip arms into lunges
+
       if (h.t > 0.7 && h.t < 0.75) {
         for (ti = 0; ti < (h.tendrils || []).length; ti++) {
           if (h.tendrils[ti].mode === "whip") h.tendrils[ti].mode = "lunge";
@@ -2682,7 +2682,7 @@
         if (h.ostia[oi3].lit > 0) h.ostia[oi3].lit -= dt;
         if (h.ostia[oi3].hurt > 0) h.ostia[oi3].hurt -= dt;
       }
-      // Exposed but still dangerous — rain + soft suck
+
       if (h.t > 0.35) h.suck = 0.12;
       if (h.t % 0.2 < dt) {
         g.shots.push({
@@ -2831,7 +2831,7 @@
         if (G.audio && G.audio.explosion) G.audio.explosion();
       }
     } else if (d.beat === "eject") {
-      // Reverse peristalsis — blasted toward the maw (up/back)
+
       d.rush = Math.min(1, d.beatT / 2.1);
       var rk = d.rush * d.rush;
       g.scroll = (g.scroll || 0) - (320 + rk * 900) * dt;
@@ -2868,7 +2868,7 @@
     var c = centerOf(state);
     var bx = boss ? boss.x : c.x;
     var by = boss ? boss.y : c.y;
-    // Exit gullet — world spit cinematic takes over
+
     state.arklanGullet = null;
     state.arklanEyes = [];
     state.camZoomTo = desertZoom(state);
@@ -2949,7 +2949,7 @@
         sp.beat = "spit";
         sp.beatT = 0;
         var ang = boss && boss.rot != null ? boss.rot : -0.55;
-        // Launch toward arena center
+
         var tx = c.x + (Math.random() - 0.5) * 40;
         var ty = c.y + 60;
         sp.toX = tx;
@@ -2967,13 +2967,13 @@
         if (G.audio && G.audio.explosion) G.audio.explosion();
       }
     } else if (sp.beat === "spit") {
-      // Arc flight out of the maw
+
       var k = Math.min(1, sp.beatT / 1.55);
       var ease = k * k * (3 - 2 * k);
       sp.vy += 520 * dt;
       sp.craftX += sp.vx * dt;
       sp.craftY += sp.vy * dt;
-      // Soft pull toward landing so it reads as a spit, not a miss
+
       sp.craftX += (sp.toX - sp.craftX) * Math.min(1, 1.8 * dt) * ease;
       sp.rot = Math.atan2(sp.vy, sp.vx || 1) * 0.35;
       if (boss) {
@@ -3017,7 +3017,7 @@
         sp.beat = "die";
         sp.beatT = 0;
         state.banner = { text: "O deserto engole o ferro", t: 3.2 };
-        // Unstow squad around landing
+
         var u;
         for (u = 0; u < state.units.length; u++) {
           state.units[u].stowed = false;
@@ -3096,7 +3096,7 @@
     g.t += dt;
     g.flash = Math.max(0, (g.flash || 0) - dt);
 
-    // —— Boarding cinematic ——
+
     if (g.phase === "enter" || g.phase === "findShip" || g.phase === "cin") {
       if (!g.cin) {
         g.phase = "cin";
@@ -3163,7 +3163,7 @@
         if (c.impacts[im].life <= 0) c.impacts.splice(im, 1);
       }
       var floorY = state.H * 0.72;
-      // Keep ship planted on the flesh floor
+
       c.shipY = floorY - 20;
       var wallL = state.W * 0.24;
       var wallR = state.W * 0.76;
@@ -3211,7 +3211,7 @@
         else if (G.audio && G.audio.thud) G.audio.thud();
       }
 
-      // —— Subtle swallow: fade into the maw, then throat plunge ——
+
       if (c.beat === "swallow") {
         c.beatT = (c.beatT || 0) + dt;
         c.fade = Math.min(1, c.beatT / 0.85);
@@ -3247,7 +3247,7 @@
           c.toX = wallL + 24;
           c.toY = state.H * 0.36;
         }
-        // Hit-stun: brief freeze so the bounce reads
+
         if ((c.hitStun || 0) > 0) {
           c.hitStun -= dt;
         } else {
@@ -3256,7 +3256,7 @@
           var k = Math.min(1, c.segT / segDur);
           var kx = 1 - (1 - k) * (1 - k);
           var ky = k * k;
-          // Slight arc on wall-to-wall so it doesn't look like a straight teleport
+
           var arc = c.seg < 2 ? Math.sin(k * Math.PI) * (-28 - c.seg * 8) : Math.sin(k * Math.PI) * 10;
           var nx = c.fromX + (c.toX - c.fromX) * kx;
           var ny = c.fromY + (c.toY - c.fromY) * ky + arc;
@@ -3312,12 +3312,12 @@
               c.beatT = 0;
             }
           }
-          // Last plunge: chamber floor rises to meet the faller
+
           if (c.seg === 2) {
             c.floorRise = Math.min(1, Math.pow(Math.min(1, c.segT / Math.max(0.01, segDur)), 0.85));
           }
         }
-        // Blood drips scrolling past during fall
+
         if (Math.random() < 0.55) {
           c.drips.push({
             x: wallL + 10 + Math.random() * (wallR - wallL - 20),
@@ -3334,7 +3334,7 @@
           if (c.drips[dr].life <= 0) c.drips.splice(dr, 1);
         }
       } else if (c.beat === "land") {
-        // Prone impact settle
+
         c.beatT = (c.beatT || 0) + dt;
         c.floorRise = 1;
         c.prone = Math.max(0.55, 1 - c.beatT * 0.35);
@@ -3345,7 +3345,7 @@
           c.beatT = 0;
         }
       } else if (c.beat === "daze") {
-        // Lying there, trying to make sense of it
+
         c.beatT = (c.beatT || 0) + dt;
         c.prone = 0.7;
         c.cmdY = floorY + 6;
@@ -3357,7 +3357,7 @@
           c.beatT = 0;
         }
       } else if (c.beat === "rise") {
-        // Slow push-up → knees → feet
+
         c.beatT = (c.beatT || 0) + dt;
         var rkUp = Math.min(1, c.beatT / 1.85);
         rkUp = rkUp * rkUp * (3 - 2 * rkUp);
@@ -3524,7 +3524,7 @@
         if (fo.kind === "spore") {
           fo.y += Math.sin(fo.t * 1.8) * 18 * dt;
         }
-        // Infinite range — aim at craft from off-screen; shots travel the whole tunnel
+
         if (fx > -280 && fx < state.W + 160) {
           var aimA = Math.atan2(state.squad.y - fo.y, state.squad.x - fx);
           if (fo.kind === "spore" && (fo.shotCd || 0) <= 0) {
@@ -3628,7 +3628,7 @@
           }
         }
       }
-      // Approach valve — cinematic reveal before the fight
+
       if (!g.valve && g.scroll >= (g.valveAt || 4100)) {
         beginValveCin(state, g);
       }
@@ -3664,7 +3664,7 @@
   }
 
   function finishGullet(state) {
-    // Fallback — prefer the spit cinematic path
+
     var g = state.arklanGullet;
     if (g && !state.arklanSpit) {
       startArklanSpit(state, g);
@@ -3703,7 +3703,7 @@
     ctx.translate(eye.x, eye.y);
     ctx.rotate(eye.ang || 0);
     ctx.globalAlpha = g;
-    // flesh mound on wall
+
     ctx.fillStyle = "#4a3028";
     ctx.beginPath();
     ctx.ellipse(0, 0, 16 * g, 12 * g, 0, 0, Math.PI * 2);
@@ -3712,13 +3712,13 @@
     ctx.beginPath();
     ctx.ellipse(0, 0, 12 * g, 9 * g, 0, 0, Math.PI * 2);
     ctx.fill();
-    // metal ring
+
     ctx.strokeStyle = charging ? "#ff8aa0" : "#a8b8c8";
     ctx.lineWidth = 2.2 + chargeK * 1.5;
     ctx.beginPath();
     ctx.ellipse(0, 0, 11 * g, 8.5 * g, 0, 0, Math.PI * 2);
     ctx.stroke();
-    // charge aura
+
     if (charging) {
       ctx.globalCompositeOperation = "lighter";
       ctx.strokeStyle = "rgba(255, 80, 120, " + (0.35 + chargeK * 0.5) + ")";
@@ -3728,7 +3728,7 @@
       ctx.stroke();
       ctx.globalCompositeOperation = "source-over";
     }
-    // sclera
+
     ctx.fillStyle = charging ? "#ffe0e8" : "#f2e8dc";
     ctx.beginPath();
     ctx.ellipse(0, 0, 8 * g, 6.2 * g * (1 - lid * 0.92), 0, 0, Math.PI * 2);
@@ -3758,7 +3758,7 @@
       ctx.arc(px + 1.2, py - 1.2, 0.9 * g, 0, Math.PI * 2);
       ctx.fill();
     }
-    // flesh lid
+
     if (lid > 0.05) {
       ctx.fillStyle = "#5a3830";
       ctx.beginPath();
@@ -3777,7 +3777,7 @@
     var slam = tent.slamFx || 0;
     ctx.save();
     ctx.translate(tent.x, tent.y);
-    // shadow / impact ring
+
     ctx.fillStyle = "rgba(20, 16, 12, " + (0.25 + grow * 0.25) + ")";
     ctx.beginPath();
     ctx.ellipse(0, 8, 28 * grow, 12 * grow, 0, 0, Math.PI * 2);
@@ -3793,7 +3793,7 @@
       ctx.arc(0, 0, tent.slamR * (0.7 + (1 - slam) * 0.4), 0, Math.PI * 2);
       ctx.fill();
     }
-      // segmented robotic arm rising from edge
+
     var segs = 5;
     var h = 90 * grow * (tent.phase === "rise" ? 0.55 + grow * 0.45 : 1);
     for (var i = 0; i < segs; i++) {
@@ -3815,7 +3815,7 @@
       ctx.fill();
       ctx.globalCompositeOperation = "source-over";
     }
-    // claw tip
+
     ctx.fillStyle = "#d0dde8";
     ctx.beginPath();
     ctx.moveTo(-16, -h - 4);
@@ -3834,7 +3834,7 @@
     var sp = state.arklanSpit;
     if (!sp) return;
     var time = state.time || 0;
-    // After landing, squad sprites take over
+
     if (sp.beat === "die") {
       if ((sp.fade || 0) > 0.02) {
         ctx.fillStyle = "rgba(18, 4, 4, " + Math.min(0.92, sp.fade) + ")";
@@ -3842,14 +3842,14 @@
       }
       return;
     }
-    // Sand plume under craft
+
     if ((sp.sand || 0) > 0.05 || sp.beat === "land" || sp.beat === "spit") {
       ctx.fillStyle = "rgba(180, 140, 80, " + (0.2 + (sp.sand || 0.3) * 0.35) + ")";
       ctx.beginPath();
       ctx.ellipse(sp.craftX + 4, sp.craftY + 16, 28 + (sp.sand || 0) * 20, 10, 0, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Flying scrap fighter
+
     ctx.save();
     ctx.translate(sp.craftX, sp.craftY);
     ctx.rotate(sp.rot || 0);
@@ -3887,7 +3887,7 @@
     ctx.ellipse(10, 0, 6, 4, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalCompositeOperation = "source-over";
-    // Thruster flare while spat
+
     if (sp.beat === "spit" || sp.beat === "gag") {
       var thr = 14 + Math.sin(time * 30) * 6;
       ctx.fillStyle = "rgba(255, 140, 40, 0.85)";
@@ -3899,7 +3899,7 @@
       ctx.fill();
     }
     ctx.restore();
-    // Fade from gullet
+
     if ((sp.fade || 0) > 0.02) {
       ctx.fillStyle = "rgba(18, 4, 4, " + Math.min(0.92, sp.fade) + ")";
       ctx.fillRect(0, 0, state.W, state.H);
@@ -3915,7 +3915,7 @@
       for (var i = 0; i < eyes.length; i++) {
         drawWallEye(ctx, eyes[i], time);
         var ey = eyes[i];
-        // Soft telegraph — pale preview, NOT the actual beam
+
         if ((ey.chargeT || 0) > 0 && ey.lockedAim != null) {
           var ck = ey.chargeMax ? 1 - ey.chargeT / ey.chargeMax : 0.5;
           var elen = cageReach(state, ey, 40);
@@ -3923,7 +3923,7 @@
           ctx.save();
           ctx.translate(ey.x, ey.y);
           ctx.rotate(ey.lockedAim);
-          // thin ghost lane
+
           ctx.fillStyle = "rgba(255, 190, 200, " + (0.06 + ck * 0.08 * pulse) + ")";
           ctx.fillRect(0, -7, elen, 14);
           ctx.setLineDash([6, 8]);
@@ -3933,7 +3933,7 @@
           ctx.moveTo(0, 0);
           ctx.lineTo(elen, 0);
           ctx.stroke();
-          // faint edge guides
+
           ctx.strokeStyle = "rgba(255, 170, 180, " + (0.16 + ck * 0.14) + ")";
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -3944,7 +3944,7 @@
           ctx.stroke();
           ctx.setLineDash([]);
           ctx.restore();
-          // Soft ground mark
+
           var mx = ey.markX != null ? ey.markX : ey.x + Math.cos(ey.lockedAim) * 120;
           var my = ey.markY != null ? ey.markY : ey.y + Math.sin(ey.lockedAim) * 120;
           var mr = 28 + ck * 10;
@@ -4048,16 +4048,16 @@
     gulletOval(ctx, x + r * 0.25, y - r * 0.2, r * 0.35, r * 0.3, "#ffe08a");
   }
 
-  /** Parasitic sand-mite larva (mini desert worm vibe) */
+
   function drawGulletMite(ctx, fo, time) {
     var s = fo.r;
     var gait = time * 8 + (fo.t || 0) * 3;
     ctx.save();
     ctx.scale(fo.facing || -1, 1);
     ctx.rotate(Math.sin(gait) * 0.12);
-    // shadow
+
     gulletOval(ctx, 2, s * 0.55, s * 1.1, s * 0.28, "rgba(20, 8, 4, 0.35)");
-    // body segments
+
     for (var seg = 3; seg >= 0; seg--) {
       var bx = -s * 0.85 + seg * s * 0.42;
       var by = Math.sin(gait + seg * 0.7) * 2.2;
@@ -4072,10 +4072,10 @@
       ctx.ellipse(bx, by, s * (0.4 + seg * 0.04), s * 0.36, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-    // head
+
     gulletOval(ctx, s * 0.55, 0, s * 0.48, s * 0.42, "#5a3418");
     gulletOval(ctx, s * 0.62, 0, s * 0.28, s * 0.32, "#1a0808");
-    // mandibles
+
     ctx.fillStyle = "#c4a06a";
     ctx.beginPath();
     ctx.moveTo(s * 0.7, -s * 0.18);
@@ -4091,7 +4091,7 @@
     ctx.fill();
     gulletEye(ctx, s * 0.48, -s * 0.14, s * 0.11, "#2a1008");
     gulletEye(ctx, s * 0.48, s * 0.14, s * 0.11, "#2a1008");
-    // tiny legs
+
     ctx.strokeStyle = "#3a2010";
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
@@ -4106,14 +4106,14 @@
     ctx.restore();
   }
 
-  /** Mobile enamel fang — bone + metal root */
+
   function drawGulletTooth(ctx, fo, time) {
     var s = fo.r;
     var bob = Math.sin(time * 6 + fo.t) * 2;
     ctx.save();
     ctx.translate(0, bob);
     ctx.rotate(-0.15 + Math.sin(time * 3) * 0.08);
-    // root / metal socket
+
     var root = ctx.createLinearGradient(0, s * 0.4, 0, s * 1.1);
     root.addColorStop(0, "#8a9aaa");
     root.addColorStop(1, "#2a3038");
@@ -4124,7 +4124,7 @@
       ctx.arc(rv * s * 0.22, s * 0.5, 2, 0, Math.PI * 2);
       ctx.fill();
     }
-    // enamel blade
+
     var enamel = ctx.createLinearGradient(-s * 0.3, -s, s * 0.3, s * 0.4);
     enamel.addColorStop(0, "#fff8e8");
     enamel.addColorStop(0.45, "#e8dcc8");
@@ -4139,14 +4139,14 @@
     ctx.strokeStyle = "rgba(60, 40, 20, 0.4)";
     ctx.lineWidth = 1.4;
     ctx.stroke();
-    // crack highlight
+
     ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(-s * 0.05, -s * 0.9);
     ctx.lineTo(s * 0.12, -s * 0.2);
     ctx.stroke();
-    // blood rim
+
     ctx.strokeStyle = "rgba(160, 40, 30, 0.55)";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -4156,13 +4156,13 @@
     ctx.restore();
   }
 
-  /** Acid cyst / bile spore sac */
+
   function drawGulletSpore(ctx, fo, time) {
     var s = fo.r;
     var pulse = 1 + Math.sin(time * 5 + fo.t) * 0.06;
     ctx.save();
     ctx.scale(pulse, pulse);
-    // drip aura
+
     ctx.fillStyle = "rgba(100, 200, 60, 0.18)";
     ctx.beginPath();
     ctx.arc(0, 0, s * 1.35, 0, Math.PI * 2);
@@ -4173,7 +4173,7 @@
     body.addColorStop(0.75, "#3a6020");
     body.addColorStop(1, "#1a2a10");
     gulletOval(ctx, 0, 0, s, s * 0.92, body);
-    // membrane veins
+
     ctx.strokeStyle = "rgba(40, 80, 20, 0.55)";
     ctx.lineWidth = 1.3;
     for (var v = 0; v < 5; v++) {
@@ -4188,29 +4188,29 @@
       );
       ctx.stroke();
     }
-    // nucleus
+
     gulletOval(ctx, s * 0.15, -s * 0.1, s * 0.32, s * 0.28, "#1a3010");
     gulletOval(ctx, s * 0.2, -s * 0.14, s * 0.14, s * 0.12, "#ffe08a");
-    // hanging drips
+
     ctx.fillStyle = "#8ad422";
     for (var d = 0; d < 3; d++) {
       var dx = -s * 0.35 + d * s * 0.35;
       var dy = s * 0.7 + Math.sin(time * 4 + d) * 3;
       gulletOval(ctx, dx, dy, 3.5, 5 + (d % 2) * 2, "#8ad422");
     }
-    // wart bumps
+
     gulletOval(ctx, -s * 0.45, s * 0.2, s * 0.18, s * 0.15, "#5a8a30");
     gulletOval(ctx, s * 0.5, s * 0.25, s * 0.14, s * 0.12, "#5a8a30");
     ctx.restore();
   }
 
-  /** Scrap platelet crab — armored blood-cell with legs */
+
   function drawGulletPlatelet(ctx, fo, time) {
     var s = fo.r;
     var spin = time * 2.2 + fo.t;
     ctx.save();
     ctx.rotate(Math.sin(spin) * 0.2);
-    // legs
+
     ctx.strokeStyle = "#5a3038";
     ctx.lineWidth = 2.4;
     ctx.lineCap = "round";
@@ -4223,13 +4223,13 @@
       ctx.stroke();
       gulletOval(ctx, Math.cos(la) * reach, Math.sin(la) * reach * 0.7, 2.5, 2.5, "#8a4050");
     }
-    // disk shell
+
     var disk = ctx.createRadialGradient(-s * 0.2, -s * 0.2, 2, 0, 0, s * 1.2);
     disk.addColorStop(0, "#e08090");
     disk.addColorStop(0.4, "#a04050");
     disk.addColorStop(1, "#3a1018");
     gulletOval(ctx, 0, 0, s * 1.25, s * 0.72, disk);
-    // metal plates
+
     ctx.strokeStyle = "rgba(200, 210, 220, 0.55)";
     ctx.lineWidth = 1.6;
     ctx.beginPath();
@@ -4244,7 +4244,7 @@
     }
     gulletEye(ctx, s * 0.35, -s * 0.08, s * 0.14, "#1a0808");
     gulletEye(ctx, s * 0.35, s * 0.12, s * 0.12, "#1a0808");
-    // mouth slit
+
     ctx.strokeStyle = "#2a0808";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -4255,12 +4255,12 @@
     ctx.restore();
   }
 
-  /** Bile / pressure vent — hazard fixture */
+
   function drawGulletVent(ctx, fo, time) {
     var s = fo.r;
     var pulse = 0.5 + Math.sin(fo.t * 4.5) * 0.5;
     ctx.save();
-    // metal housing
+
     var housing = ctx.createLinearGradient(-s, 0, s, 0);
     housing.addColorStop(0, "#2a3038");
     housing.addColorStop(0.5, "#6a7888");
@@ -4271,7 +4271,7 @@
     ctx.beginPath();
     ctx.ellipse(0, 0, s * 0.95, s * 0.75, 0, 0, Math.PI * 2);
     ctx.stroke();
-    // bolts
+
     ctx.fillStyle = "#a8b8c8";
     for (var b = 0; b < 6; b++) {
       var ba = (b / 6) * Math.PI * 2;
@@ -4279,7 +4279,7 @@
       ctx.arc(Math.cos(ba) * s * 0.78, Math.sin(ba) * s * 0.58, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    // grate
+
     ctx.strokeStyle = "#1a2228";
     ctx.lineWidth = 2;
     for (var gi = -2; gi <= 2; gi++) {
@@ -4288,7 +4288,7 @@
       ctx.lineTo(gi * 7, s * 0.45);
       ctx.stroke();
     }
-    // toxic plume
+
     ctx.globalCompositeOperation = "lighter";
     var plume = ctx.createRadialGradient(0, 0, 4, 0, 0, s * (1.1 + pulse * 0.45));
     plume.addColorStop(0, "rgba(180, 255, 120, " + (0.35 + pulse * 0.35) + ")");
@@ -4299,7 +4299,7 @@
     ctx.arc(0, 0, s * (1.1 + pulse * 0.45), 0, Math.PI * 2);
     ctx.fill();
     ctx.globalCompositeOperation = "source-over";
-    // core glow
+
     gulletOval(ctx, 0, 0, 6 + pulse * 4, 5 + pulse * 3, pulse > 0.55 ? "#c4ff80" : "#2a5030");
     ctx.restore();
   }
@@ -4310,7 +4310,7 @@
       ctx.translate(ox, rib.y);
       ctx.rotate(time * 1.2);
       var r = rib.w * 0.5;
-      // hub
+
       var gear = ctx.createRadialGradient(-4, -4, 2, 0, 0, r);
       gear.addColorStop(0, "#a8b8c8");
       gear.addColorStop(0.5, "#5a6878");
@@ -4319,7 +4319,7 @@
       ctx.beginPath();
       ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
       ctx.fill();
-      // teeth
+
       for (var toothG = 0; toothG < 10; toothG++) {
         var ga = (toothG / 10) * Math.PI * 2;
         ctx.save();
@@ -4334,7 +4334,7 @@
       ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
       ctx.stroke();
       gulletOval(ctx, 0, 0, 5, 5, "#1a2228");
-      // flesh crust on gear
+
       ctx.fillStyle = "rgba(120, 50, 40, 0.4)";
       ctx.beginPath();
       ctx.arc(r * 0.2, r * 0.15, r * 0.35, 0, Math.PI * 2);
@@ -4344,7 +4344,7 @@
       var fromTop = rib.y < H / 2;
       var top = fromTop ? 48 : rib.y - rib.h;
       var hh = rib.h;
-      // bone/flesh column
+
       var col = ctx.createLinearGradient(ox - rib.w * 0.5, 0, ox + rib.w * 0.5, 0);
       col.addColorStop(0, "#3a1810");
       col.addColorStop(0.35, "#6a3030");
@@ -4366,12 +4366,12 @@
       }
       ctx.closePath();
       ctx.fill();
-      // metal rebar
+
       ctx.fillStyle = "#a8b8c8";
       ctx.fillRect(ox - 3.5, top, 7, hh);
       ctx.fillStyle = "#e8f0f8";
       ctx.fillRect(ox - 1.5, top, 3, hh);
-      // cartilage ridges
+
       ctx.strokeStyle = "rgba(200, 160, 140, 0.35)";
       ctx.lineWidth = 2;
       for (var ridge = 0; ridge < 4; ridge++) {
@@ -4395,9 +4395,9 @@
   function drawGulletShip(ctx, x, y, door, pilot, lit) {
     ctx.save();
     ctx.translate(x, y);
-    // Wedged into flesh — slight tilt
+
     ctx.rotate(-0.12);
-    // hull
+
     var hg = ctx.createLinearGradient(-70, 0, 80, 0);
     hg.addColorStop(0, "#2a3038");
     hg.addColorStop(0.4, "#5a6878");
@@ -4415,14 +4415,14 @@
     ctx.strokeStyle = "#e8f0f8";
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    // flesh pinch marks
+
     ctx.strokeStyle = "rgba(120, 40, 30, 0.55)";
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(-40, -24);
     ctx.quadraticCurveTo(-20, -38, 10, -30);
     ctx.stroke();
-    // door panel (slides up)
+
     var doorH = 22 * (1 - Math.max(0, Math.min(1, door || 0)));
     ctx.fillStyle = "#1a2228";
     ctx.fillRect(-18, -doorH, 22, doorH * 2);
@@ -4430,7 +4430,7 @@
     ctx.globalAlpha = 0.35 + (door || 0) * 0.4;
     ctx.strokeRect(-18, -22, 22, 44);
     ctx.globalAlpha = 1;
-    // cockpit
+
     var cock = lit || (pilot || 0) > 0.15;
     ctx.fillStyle = cock ? "#7af0ff" : "#3a4550";
     ctx.globalCompositeOperation = cock ? "lighter" : "source-over";
@@ -4444,7 +4444,7 @@
       ctx.arc(38, 0, 6 + pilot * 10, 0, Math.PI * 2);
       ctx.fill();
     }
-    // thruster warmup
+
     if ((pilot || 0) > 0.55) {
       ctx.fillStyle = "rgba(255, 140, 40, " + ((pilot - 0.55) * 1.5) + ")";
       ctx.beginPath();
@@ -4470,10 +4470,10 @@
     var depth = Math.min(1, c.depth || (inThroat ? 0.55 : 1));
     var scrollY = (c.camY || 0) + time * 55;
     var tunnelOpen = inSwallow ? Math.max(0.08, c.iris || 0) : 1;
-    // Keep ship planted even if init was old
+
     if (onFloor) c.shipY = floorY - 20;
 
-    // —— Deep mucosal void ——
+
     var bg = ctx.createLinearGradient(0, 0, 0, H);
     bg.addColorStop(0, "#080202");
     bg.addColorStop(0.25, "#1a0608");
@@ -4483,7 +4483,7 @@
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // Distant throat vanishing point (depth tunnel)
+
     var vanishY = H * 0.15 - (1 - tunnelOpen) * 40;
     var layers = 16;
     var li;
@@ -4502,13 +4502,13 @@
       ctx.beginPath();
       ctx.ellipse(W / 2, cy, hw, hh, 0, 0, Math.PI * 2);
       ctx.fill();
-      // ring cartilage
+
       ctx.strokeStyle = "rgba(120, 50, 45, " + ((0.12 + lk * 0.2) * tunnelOpen) + ")";
       ctx.lineWidth = 3 + persp * 6;
       ctx.beginPath();
       ctx.ellipse(W / 2, cy, hw * 0.92, hh * 0.9, 0, 0, Math.PI * 2);
       ctx.stroke();
-      // metal scrap flecks deeper in
+
       if (li % 3 === 0) {
         ctx.strokeStyle = "rgba(100, 120, 140, " + (0.08 * tunnelOpen) + ")";
         ctx.lineWidth = 1.5;
@@ -4518,7 +4518,7 @@
       }
     }
 
-    // Soft tissue side walls (organic, not flat slabs)
+
     function drawFleshWall(left) {
       var x0 = left ? 0 : wallR;
       var x1 = left ? wallL : W;
@@ -4555,7 +4555,7 @@
       ctx.closePath();
       ctx.fill();
 
-      // Mucosal sheen
+
       ctx.strokeStyle = "rgba(255, 180, 160, 0.1)";
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -4570,7 +4570,7 @@
     drawFleshWall(true);
     drawFleshWall(false);
 
-    // Wall impact dents / blood spatters (reads as real hits)
+
     var impacts = c.impacts || [];
     var v;
     for (v = 0; v < impacts.length; v++) {
@@ -4595,7 +4595,7 @@
       ctx.restore();
     }
 
-    // Blood vessels (branching along walls)
+
     var vessels = c.vessels || [];
     for (v = 0; v < vessels.length; v++) {
       var vs = vessels[v];
@@ -4614,7 +4614,7 @@
         ctx.lineTo(baseX + ox, vy + seg * 28);
       }
       ctx.stroke();
-      // capillary branches
+
       ctx.lineWidth = Math.max(1, vs.thick * 0.45);
       ctx.strokeStyle = "rgba(180, 40, 50, " + (0.25 + pulse * 0.2) + ")";
       ctx.beginPath();
@@ -4628,7 +4628,7 @@
       ctx.stroke();
     }
 
-    // Blood droplets / spatters scrolling
+
     for (v = 0; v < 18; v++) {
       var bx = wallL + 20 + ((v * 97) % Math.max(20, wallR - wallL - 40));
       var by = ((v * 73 - scrollY * 0.9) % (H + 60)) - 20;
@@ -4638,7 +4638,7 @@
       ctx.fill();
     }
 
-    // Tissue folds / uvula-like pendants from top during throat
+
     if (inThroat) {
       for (v = 0; v < 5; v++) {
         var px = wallL + 30 + v * ((wallR - wallL - 60) / 4);
@@ -4655,7 +4655,7 @@
       }
     }
 
-    // Warm light from maw entrance (above)
+
     var topLight = ctx.createRadialGradient(W / 2, -30, 8, W / 2, H * 0.35, H * 0.7);
     topLight.addColorStop(0, "rgba(255, 90, 50, " + (0.22 * (1 - depth * 0.4) * tunnelOpen) + ")");
     topLight.addColorStop(0.35, "rgba(160, 30, 30, " + (0.1 * tunnelOpen) + ")");
@@ -4663,7 +4663,7 @@
     ctx.fillStyle = topLight;
     ctx.fillRect(0, 0, W, H);
 
-    // Soft floor chamber — rises during final plunge so it doesn't pop in
+
     var floorRise = Math.max(c.floorRise || 0, c.softLand || 0, onFloor ? 1 : 0);
     var floorA = floorRise;
     var floorDrawY = floorY + (1 - floorRise) * (H * 0.42);
@@ -4682,7 +4682,7 @@
       ctx.lineTo(W, H);
       ctx.lineTo(0, H);
       ctx.fill();
-      // vessels on floor
+
       ctx.strokeStyle = "rgba(160, 30, 40, " + (0.2 + floorA * 0.2) + ")";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -4699,7 +4699,7 @@
       ctx.globalAlpha = 1;
 
       if (floorRise > 0.55 && (onFloor || (c.softLand || 0) > 0.15 || (c.seg === 2 && floorRise > 0.7))) {
-        // Flesh cradle under the ship so it isn't floating in void
+
         var shipAlpha = Math.min(1, (floorRise - 0.55) / 0.35);
         ctx.globalAlpha = shipAlpha;
         ctx.fillStyle = "#3a1810";
@@ -4720,7 +4720,7 @@
       }
     }
 
-    // Drips
+
     var d;
     for (d = 0; d < (c.drips || []).length; d++) {
       var dr = c.drips[d];
@@ -4730,7 +4730,7 @@
       ctx.fill();
     }
 
-    // Sparks
+
     for (d = 0; d < (c.sparks || []).length; d++) {
       var sk = c.sparks[d];
       ctx.fillStyle = sk.col || "#ffe08a";
@@ -4750,7 +4750,7 @@
       }
     }
 
-    // Commander (hidden during early swallow fade)
+
     var showCmd = (c.cmdAlpha == null || c.cmdAlpha > 0.05) && c.beat !== "pilot";
     if (inSwallow && (c.iris || 0) < 0.35) showCmd = false;
     if (showCmd) {
@@ -4873,26 +4873,26 @@
       }
     }
 
-    // Depth vignette
+
     var vig = ctx.createRadialGradient(W / 2, H * 0.4, H * 0.1, W / 2, H / 2, Math.max(W, H) * 0.75);
     vig.addColorStop(0, "rgba(0,0,0,0)");
     vig.addColorStop(1, "rgba(0,0,0, " + (0.4 + depth * 0.35) + ")");
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
 
-    // Swallow transition overlays
+
     if (inSwallow) {
       var fade = c.fade || 0;
       var iris = c.iris || 0;
       var ir = Math.max(8, Math.min(W, H) * 0.55 * Math.max(0.02, iris));
       ctx.save();
-      // Even-odd iris: dark world with circular maw opening
+
       ctx.fillStyle = "rgba(6, 0, 0, " + (0.94 - iris * 0.55) + ")";
       ctx.beginPath();
       ctx.rect(0, 0, W, H);
       ctx.arc(W / 2, H * 0.42, ir, 0, Math.PI * 2);
       ctx.fill("evenodd");
-      // Fleshy rim of the mouth
+
       ctx.strokeStyle = "rgba(140, 30, 30, " + (0.65 * (1 - iris * 0.4)) + ")";
       ctx.lineWidth = 22 * (1 - iris * 0.5);
       ctx.beginPath();
@@ -4901,7 +4901,7 @@
       ctx.strokeStyle = "rgba(255, 100, 80, " + (0.2 * (1 - iris)) + ")";
       ctx.lineWidth = 6;
       ctx.stroke();
-      // Early swallow: red wash
+
       if (fade > 0 && iris < 0.5) {
         ctx.fillStyle = "rgba(90, 0, 0, " + (0.4 * fade * (1 - iris * 2)) + ")";
         ctx.fillRect(0, 0, W, H);
@@ -4940,7 +4940,7 @@
       ctx.lineTo(W, H);
       ctx.closePath();
       ctx.fill();
-      // Teeth from the closing throat
+
       var ti;
       ctx.fillStyle = "rgba(200, 170, 140, " + (0.35 + squeeze * 0.4) + ")";
       for (ti = 0; ti < 10; ti++) {
@@ -5356,14 +5356,14 @@
     var H = state.H;
     var time = state.time || 0;
     ctx.save();
-    // organic tunnel background
+
     var bg = ctx.createLinearGradient(0, 0, 0, H);
     bg.addColorStop(0, "#1a0808");
     bg.addColorStop(0.5, "#3a1410");
     bg.addColorStop(1, "#120606");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
-    // peristalsis rings scrolling
+
     var scroll = g.scroll || 0;
     for (var r = 0; r < 12; r++) {
       var rx = ((r * 140 - (scroll * 0.6) % 140) + W) % (W + 140) - 40;
@@ -5378,7 +5378,7 @@
       ctx.ellipse(rx, H / 2, 22, H * 0.36, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
-    // floor/ceiling flesh
+
     ctx.fillStyle = "#2a0c0a";
     ctx.fillRect(0, 0, W, 48);
     ctx.fillRect(0, H - 48, W, 48);
@@ -5403,7 +5403,7 @@
       return;
     }
 
-    // obstacles
+
     for (var o = 0; o < (g.obstacles || []).length; o++) {
       var rib = g.obstacles[o];
       var ox = rib.x - scroll;
@@ -5411,7 +5411,7 @@
       drawGulletObstacle(ctx, rib, ox, time, H);
     }
 
-    // foes
+
     for (var f = 0; f < (g.foes || []).length; f++) {
       var fo = g.foes[f];
       if (fo.hp <= 0) continue;
@@ -5430,14 +5430,14 @@
       ctx.restore();
     }
 
-    // shots
+
     for (var s = 0; s < (g.shots || []).length; s++) {
       var sh = g.shots[s];
       ctx.save();
       ctx.translate(sh.x, sh.y);
       if (sh.enemy) {
         if (sh.parry) {
-          // Cuphead-style pink parry orb
+
           var pulse = 0.75 + Math.sin(time * 14 + sh.x * 0.05) * 0.25;
           ctx.fillStyle = "rgba(255, 120, 210, " + (0.25 * pulse) + ")";
           ctx.beginPath();
@@ -5499,7 +5499,7 @@
         ctx.closePath();
         ctx.fill();
       } else {
-        // peashooter
+
         ctx.fillStyle = "#ffe08a";
         ctx.beginPath();
         ctx.ellipse(0, 0, 5, 2.4, 0, 0, Math.PI * 2);
@@ -5514,11 +5514,11 @@
 
     var pl = g.plane || ensureGulletPlane(g);
 
-    // Hazards (crush walls / saws / shockwaves) — 2D arena props
+
     if (g.phase === "valve" || g.phase === "heart") {
       drawGulletHazards(ctx, g, time, W, H);
     }
-    // Valve ghost during heart tear cin
+
     if (g.phase === "heart_cin" && g.valveGhost) {
       var vg = g.valveGhost;
       drawGulletValve(ctx, {
@@ -5534,20 +5534,20 @@
         pulse: 0.5
       }, time, W, H);
     }
-    // Valve behind the craft (+ reveal cin)
+
     if ((g.phase === "valve" || g.phase === "miniboss" || g.phase === "valve_cin") && g.valve) {
       drawGulletValve(ctx, g.valve, time, W, H);
     }
-    // Heart behind craft during arena (+ reveal cin)
+
     if ((g.phase === "heart" || g.phase === "heart_cin" || g.phase === "death_cin") && g.heart) {
       drawGulletHeart(ctx, g.heart, time, W, H);
     }
-    // Boss cinematic overlays (walls / fade / title)
+
     if ((g.phase === "valve_cin" || g.phase === "heart_cin") && g.bossCin) {
       drawBossCinOverlay(ctx, state, g, time, W, H);
     }
 
-    // Dash afterimages
+
     for (var tr = 0; tr < (pl.trails || []).length; tr++) {
       var trail = pl.trails[tr];
       ctx.globalAlpha = Math.max(0, trail.life / (trail.max || 0.22)) * 0.35;
@@ -5562,11 +5562,11 @@
       ctx.globalAlpha = 1;
     }
 
-    // Plane craft — cuphead-ish scrap fighter
+
     ctx.save();
     ctx.translate(state.squad.x, state.squad.y);
     if ((pl.flash || 0) > 0) ctx.globalAlpha = 0.55 + Math.sin(time * 40) * 0.35;
-    // Wings
+
     ctx.fillStyle = "#4a5560";
     ctx.beginPath();
     ctx.moveTo(-4, 0);
@@ -5583,7 +5583,7 @@
     ctx.strokeStyle = "#c8d4e0";
     ctx.lineWidth = 1.2;
     ctx.stroke();
-    // Fuselage
+
     var hg = ctx.createLinearGradient(-22, 0, 30, 0);
     hg.addColorStop(0, "#2a3038");
     hg.addColorStop(0.45, "#6a7888");
@@ -5601,7 +5601,7 @@
     ctx.strokeStyle = "#e8f0f8";
     ctx.lineWidth = 1.4;
     ctx.stroke();
-    // Rivets / plate seams
+
     ctx.strokeStyle = "rgba(20, 24, 30, 0.45)";
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -5610,7 +5610,7 @@
     ctx.moveTo(2, -8);
     ctx.lineTo(2, 8);
     ctx.stroke();
-    // Cockpit
+
     ctx.fillStyle = "#7af0ff";
     ctx.globalCompositeOperation = "lighter";
     ctx.beginPath();
@@ -5621,14 +5621,14 @@
     ctx.beginPath();
     ctx.arc(9, 0, 2.5, 0, Math.PI * 2);
     ctx.fill();
-    // Prop / spinner
+
     ctx.strokeStyle = "rgba(255, 220, 140, 0.7)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(30, -10 - Math.sin(time * 40) * 2);
     ctx.lineTo(30, 10 + Math.sin(time * 40) * 2);
     ctx.stroke();
-    // Thruster
+
     var thr = 18 + Math.sin(time * 30) * 6 + ((pl.dashT || 0) > 0 ? 14 : 0);
     ctx.fillStyle = (pl.dashT || 0) > 0 ? "rgba(122, 240, 255, 0.9)" : "rgba(255, 140, 40, 0.8)";
     ctx.beginPath();
@@ -5636,7 +5636,7 @@
     ctx.lineTo(-28 - thr, 0);
     ctx.lineTo(-28, 6);
     ctx.fill();
-    // Energy shield
+
     if ((pl.shieldT || 0) > 0) {
       var sk = pl.shieldT / 0.38;
       ctx.strokeStyle = "rgba(255, 122, 217, " + (0.45 + sk * 0.4) + ")";
@@ -5650,7 +5650,7 @@
       ctx.arc(0, 0, 20, 0, Math.PI * 2);
       ctx.stroke();
     }
-    // Charge telegraph on craft
+
     if ((pl.charge || 0) > 0.05) {
       ctx.strokeStyle = "rgba(122, 240, 255, " + (0.3 + pl.charge * 0.5) + ")";
       ctx.lineWidth = 2;
@@ -5660,7 +5660,7 @@
     }
     ctx.restore();
 
-    // Plane HUD — card + hints
+
     if (g.phase === "scroll" || g.phase === "heart" || g.phase === "valve") {
       ctx.fillStyle = "rgba(0,0,0,0.45)";
       ctx.fillRect(14, H - 52, 150, 36);
@@ -5678,7 +5678,7 @@
       ctx.fillText("Shift dash · Espaço escudo · Esq/Dir tiro", 14, H - 10);
     }
 
-    // Parry FX rings / sparks
+
     if (pl.parryFx && pl.parryFx.length) {
       var pfi;
       for (pfi = 0; pfi < pl.parryFx.length; pfi++) {
@@ -5711,7 +5711,7 @@
       }
     }
 
-    // —— Valve/heart already drawn behind craft ——
+
 
     if (g.phase === "death_cin" && g.death) {
       var dth = g.death;
@@ -5773,7 +5773,7 @@
       ctx.fillRect(0, 0, W, H);
     }
 
-    // vignette
+
     var vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.75);
     vig.addColorStop(0, "rgba(0,0,0,0)");
     vig.addColorStop(1, "rgba(0,0,0,0.55)");

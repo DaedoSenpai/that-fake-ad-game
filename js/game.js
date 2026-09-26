@@ -128,9 +128,62 @@
     return 1 + stageIndex * 0.16;
   }
 
+  function clonePacks(wave) {
+    var out = [];
+    for (var i = 0; wave && i < wave.length; i++) {
+      var pack = wave[i];
+      if (!pack || !pack.type) continue;
+      out.push({ type: pack.type, n: pack.n | 0 });
+    }
+    return out;
+  }
+
+  function splitStageWaves(stage) {
+    var trash = [];
+    var boss = [];
+    var waves = (stage && stage.waves) || [];
+    for (var w = 0; w < waves.length; w++) {
+      var wave = waves[w] || [];
+      var hasBoss = false;
+      for (var i = 0; i < wave.length; i++) {
+        if (wave[i] && String(wave[i].type || "").indexOf("chefe") === 0) hasBoss = true;
+      }
+      if (hasBoss) boss = wave;
+      else if (wave.length) trash.push(wave);
+    }
+    return { trash: trash, boss: boss };
+  }
+
+  function rollStageWaves(stage) {
+    var split = splitStageWaves(stage);
+    var bag = split.trash.length ? split.trash : [[{ type: "infantaria", n: 4 }]];
+    var out = [];
+    for (var n = 0; n < 5; n++) {
+      var pick = bag[(Math.random() * bag.length) | 0];
+      var wave = clonePacks(pick);
+      for (var p = 0; p < wave.length; p++) {
+        wave[p].n = Math.max(1, wave[p].n + (((Math.random() * 3) | 0) - 1));
+      }
+      if (Math.random() < 0.35 && bag.length > 1) {
+        var other = bag[(Math.random() * bag.length) | 0];
+        if (other !== pick && other[0] && other[0].type) {
+          var extraType = other[0].type;
+          var dup = false;
+          for (var d = 0; d < wave.length; d++) if (wave[d].type === extraType) dup = true;
+          if (!dup) wave.push({ type: extraType, n: Math.max(1, Math.round((other[0].n | 0) * 0.5)) });
+        }
+      }
+      out.push(wave);
+    }
+    out.push(clonePacks(split.boss));
+    return out;
+  }
+
   function queueWave(state) {
     var stage = G.STAGES[state.stageIndex];
-    var wave = stage.waves[state.waveIndex];
+    var list = state.stageWaves && state.stageWaves.length ? state.stageWaves : stage.waves;
+    var wave = list[state.waveIndex];
+    if (!wave) return;
     state.spawnQueue = [];
     for (var i = 0; i < wave.length; i++) {
       var pack = wave[i];
@@ -273,6 +326,7 @@
       if (secondKind !== "recruta") G.codex.unlockUnit(secondKind);
       state.run.rerolls = perm.rerolls | 0;
       state.run.reserve = [];
+      state.run.bench = [];
       var startArq = perm.startArquivo | 0;
       if ((perm.arquivista | 0) >= 2) startArq += 1;
       state.run.intel = {
@@ -297,6 +351,7 @@
       state.forceWaves = [];
       state.forceWells = [];
       state.cmdStrikes = [];
+      state.supportCalls = [];
       state.units.push(G.createPlayerUnit(state.squad.x, state.squad.y, "comandante", state.run, perm));
       for (var i = 0; i < count; i++) {
         var a = (i / count) * Math.PI * 2;
@@ -311,8 +366,9 @@
     startStage: function (state) {
       var stage = G.STAGES[state.stageIndex];
       var wave = 0;
-      if (state.debugFight && state.debugOpts && state.debugOpts.lastWave && stage && stage.waves) {
-        wave = Math.max(0, stage.waves.length - 1);
+      state.stageWaves = rollStageWaves(stage);
+      if (state.debugFight && state.debugOpts && state.debugOpts.lastWave && state.stageWaves.length) {
+        wave = state.stageWaves.length - 1;
       }
       state.waveIndex = wave;
       state.enemies = [];
@@ -369,6 +425,7 @@
       state.forceWaves = [];
       state.forceWells = [];
       state.cmdStrikes = [];
+      state.supportCalls = [];
       state.keys = state.keys || {};
       for (var r = 0; r < state.units.length; r++) {
         if (state.units[r].hp <= 0) continue;
@@ -388,6 +445,11 @@
       for (var h = 0; h < state.units.length; h++) {
         var u = state.units[h];
         u.hp = Math.min(u.maxHp, u.hp + Math.round(u.maxHp * 0.22));
+      }
+      var benchHeal = (state.run && state.run.bench) || [];
+      for (var bh = 0; bh < benchHeal.length; bh++) {
+        var bu = benchHeal[bh];
+        bu.hp = Math.min(bu.maxHp, bu.hp + Math.round(bu.maxHp * 0.22));
       }
       if (!state.debugFight) G.save.noteStage(state.stageIndex + 1);
       var pocket = G.upgrades && G.upgrades.stageGold ? G.upgrades.stageGold(state) : (G.save.data.perm.gold | 0) * 20;
@@ -433,7 +495,7 @@
           }
         }
         if (!nextBoss && living >= res.concurrent) {
-          /* espera: monitor menor segura menos bicho na tela */
+
         } else {
           state.spawnTimer -= dt;
           if (state.spawnTimer <= 0) {
@@ -455,7 +517,7 @@
         for (var he = 0; he < state.enemies.length; he++) {
           var enLeft = state.enemies[he];
           if (enLeft.stolen || enLeft.scenery) continue;
-          // Arklan P2 broken / Glinder dying still count as active fight
+
           if (enLeft.arklanBroken || enLeft.glinderDying) hostilesLeft++;
           else if (enLeft.hp > 0) hostilesLeft++;
         }
@@ -469,7 +531,8 @@
         if (state.clearTimer <= 0) {
           state.waitingClear = false;
           var stage = G.STAGES[state.stageIndex];
-          if (state.waveIndex < stage.waves.length - 1) {
+          var waveList = state.stageWaves && state.stageWaves.length ? state.stageWaves : stage.waves;
+          if (state.waveIndex < waveList.length - 1) {
             state.waveIndex++;
             queueWave(state);
           } else {

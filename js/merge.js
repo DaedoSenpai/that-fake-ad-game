@@ -89,6 +89,61 @@
     return 2 << g;
   }
 
+  var BENCH_MAX = 4;
+
+  function benchList(state) {
+    if (!state || !state.run) return [];
+    if (!state.run.bench) state.run.bench = [];
+    return state.run.bench;
+  }
+
+  function benchRoom(state) {
+    return benchList(state).length < BENCH_MAX;
+  }
+
+  function pullUnit(state, unit) {
+    if (!unit || !state) return;
+    var units = state.units || [];
+    var ui = units.indexOf(unit);
+    if (ui >= 0) units.splice(ui, 1);
+    var bench = benchList(state);
+    var bi = bench.indexOf(unit);
+    if (bi >= 0) bench.splice(bi, 1);
+    unit.benched = false;
+    unit.held = false;
+  }
+
+  function benchPush(state, kind) {
+    var nu = G.createPlayerUnit(0, 0, kind || "recruta", state.run, G.save.data.perm);
+    nu.benched = true;
+    benchList(state).push(nu);
+    if (G.upgrades && G.upgrades.maybeRecruitRefund) G.upgrades.maybeRecruitRefund(state, nu);
+    if (G.codex && G.codex.unlockUnit(nu.kind)) {
+      var cmd = state.squad || { x: 0, y: 0 };
+      state.floaters.push(G.createFloater(cmd.x, cmd.y - 34, "Compêndio: " + nu.def.name, "#ffe08a"));
+    }
+    return nu;
+  }
+
+  function placeField(state, unit, x, y) {
+    pullUnit(state, unit);
+    unit.benched = false;
+    unit.x = x;
+    unit.y = y;
+    unit.held = false;
+    state.units.push(unit);
+  }
+
+  function placeBench(state, unit) {
+    var bench = benchList(state);
+    if (bench.indexOf(unit) < 0 && bench.length >= BENCH_MAX) return false;
+    pullUnit(state, unit);
+    unit.benched = true;
+    unit.held = false;
+    benchList(state).push(unit);
+    return true;
+  }
+
   function openOptions(state, kinds) {
     var out = [];
     if (!kinds || !kinds.length) return out;
@@ -130,13 +185,26 @@
       return G.upgrades && G.upgrades.colossoCost ? G.upgrades.colossoCost() : COLOSSO_COST;
     },
     openOptions: openOptions,
+    BENCH_MAX: BENCH_MAX,
+    benchList: benchList,
+    benchRoom: benchRoom,
+    benchPush: benchPush,
+    pullUnit: pullUnit,
+    placeField: placeField,
+    placeBench: placeBench,
 
     listRoster: function (state) {
       var list = [];
       for (var i = 0; i < state.units.length; i++) {
         var u = state.units[i];
-        if (u.hp <= 0 || u.commander || u.stowed) continue;
+        if (u.hp <= 0 || u.commander || u.stowed || u.benched) continue;
         list.push(u);
+      }
+      var bench = state.run && state.run.bench;
+      for (var b = 0; bench && b < bench.length; b++) {
+        var bu = bench[b];
+        if (bu.hp <= 0 || bu.commander) continue;
+        list.push(bu);
       }
       list.sort(function (a, b) {
         var ga = a.gen | 0;
@@ -163,7 +231,8 @@
         cost: cost,
         x: u.x,
         y: u.y,
-        options: options
+        options: options,
+        toBench: !!u.benched
       };
     },
 
@@ -224,6 +293,16 @@
         var k;
         for (k in extra) pending[k] = extra[k];
       }
+      var aField = state.units.indexOf(a) >= 0 && !a.benched;
+      var bField = state.units.indexOf(b) >= 0 && !b.benched;
+      pending.toBench = !aField && !bField;
+      if (aField) {
+        pending.x = a.x;
+        pending.y = a.y;
+      } else if (bField) {
+        pending.x = b.x;
+        pending.y = b.y;
+      }
       return pending;
     },
 
@@ -236,10 +315,27 @@
         paid.arquivo -= cost;
       }
       pending.consumed = true;
-      pending.a.hp = 0;
-      if (pending.b) pending.b.hp = 0;
-      var nu = G.createPlayerUnit(pending.x, pending.y, pick, state.run, G.save.data.perm);
-      state.units.push(nu);
+      function retire(unit) {
+        if (!unit) return;
+        if (unit.benched) pullUnit(state, unit);
+        else {
+          unit.hp = 0;
+          unit.held = false;
+        }
+      }
+      retire(pending.a);
+      retire(pending.b);
+      if (pending.toBench && state.squad) {
+        pending.x = state.squad.x;
+        pending.y = state.squad.y;
+      }
+      var nu = G.createPlayerUnit(pending.x || 0, pending.y || 0, pick, state.run, G.save.data.perm);
+      if (pending.toBench) {
+        nu.benched = true;
+        benchList(state).push(nu);
+      } else {
+        state.units.push(nu);
+      }
       if (G.upgrades && G.upgrades.maybeRecruitRefund) G.upgrades.maybeRecruitRefund(state, nu);
       G.audio.merge();
       G.burst(state, pending.x, pending.y, "#ffd24a", 18, 120);

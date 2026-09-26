@@ -102,20 +102,14 @@
 
         <section id="screen-how" class="screen hidden">
           <h2>Como jogar</h2>
-          <p class="tagline">Você mexe o esquadrão inteiro de uma vez. O resto é mira e timing.</p>
           <ul class="howto">
-            <li><strong>Andar</strong> é WASD ou as setas. <strong>Shift</strong> dá um ímpeto curto — só pra sair da frente, não é skill de classe.</li>
-            <li><strong>Mouse</strong> aponta. Segura o <strong>esquerdo</strong> pra atirar.</li>
-            <li>A <strong>passiva</strong> já vem ligada: é o jeito da unidade atirar ou o efeito que ela faz sozinha. A <strong>ativa</strong> fica na barra. <strong>1 a 9</strong> escolhe a skill, <strong>direito</strong> habilidades são usadas na mira.</li>
-            <li>O <strong>comandante</strong> não ocupa vaga. O laser marca quem você aponta. O esquadrão pega o reforço caído e vira arquivo. <strong>R</strong> abre o quadro da formação e os arquivos: arrasta dois iguais no quadro pra merge, 1 arquivo convoca um recruta, 2 promovem nível 0, 4 o nível 1, 8 o nível 2, e dobra depois. O Colosso custa <strong>100 arquivos</strong> (o Quartel de Blindados no QG pode baixar isso). Com a ativa dele, segura o <strong>direito</strong>: menu radial de 3 fatias. O QG troca cada uma (cura ou grito, airstrike ou cluster, recruta ou arquivos). Solta na fatia; volta ao centro pra cancelar.</li>
-            <li>Duas unidades iguais se juntam no quadro do <strong>R</strong>: arrasta uma em cima da outra pra confirmar o merge. Vale no máximo <strong>2 de cada tipo</strong> (fuzileiro, batedor, anti-matéria etc.). <strong>Míssil, Inferno e Colosso</strong> são únicos — só 1. Recruta não tem esse teto. Uma licença no QG deixa Inferno e Míssil em dupla.</li>
-            <li>Cabe <strong>5</strong> soldados (o QG pode abrir uma 6ª vaga). O comandante não ocupa vaga.</li>
-            <li>No fim da fase caem 3 <strong>arquivos</strong>: doutrina comum, confidencial e (se o esquadrão pedir) máximo. Pegar de novo a mesma confidencial vira posto II. As cartas da campanha ficam no <strong>Esc</strong>.</li>
-            <li><strong>Esc</strong> pausa. Lá você vê as cartas que pegou. Na pausa, passa o mouse em alguém pra ler o que ele faz.</li>
-            <li>Em <strong>Opções</strong> (menu ou pausa): <strong>Auto mira</strong> trava e atira sozinho no inimigo mais perto; <strong>Auto uso de skill</strong> gasta a ativa quando ela sai da recarga. Você continua andando no WASD.</li>
-            <li>O <strong>compêndio</strong> anota unidades aliadas quando você faz merge e inimigo no primeiro abate.</li>
-            <li>São 3 perfis de save. O progresso é o mesmo no Jogar.bat e no index.html. Se o esquadrão cair durante uma run, as moedas adquiridas na run vão para o cofre.</li>
-            <li>No <strong>QG</strong> (menu) você compra bônus permanentes. <strong>Operação</strong> é começo e saque. <strong>Quartel</strong> especializa a linha do esquadrão. <strong>Comando</strong> é o radial do herói (cada fatia A ou B) e os truques só dele.</li>
+            <li><strong>Andar</strong> é WASD ou as setas. <strong>Shift</strong> dá um dash curto.</li>
+            <li><strong>Mouse</strong> aponta. Segura o <strong>esquerdo</strong> pra atirar e o <strong>direito</strong> para usar habilidades.</li>
+            <li>Todas as unidades inclusive o comandante possuem passivas, todas elas funcionam de forma automatica.</li>
+            <li>Grande parte das unidades possuem habilidades ativas, que podem ser usadas apertando o botão direito do mouse.</li>
+            <li>O jogo possui um sistema de meta progressão, vantagens que perduram por entre as runs, todas essas vantagens podem ser liberdas no <strong>QG</strong>.</li>
+            <li>Todas as informações de todas as unidadas podem ser lidas e encontradas no <strong>compendium</strong> após você ter feito uma unidade pelo menos uma vez.</li>
+            <li>O jogo gira em torno do sistema de merge das unidades, misture duas unidades iguais e faça uma nova mais poderososa ou diferente.</li>
           </ul>
           <button id="btn-how-back" class="btn primary" type="button">Voltar</button>
         </section>
@@ -312,23 +306,45 @@
 
       <div id="archive-modal" class="hidden">
         <div class="merge-panel archive-panel">
-          <p class="kicker">comandante</p>
-          <h2>Arquivos de guerra</h2>
-          <p class="tagline">Você tem <b id="archive-count">0</b>. No quadro, arrasta dois iguais pra merge — no máximo 2 de cada tipo, recruta livre. Míssil, Inferno e Colosso são únicos (só 1). 1 arquivo convoca um recruta. Promover: nível 0 custa 2, nível 1 custa 4, nível 2 custa 8 — e dobra depois. Colosso custa 100. R ou Esc fecha.</p>
-          <div class="archive-stage">
-            <div class="archive-board-wrap">
-              <p class="kicker">formação</p>
-              <div id="archive-board" class="archive-board"></div>
-              <p id="archive-board-hint" class="archive-board-hint">Arrasta duas peças iguais uma em cima da outra.</p>
+          <div class="archive-frame" aria-hidden="true">
+            <span class="archive-corner tl"></span>
+            <span class="archive-corner tr"></span>
+            <span class="archive-corner bl"></span>
+            <span class="archive-corner br"></span>
+            <span class="archive-scan"></span>
+          </div>
+          <header class="archive-head">
+            <div class="archive-title">
+              <p class="kicker">canal tático · r</p>
+              <h2>Arquivos de guerra <b id="archive-count">0</b></h2>
             </div>
-            <div class="archive-files">
-              <p class="kicker">arquivos</p>
-              <div id="archive-list"></div>
+            <button id="btn-archive-close" class="btn archive-close" type="button">Fechar</button>
+          </header>
+          <div class="archive-stage">
+            <div class="archive-squad">
+              <div id="archive-formation" class="archive-formation">
+                <div id="archive-board" class="archive-board"></div>
+                <p class="archive-bench-label">reserva</p>
+                <div id="archive-bench" class="archive-bench"></div>
+              </div>
+              <p id="archive-board-hint" class="archive-board-hint">Arrasta duas iguais pra fundir. Tipos diferentes trocam de lugar.</p>
+            </div>
+            <div class="archive-side">
+              <div class="archive-tabs">
+                <button type="button" class="archive-tab on" data-archive-tab="recruit">Recrutamento</button>
+                <button type="button" class="archive-tab" data-archive-tab="support">Apoio</button>
+              </div>
+              <div id="archive-pane-recruit" class="archive-pane on">
+                <div id="archive-list"></div>
+              </div>
+              <div id="archive-pane-support" class="archive-pane">
+                <div id="archive-support"></div>
+              </div>
             </div>
           </div>
-          <button id="btn-archive-close" class="btn" type="button">Fechar</button>
         </div>
       </div>
+      <p id="archive-aim-hint" class="archive-aim-hint hidden"></p>
 
       <div id="merge-modal" class="hidden">
         <div class="merge-panel">

@@ -266,7 +266,7 @@
       for (var i = 0; i < list.length; i++) {
         var e = list[i];
         if (!e || e.fake) continue;
-        // Keep boss theme while Arklan is broken / gullet / Glinder death sequence
+
         var stillFighting = e.hp > 0 || e.arklanBroken || e.immortal || e.glinderDying || e.mazeHide;
         if (!stillFighting) continue;
         if (!e.def || !e.def.boss) continue;

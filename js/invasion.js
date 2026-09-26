@@ -329,7 +329,7 @@
       state.bossCutscene = null;
       if (state.defeat) return;
       state.camLook = cs.prevLook || null;
-      // keepZoom wins (Arklan P2 must stay at desert zoom-out)
+
       var z = cs.keepZoom != null ? cs.keepZoom : cs.prevZoom;
       if (!(z > 0) || !isFinite(z)) z = 1;
       else z = Math.max(0.15, Math.min(8, z));
@@ -918,7 +918,7 @@
               e.wormSegs = [];
             }
           }
-          // Pre-seed military feast: tanks, trucks, gullet craft, soldiers
+
           (function seedFeast() {
             var kinds = ["tank", "truck", "craft", "soldier", "soldier", "tank", "truck", "soldier", "craft", "soldier"];
             var ki;
@@ -977,13 +977,13 @@
               var dist = Math.hypot(dx, dy) || 1;
               var tx = -dy / dist;
               var ty = dx / dist;
-              // Stronger radial suck; orbit fades as vacuum / close range
+
               var pull = spd * (0.85 + Math.min(2.2, 140 / dist));
               if (vacuum) pull *= 2.4;
               var orbit = vacuum ? 8 : Math.min(70, 18 + dist * 0.12) * Math.min(1, dist / 160);
               d.vx = (d.vx || 0) * (vacuum ? 0.72 : 0.82) + (dx / dist) * pull * dt + tx * orbit * dt;
               d.vy = (d.vy || 0) * (vacuum ? 0.72 : 0.82) + (dy / dist) * pull * dt + ty * orbit * dt;
-              // Hard snap when close so nothing stalls outside the maw
+
               if (dist < (vacuum ? 140 : 70)) {
                 d.x += dx * Math.min(1, dt * (vacuum ? 8 : 4));
                 d.y += dy * Math.min(1, dt * (vacuum ? 8 : 4));
@@ -996,7 +996,7 @@
               var eaten = dist < eatR || (vacuum && dist < eatR * 2.2) || d.life <= 0;
               if (eaten) {
                 var wasBig = d.kind === "tank" || d.kind === "truck" || d.kind === "craft";
-                // Never leave leftovers floating — yank into maw if still far
+
                 if (dist >= eatR * 1.8) {
                   d.x = mouthX;
                   d.y = mouthY;
@@ -1024,7 +1024,7 @@
             pullScrap(cs.debris, force ? 900 : 620, 36, true);
             pullScrap(cs.scraps, force ? 850 : 560, 40, true);
             if (force) {
-              // Nothing left floating after morph seals shut
+
               if ((cs.debris || []).length || (cs.scraps || []).length) {
                 var mouthX = e.x + Math.cos(e.rot || 0) * 36;
                 var mouthY = e.y + Math.sin(e.rot || 0) * 36;
@@ -1041,7 +1041,7 @@
             }
           }
 
-          // 1) Rage + military feast
+
           if (t < feastEnd) {
             k = t / feastEnd;
             e.buried = false;
@@ -1050,7 +1050,7 @@
             e.arklanMech = 0;
             if (t < 0.55) e.mawOpen = Math.min(1, t / 0.55);
             else if (t < feastEnd - 0.65) e.mawOpen = 1;
-            else e.mawOpen = Math.max(0.35, (feastEnd - t) / 0.65); // keep maw ajar while finishing swallows
+            else e.mawOpen = Math.max(0.35, (feastEnd - t) / 0.65);
             cs.mawFace = (cs.mawFace || 0) + dt * (0.5 + k * 0.4);
             e.rot = cs.mawFace;
             e.x = cs.fromX + Math.sin(t * 2.2) * 3;
@@ -1063,7 +1063,7 @@
             state.shake = Math.max(state.shake || 0, 3 + e.mawOpen * 5);
             cs.nextDebris -= dt;
             var feastVacuum = t > feastEnd - 1.1;
-            // Stop spawning near the end so leftovers can be swallowed
+
             if (cs.nextDebris <= 0 && e.mawOpen > 0.3 && !feastVacuum) {
               cs.nextDebris = 0.085 + Math.random() * 0.05;
               var face = e.rot || 0;
@@ -1120,7 +1120,7 @@
                 sand: true
               });
             }
-            // Maw light rays
+
             if (Math.random() < 0.08) {
               cs.rays.push({
                 ang: (e.rot || 0) + (Math.random() - 0.5) * 0.9,
@@ -1139,7 +1139,7 @@
           e.mawOpen = Math.max(0, (e.mawOpen || 0) - dt * 2.2);
           cs.rays = [];
 
-          // 2) Mutation: metal armor erupts from within
+
           if (t < morphEnd) {
             k = (t - feastEnd) / (morphEnd - feastEnd);
             var ease = k * k * (3 - 2 * k);
@@ -1147,7 +1147,7 @@
             e.y += (cs.cy - e.y) * Math.min(1, dt * 1.6);
             e.rot += dt * (1.2 + ease * 3.5);
             e.arklanMech = Math.min(1, ease);
-            // Keep a slight maw opening until leftovers are gone
+
             if ((cs.debris && cs.debris.length) || (cs.scraps && cs.scraps.length)) {
               e.mawOpen = Math.max(e.mawOpen || 0, 0.45);
               vacuumAll(k > 0.55);
@@ -1191,13 +1191,13 @@
             return;
           }
 
-          // Ensure no feast leftovers survive into the seal beat
+
           vacuumAll(true);
           e.arklanMech = 1;
           e.arklanArmor = true;
           e.mawOpen = 0;
 
-          // 3) Seal the four corners + raise perimeter walls
+
           if (t < sealEnd) {
             k = (t - morphEnd) / (sealEnd - morphEnd);
             e.x += (cs.cx - e.x) * Math.min(1, dt * 4);
@@ -1258,7 +1258,7 @@
             return;
           }
 
-          // 4) Center roar — P2 begins
+
           e.x = cs.cx;
           e.y = cs.cy;
           e.buried = false;
@@ -1310,7 +1310,7 @@
           ctx.fillStyle = g;
           ctx.fillRect(0, 0, state.W, state.H);
           if (t < 5.1 && e) {
-            // Maw throat glow (screen wash toward boss)
+
             var mawK = Math.min(1, (e.mawOpen || 0));
             var mg = ctx.createRadialGradient(e.x, e.y, 20, e.x, e.y, 220);
             mg.addColorStop(0, "rgba(255, 120, 40, " + (0.12 * mawK) + ")");
@@ -1338,7 +1338,7 @@
           ctx.save();
           G.applyCamera(ctx, state);
 
-          // Maw light shafts during feast
+
           if (e && t < 5.1 && (cs.rays || []).length) {
             var ri;
             for (ri = 0; ri < cs.rays.length; ri++) {
@@ -1369,7 +1369,7 @@
             ctx.translate(d.x, d.y);
             ctx.rotate(d.spin || 0);
             ctx.scale(z, z);
-            // ground shadow
+
             ctx.fillStyle = "rgba(20, 10, 4, 0.28)";
             ctx.beginPath();
             ctx.ellipse(2, s * 0.55, s * 0.9, s * 0.28, 0, 0, Math.PI * 2);
@@ -1459,7 +1459,7 @@
             ctx.restore();
           }
 
-          // Draw far (small z) first for depth
+
           var sorted = (cs.debris || []).slice().sort(function (a, b) {
             return (a.z || 1) - (b.z || 1);
           });
@@ -1952,7 +1952,7 @@
             state.heirFlash = cs.flashA;
             state.hiveWake = { black: cs.blackA, lids: cs.eyeK, flash: Math.max(cs.flashA, cs.clashFlash || 0) };
             if (!cs.swapped && e && t < T_FADE1) {
-              /* câmera já setada nas fases */
+
             } else if (cs.swapped) {
               state.camLook = { x: cx, y: cy + 42 };
             }

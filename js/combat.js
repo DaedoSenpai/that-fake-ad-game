@@ -557,6 +557,126 @@
     return true;
   }
 
+  function pickMissileLock(state, x, y, ang, avoidId) {
+    var best = null;
+    var bestScore = 1e9;
+    var c = Math.cos(ang || 0);
+    var s = Math.sin(ang || 0);
+    for (var i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (!e || e.id === avoidId || e.hp <= 0 || e.scenery || e.stolen || e.fallen) continue;
+      if (!unitHittable(e)) continue;
+      var dx = e.x - x;
+      var dy = e.y - y;
+      var d = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ahead = (dx * c + dy * s) / d;
+      var score = d - ahead * 110;
+      if (ahead < -0.15) score += 90;
+      if (score < bestScore) {
+        bestScore = score;
+        best = e;
+      }
+    }
+    return best;
+  }
+
+  function updateMissileHoming(state, p, dt) {
+    var spNow = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    var cruise = p.cruise || Math.max(200, spNow || 220);
+    var maxCruise = p.maxCruise || 300;
+    var have = spNow > 12 ? Math.atan2(p.vy, p.vx) : (p.launchAng != null ? p.launchAng : -Math.PI / 2);
+
+    var tgt = null;
+    if (p.homeId) tgt = findEnemy(state, p.homeId);
+    if (!tgt || tgt.hp <= 0) {
+      p.homeId = 0;
+      tgt = pickMissileLock(state, p.x, p.y, have, 0);
+      if (tgt) p.homeId = tgt.id;
+    }
+
+    if (!tgt && p.homeCursor) {
+      var ap = aimPoint(state);
+      var cdx = ap.x - p.x;
+      var cdy = ap.y - p.y;
+      if (cdx * cdx + cdy * cdy > 64 * 64) tgt = ap;
+    }
+
+    if (tgt) {
+      var hx = tgt.x - p.x;
+      var hy = tgt.y - p.y;
+      var hl = Math.sqrt(hx * hx + hy * hy) || 1;
+      if (hl > 16) {
+        var want = Math.atan2(hy, hx);
+        var diff = Math.atan2(Math.sin(want - have), Math.cos(want - have));
+        var maxTurn = (p.turnRate != null ? p.turnRate : 5.5) * dt;
+        if (diff > maxTurn) diff = maxTurn;
+        if (diff < -maxTurn) diff = -maxTurn;
+        have += diff;
+        cruise = Math.min(cruise + 55 * dt, maxCruise);
+      }
+    } else {
+      cruise = Math.min(Math.max(cruise, 190) + 35 * dt, maxCruise);
+    }
+
+    p.cruise = cruise;
+    p.vx = Math.cos(have) * cruise;
+    p.vy = Math.sin(have) * cruise;
+
+    p.trailT = (p.trailT || 0) - dt;
+    if (p.trailT <= 0 && state.particles) {
+      p.trailT = 0.028;
+      var bx = p.x - Math.cos(have) * 10;
+      var by = p.y - Math.sin(have) * 10;
+      state.particles.push({
+        x: bx + (Math.random() - 0.5) * 4,
+        y: by + (Math.random() - 0.5) * 4,
+        vx: -Math.cos(have) * (18 + Math.random() * 24) + (Math.random() - 0.5) * 16,
+        vy: -Math.sin(have) * (18 + Math.random() * 24) + (Math.random() - 0.5) * 16,
+        life: 0.28 + Math.random() * 0.22,
+        max: 0.5,
+        size: 2.5 + Math.random() * 3.5,
+        color: Math.random() > 0.55 ? "#c8a0ff" : "#ff9a4a"
+      });
+      if (Math.random() > 0.45) {
+        state.particles.push({
+          x: bx,
+          y: by,
+          vx: (Math.random() - 0.5) * 12,
+          vy: (Math.random() - 0.5) * 12,
+          life: 0.4 + Math.random() * 0.25,
+          max: 0.65,
+          size: 4 + Math.random() * 5,
+          color: "rgba(90, 80, 100, 0.45)"
+        });
+      }
+    }
+  }
+
+  function missileExplode(state, x, y, radius, dmg, team) {
+    var r = radius || 40;
+    explode(state, x, y, r, dmg, team, "#e8b0ff");
+    G.burst(state, x, y, "#fff6ff", 14, 150);
+    G.burst(state, x, y, "#ff8a3a", 22, 260);
+    G.burst(state, x, y, "#c46bff", 10, 90);
+    if (state.particles) {
+      var k;
+      for (k = 0; k < 8; k++) {
+        var a = (Math.PI * 2 * k) / 8 + Math.random() * 0.4;
+        state.particles.push({
+          x: x,
+          y: y,
+          vx: Math.cos(a) * (40 + Math.random() * 70),
+          vy: Math.sin(a) * (40 + Math.random() * 70) - 20,
+          life: 0.45 + Math.random() * 0.3,
+          max: 0.75,
+          size: 5 + Math.random() * 6,
+          color: k % 2 ? "rgba(70, 60, 80, 0.5)" : "#ffb070"
+        });
+      }
+    }
+    if (G.boomFx) G.boomFx(state, x, y, r * 1.15, "#ff9a4a");
+  }
+
   function explode(state, x, y, radius, dmg, team, extraColor) {
     var col = extraColor || (team === "player" ? "#ffd24a" : "#ff5a32");
     G.burst(state, x, y, col, 28, 210);
@@ -767,7 +887,7 @@
         }
       }
       if (!keepZ) {
-        // Stay at desert zoom-out if that fight was using it
+
         state.camZoomTo = state.desertZoom > 0 ? state.desertZoom : 1;
       }
       state.arklanCage = null;
@@ -778,6 +898,85 @@
       var owner = findEnemy(state, e.ownerId);
       if (owner && owner.cloneCd) owner.cloneCd[e.cloneSlot | 0] = 30;
     }
+    if (e.def && e.def.boss && !e.fake && !e.fallen) queueBossPurge(state, e);
+  }
+
+  function bossStillFighting(state, exceptId) {
+    for (var i = 0; i < state.enemies.length; i++) {
+      var b = state.enemies[i];
+      if (!b || b.id === exceptId || !b.def || !b.def.boss) continue;
+      if (b.fake || b.fallen || b.scenery) continue;
+      var kind = b.def.kind || "";
+      if (kind.indexOf("mini_") === 0) continue;
+      if (b.glinderDying || b.arklanBroken) return true;
+      if (b.hp > 0) return true;
+    }
+    return false;
+  }
+
+  function queueBossPurge(state, boss) {
+    if (!boss || bossStillFighting(state, boss.id)) return;
+    if (state.spawnQueue && state.spawnQueue.length) state.spawnQueue.length = 0;
+    var list = [];
+    var i;
+    for (i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (!e || e.id === boss.id) continue;
+      if (e.hp <= 0 && !e.glinderDying) continue;
+      if (e.stolen || e.scenery || e.fallen || e.immortal || e.arklanBroken) continue;
+      if (e.def && e.def.boss) {
+        var kind = e.def.kind || "";
+        if (kind.indexOf("mini_") !== 0) continue;
+      }
+      var d = Math.hypot(e.x - boss.x, e.y - boss.y);
+      list.push({ id: e.id, delay: 0.04 + d * 0.00135 + list.length * 0.018 });
+    }
+    if (!list.length) return;
+    list.sort(function (a, b) {
+      return a.delay - b.delay;
+    });
+    state.bossPurge = list;
+    state.shake = Math.max(state.shake || 0, 10);
+    if (G.audio && G.audio.explosion) G.audio.explosion();
+    if (G.boomFx) G.boomFx(state, boss.x, boss.y, 90, (boss.def && boss.def.color) || "#ffe08a");
+    if (state.projectiles && state.projectiles.length) {
+      state.projectiles = state.projectiles.filter(function (p) {
+        return p.team === "player";
+      });
+    }
+  }
+
+  function tickBossPurge(state, dt) {
+    var list = state.bossPurge;
+    if (!list || !list.length) return;
+    var i;
+    for (i = list.length - 1; i >= 0; i--) {
+      var item = list[i];
+      item.delay -= dt;
+      if (item.delay > 0) continue;
+      var e = null;
+      for (var ei = 0; ei < state.enemies.length; ei++) {
+        if (state.enemies[ei].id === item.id) {
+          e = state.enemies[ei];
+          break;
+        }
+      }
+      list.splice(i, 1);
+      if (!e || e.hp <= 0 || e.stolen || e.scenery || e.fallen) continue;
+      if (e.def && e.def.boss) {
+        var kind = e.def.kind || "";
+        if (kind.indexOf("mini_") !== 0) continue;
+      }
+      e.noDrop = true;
+      e.hp = 0;
+      e.vx = 0;
+      e.vy = 0;
+      G.burst(state, e.x, e.y, (e.def && e.def.color) || "#ff6b6b", 16, 110);
+      G.burst(state, e.x, e.y, "#fff4d0", 8, 60);
+      if (G.boomFx) G.boomFx(state, e.x, e.y, 28 + (e.def && e.def.size ? e.def.size * 0.4 : 0), "#ff9a3a");
+      state.shake = Math.max(state.shake || 0, 3);
+    }
+    if (!list.length) state.bossPurge = null;
   }
 
   function fireAt(state, u, target) {
@@ -7155,7 +7354,7 @@
       var seg = e.wormSegs[i];
       seg.age = (seg.age || 0) + dt;
       seg.wig = (seg.wig || 0) + dt * (5.5 + (i % 5) * 0.35);
-      // Visual wiggle perpendicular to body
+
       var nx = -Math.sin(seg.rot || 0);
       var ny = Math.cos(seg.rot || 0);
       var amp = (seg.wigAmp || 4) * (0.7 + Math.sin(seg.wig + i * 0.4) * 0.3);
@@ -7195,7 +7394,7 @@
   function resolveWormWalls(state, ox, oy) {
     if (!state.enemies || !state.squad) return;
     if (state.arklanGullet) return;
-    // Dash atravessa o corpo; andar normal não.
+
     if (state.dashActive || (state.dashT || 0) > 0) return;
     var sx = state.squad.x;
     var sy = state.squad.y;
@@ -7531,7 +7730,7 @@
     }
 
     if (e.wormAct === "chomp") {
-      // 1) approach underground toward predicted squad (locked aim)
+
       if ((e.chompApproach || 0) > 0) {
         e.chompApproach -= dt;
         wormTunnelToward(state, e, e.chompX, e.chompY, 340, dt);
@@ -7557,7 +7756,7 @@
         }
         return;
       }
-      // 2) rumble telegraph — mound grows on LOCKED spot (no chase)
+
       if ((e.chompRumble || 0) > 0) {
         e.chompRumble -= dt;
         e.x += (e.chompX - e.x) * Math.min(1, 5.5 * dt);
@@ -7963,7 +8162,7 @@
       return;
     }
 
-    // Idle: always tunnel underground, leave body-wall
+
     wormTunnelToward(state, e, target.x, target.y, rage || p2 ? 118 : 96, dt);
     e.wormT -= dt;
     if (e.wormT > 0) return;
@@ -8096,7 +8295,7 @@
       return;
     }
 
-    // Sandstorm
+
     var sb = G.playfield(state);
     var stormSpots = [];
     var room = Math.max(0, 3 - countSandstorms(state));
@@ -8377,7 +8576,7 @@
 
   function tryDash(state) {
     if (state.paused || state.userPaused || state.stageOutro || state.defeat || (G.invasion && G.invasion.cinematic(state))) return false;
-    if (state.arklanGullet || state.arklanSpit) return false; // plane dash is owned by arklan-p2
+    if (state.arklanGullet || state.arklanSpit) return false;
     if (state.glinderBurn || (state.glinderMaze && state.glinderMaze.phase === "build")) return false;
     if (state.timeLock && state.timeLock.phase !== "slow") return false;
     if ((state.dashCd || 0) > 0) return false;
@@ -8488,7 +8687,7 @@
     if (state.dashCd > 0) state.dashCd = Math.max(0, state.dashCd - dt);
     state.dashStep = null;
     if (state.arklanGullet) {
-      // Gullet side-scroller owns craft movement (free 2D in tickGullet).
+
       state.dashActive = false;
       state.dashT = 0;
       state.dashSlideT = 0;
@@ -8656,7 +8855,7 @@
     for (var j = 0; j < alive.length; j++) {
       var u = alive[j];
       if (u.activeHeld) {
-        /* banner planted: CD does not tick */
+
       } else if (u.activeCd > 0) u.activeCd -= dt;
       if ((u.extraActiveCd || 0) > 0) u.extraActiveCd = Math.max(0, u.extraActiveCd - dt);
       if ((u.doubleGunT || 0) > 0) u.doubleGunT = Math.max(0, u.doubleGunT - dt);
@@ -8950,7 +9149,7 @@
         if (d < e.def.range + target.def.size && e.contactCd <= 0) {
           e.contactCd = 0.32;
           if (!e.stolen && G.tactics && G.tactics.skipContact && G.tactics.skipContact(state, e)) {
-            /* frontal armor */
+
           } else if (isDecoy(e)) applyVeilNuisance(state, target, e);
           else {
             hurt(state, target, e.def.dmg, e.x, e.y, !!e.stolen);
@@ -9632,24 +9831,30 @@
         continue;
       }
       if (p.homing) {
-        var tgt = null;
-        if (p.team === "player") {
-          if (p.homeId) tgt = findEnemy(state, p.homeId);
-          if (!tgt) {
-            var ap = aimPoint(state);
-            tgt = { x: ap.x, y: ap.y };
-          }
+        if (p.kind === "missile" && p.team === "player") {
+          updateMissileHoming(state, p, dt);
         } else {
-          tgt = nearest(state.units, p.x, p.y);
-        }
-        if (tgt) {
-          var hx = tgt.x - p.x;
-          var hy = tgt.y - p.y;
-          var hl = Math.sqrt(hx * hx + hy * hy) || 1;
-          var sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy) || 210;
-          var steer = p.steer != null ? p.steer : (p.homeId && !p.homeCursor ? 0.2 : 0.16);
-          p.vx = p.vx * (1 - steer) + (hx / hl) * sp * steer;
-          p.vy = p.vy * (1 - steer) + (hy / hl) * sp * steer;
+          var tgt = null;
+          if (p.team === "player") {
+            if (p.homeId) tgt = findEnemy(state, p.homeId);
+            if (!tgt) {
+              var ap = aimPoint(state);
+              tgt = { x: ap.x, y: ap.y };
+            }
+          } else {
+            tgt = nearest(state.units, p.x, p.y);
+          }
+          if (tgt) {
+            var hx = tgt.x - p.x;
+            var hy = tgt.y - p.y;
+            var hl = Math.sqrt(hx * hx + hy * hy) || 1;
+            var sp = Math.sqrt(p.vx * p.vx + p.vy * p.vy) || 210;
+            if (hl > 20) {
+              var steer = p.steer != null ? p.steer : (p.homeId && !p.homeCursor ? 0.2 : 0.16);
+              p.vx = p.vx * (1 - steer) + (hx / hl) * sp * steer;
+              p.vy = p.vy * (1 - steer) + (hy / hl) * sp * steer;
+            }
+          }
         }
       }
       p.x += p.vx * dt;
@@ -9657,7 +9862,10 @@
       p.life -= dt;
       var b = G.playfield(state);
       if (p.life <= 0 || p.x < b.x0 - 36 || p.y < b.y0 - 36 || p.x > b.x1 + 36 || p.y > b.y1 + 36) {
-        if (p.kind === "missile") explode(state, p.x, p.y, p.boomR || 72, p.dmg, p.team);
+        if (p.kind === "missile") {
+          if (p.team === "player") missileExplode(state, p.x, p.y, p.boomR || 72, p.dmg, p.team);
+          else explode(state, p.x, p.y, p.boomR || 72, p.dmg, p.team);
+        }
         if (p.popCluster && G.tactics && G.tactics.spawnCluster) G.tactics.spawnCluster(state, p.x, p.y, p.clusterDmg || p.dmg, 1);
         state.projectiles.splice(i, 1);
         continue;
@@ -9728,7 +9936,8 @@
       if (p.kind === "grenade" || p.kind === "missile" || p.kind === "crate") {
         var br = p.kind === "missile" ? (p.boomR || 72) : (p.boomR || 52);
         if (p.team === "player") br += boomAdd(state);
-        explode(state, p.x, p.y, br, p.dmg, p.team);
+        if (p.kind === "missile" && p.team === "player") missileExplode(state, p.x, p.y, br, p.dmg, p.team);
+        else explode(state, p.x, p.y, br, p.dmg, p.team);
       }
       else if (p.team === "enemy" && ((p.boomR || 0) > 0 || p.kind === "ember")) {
         var boomR = p.boomR || 42;
@@ -9894,7 +10103,7 @@
           if (Math.hypot(uu.x - w.x, uu.y - w.y) <= (w.r || 62) + 8) uu.poisonT = Math.max(uu.poisonT || 0, 4);
         }
       } else if (w.kind === "mark" || w.kind === "lane" || w.kind === "cone" || w.kind === "tp" || w.kind === "spin" || w.kind === "slash" || w.kind === "half") {
-        /* telegraph only */
+
       } else if (w.kind === "honeydrop") {
         var drop = G.createProjectile({
           x: w.x,
@@ -10207,7 +10416,7 @@
         for (var fi = 0; fi < nFan; fi++) {
           var angF = Math.atan2(picks[fi].y - host.y, picks[fi].x - host.x);
           if (G.tactics && G.tactics.bolt) {
-            /* tactics bolt not exported */
+
           }
           C().hurt(state, picks[fi], Math.round(host.def.dmg * dmgMul(state) * sm), host.x, host.y, true);
         }
@@ -10248,6 +10457,7 @@
       if (state.run.activeDmg == null) state.run.activeDmg = 0;
       if (state.honeyT > 0) state.honeyT = Math.max(0, state.honeyT - dt);
       if (state.royalMarkT > 0) state.royalMarkT = Math.max(0, state.royalMarkT - dt);
+      tickBossPurge(state, dt);
       var hasVulto = false;
       for (var vt = 0; vt < (state.enemies || []).length; vt++) {
         if (state.enemies[vt].hp > 0 && state.enemies[vt].type === "chefe_vulto") hasVulto = true;

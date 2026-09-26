@@ -129,7 +129,7 @@
       : "A linha quebrou na fase " + (state.stageIndex + 1) + ".";
     var rows = [
       ["Fase", (state.stageIndex + 1) + " · " + stage.name],
-      ["Onda", (state.waveIndex + 1) + "/" + ((stage.waves && stage.waves.length) || 1)],
+      ["Onda", (state.waveIndex + 1) + "/" + (((state.stageWaves && state.stageWaves.length) || (stage.waves && stage.waves.length)) || 1)],
       ["Abates", String((state.run && state.run.kills) | 0)],
       ["Moedas", "+" + coins + " pro cofre"]
     ];
@@ -973,10 +973,19 @@
   var archiveDrag = null;
 
   function archiveUnitById(id) {
-    for (var i = 0; i < state.units.length; i++) {
+    var i;
+    for (i = 0; i < state.units.length; i++) {
       if (state.units[i].id === id) return state.units[i];
     }
+    var bench = state.run && state.run.bench;
+    for (i = 0; bench && i < bench.length; i++) {
+      if (bench[i].id === id) return bench[i];
+    }
     return null;
+  }
+
+  function archiveOnField(unit) {
+    return !!(unit && !unit.benched && state.units.indexOf(unit) >= 0);
   }
 
   function setArchiveHint(msg) {
@@ -986,26 +995,39 @@
 
   function archiveRing(i, n) {
     var angle = -Math.PI / 2 + (i / Math.max(1, n)) * Math.PI * 2;
-    var r = 0.32 + Math.max(0, n - 3) * 0.022;
+    var r = 0.34;
     return { x: 50 + Math.cos(angle) * r * 100, y: 50 + Math.sin(angle) * r * 100 };
+  }
+
+  function archiveRoot() {
+    return document.getElementById("archive-formation") || document.getElementById("archive-board");
   }
 
   function clearArchiveDrag() {
     if (archiveDrag && archiveDrag.el) {
-      archiveDrag.el.classList.remove("lift");
-      archiveDrag.el.style.left = archiveDrag.homeX + "%";
-      archiveDrag.el.style.top = archiveDrag.homeY + "%";
+      var dragged = archiveDrag.el;
+      dragged.classList.remove("lift");
+      dragged.style.position = "";
+      dragged.style.margin = "";
+      dragged.style.zIndex = "";
+      if (dragged.dataset.zone === "bench") {
+        dragged.style.left = "";
+        dragged.style.top = "";
+      } else {
+        dragged.style.left = archiveDrag.homeX + "%";
+        dragged.style.top = archiveDrag.homeY + "%";
+      }
     }
     archiveDrag = null;
-    var board = document.getElementById("archive-board");
+    var board = archiveRoot();
     if (!board) return;
     board.querySelectorAll(".archive-piece").forEach(function (el) {
-      el.classList.remove("merge-ok", "merge-hover", "lift");
+      el.classList.remove("merge-ok", "merge-hover", "lift", "swap-ok", "drop-ok");
     });
   }
 
   function archivePieceAt(clientX, clientY, skipId) {
-    var board = document.getElementById("archive-board");
+    var board = archiveRoot();
     if (!board) return null;
     var best = null;
     var bestD = 40;
@@ -1073,10 +1095,23 @@
     var s;
     for (s = 0; s < n; s++) {
       var pos = archiveRing(s, n);
-      if (s < soldiers.length) placePiece(soldiers[s], pos.x, pos.y, "");
-      else placePiece(null, pos.x, pos.y, "empty");
+      var fieldEl = s < soldiers.length ? placePiece(soldiers[s], pos.x, pos.y, "") : placePiece(null, pos.x, pos.y, "empty");
+      fieldEl.dataset.zone = "field";
     }
-    setArchiveHint("Arrasta duas peças iguais uma em cima da outra.");
+    var dock = document.getElementById("archive-bench");
+    if (dock) {
+      dock.innerHTML = "";
+      var bench = G.merge.benchList(state);
+      var slots = G.merge.BENCH_MAX;
+      for (s = 0; s < slots; s++) {
+        var benchEl = s < bench.length ? placePiece(bench[s], 0, 0, "bench") : placePiece(null, 0, 0, "empty bench");
+        benchEl.dataset.zone = "bench";
+        benchEl.style.left = "";
+        benchEl.style.top = "";
+        dock.appendChild(benchEl);
+      }
+    }
+    setArchiveHint("Arrasta duas iguais pra fundir. Tipos diferentes trocam de lugar.");
   }
 
   function onArchiveBoardDown(ev) {
@@ -1095,12 +1130,20 @@
       pointer: ev.pointerId
     };
     piece.classList.add("lift");
-    var board = document.getElementById("archive-board");
+    var board = archiveRoot();
     if (!board) return;
     if (board.setPointerCapture) {
       try { board.setPointerCapture(ev.pointerId); } catch (err) {}
     }
-    board.querySelectorAll(".archive-piece:not(.empty):not(.cmd)").forEach(function (el) {
+    var fromField = archiveOnField(unit);
+    board.querySelectorAll(".archive-piece:not(.cmd)").forEach(function (el) {
+      if ((el.dataset.id | 0) === unit.id) return;
+      if (el.classList.contains("empty")) {
+        var zone = el.dataset.zone;
+        if (fromField && zone === "bench" && G.merge.benchRoom(state)) el.classList.add("drop-ok");
+        if (!fromField && zone === "field" && G.soldierCount(state) < G.maxUnits()) el.classList.add("drop-ok");
+        return;
+      }
       var other = archiveUnitById(el.dataset.id | 0);
       if (!other || other.id === unit.id) return;
       if (
@@ -1110,46 +1153,126 @@
         G.merge.openOptions(state, unit.def.merge).length
       ) {
         el.classList.add("merge-ok");
+      } else if (archiveOnField(unit) !== archiveOnField(other)) {
+        el.classList.add("swap-ok");
       }
     });
-    if (!G.merge.canEvolve(unit)) setArchiveHint(unit.def.name + " já está no topo da pirâmide.");
-    else if (!G.merge.openOptions(state, unit.def.merge).length) setArchiveHint("Já tem o máximo dessa evolução.");
-    else setArchiveHint("Solta em cima de outro " + unit.def.name + " pra merge.");
+    if (!G.merge.canEvolve(unit)) setArchiveHint(unit.def.name + " não sobe mais. Solta na reserva ou no campo pra trocar.");
+    else if (!G.merge.openOptions(state, unit.def.merge).length) setArchiveHint("Já tem o máximo dessa evolução. Ainda dá pra trocar com a reserva.");
+    else setArchiveHint("Solta em cima de outro " + unit.def.name + " pra merge, ou num tipo diferente pra trocar.");
   }
 
   function onArchiveBoardMove(ev) {
     if (!archiveDrag) return;
-    var board = document.getElementById("archive-board");
+    var board = archiveRoot();
     if (!board) return;
-    var r = board.getBoundingClientRect();
-    if (r.width < 8 || r.height < 8) return;
-    var x = ((ev.clientX - r.left) / r.width) * 100;
-    var y = ((ev.clientY - r.top) / r.height) * 100;
-    archiveDrag.el.style.left = Math.max(8, Math.min(92, x)) + "%";
-    archiveDrag.el.style.top = Math.max(8, Math.min(92, y)) + "%";
+    var el = archiveDrag.el;
+    var w = el.offsetWidth || 58;
+    el.style.position = "fixed";
+    el.style.margin = "0";
+    el.style.zIndex = "30";
+    el.style.left = (ev.clientX - w / 2) + "px";
+    el.style.top = (ev.clientY - w / 2) + "px";
     board.querySelectorAll(".archive-piece.merge-hover").forEach(function (el) {
       el.classList.remove("merge-hover");
     });
-    var over = archivePieceAt(ev.clientX, ev.clientY, archiveDrag.id);
-    if (over && over.classList.contains("merge-ok")) {
+    var over = archiveDropAt(ev.clientX, ev.clientY, archiveDrag.id);
+    if (over && (over.classList.contains("merge-ok") || over.classList.contains("swap-ok") || over.classList.contains("drop-ok"))) {
       over.classList.add("merge-hover");
-      var other = archiveUnitById(over.dataset.id | 0);
-      if (other) {
-        var mergeCost = G.merge.pickCost(G.merge.openOptions(state, other.def.merge));
-        setArchiveHint(
-          mergeCost
-            ? "Solta pra fundir dois " + other.def.name + " — Colosso custa " + mergeCost + " arquivos."
-            : "Solta pra fundir dois " + other.def.name + "."
-        );
+      if (over.classList.contains("merge-ok")) {
+        var other = archiveUnitById(over.dataset.id | 0);
+        if (other) {
+          var mergeCost = G.merge.pickCost(G.merge.openOptions(state, other.def.merge));
+          setArchiveHint(
+            mergeCost
+              ? "Solta pra fundir dois " + other.def.name + " — Colosso custa " + mergeCost + " arquivos."
+              : "Solta pra fundir dois " + other.def.name + "."
+          );
+        }
+      } else if (over.classList.contains("swap-ok")) {
+        setArchiveHint("Solta pra trocar campo e reserva.");
+      } else if (over.dataset.zone === "bench") {
+        setArchiveHint("Solta pra mandar pra reserva.");
+      } else {
+        setArchiveHint("Solta pra colocar em campo.");
       }
     }
   }
 
+  function archiveDropAt(clientX, clientY, skipId) {
+    var unitHit = archivePieceAt(clientX, clientY, skipId);
+    if (unitHit) return unitHit;
+    var board = archiveRoot();
+    if (!board) return null;
+    var best = null;
+    var bestD = 36;
+    var nodes = board.querySelectorAll(".archive-piece.empty");
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var r = el.getBoundingClientRect();
+      var d = Math.hypot(clientX - (r.left + r.width / 2), clientY - (r.top + r.height / 2));
+      if (d < bestD) {
+        best = el;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  function finishArchiveSwap() {
+    G.audio.ui();
+    renderArchiveBoard();
+    renderArchiveList();
+  }
+
   function onArchiveBoardUp(ev) {
     if (!archiveDrag) return;
-    var over = archivePieceAt(ev.clientX, ev.clientY, archiveDrag.id);
+    var over = archiveDropAt(ev.clientX, ev.clientY, archiveDrag.id);
     var a = archiveDrag.unit;
-    var b = over ? archiveUnitById(over.dataset.id | 0) : null;
+    var b = over && !over.classList.contains("empty") ? archiveUnitById(over.dataset.id | 0) : null;
+    if (over && over.classList.contains("empty") && a) {
+      var zone = over.dataset.zone;
+      clearArchiveDrag();
+      if (zone === "bench" && archiveOnField(a)) {
+        if (G.merge.placeBench(state, a)) {
+          finishArchiveSwap();
+          setArchiveHint(a.def.name + " foi pra reserva.");
+          return;
+        }
+        setArchiveHint("Reserva cheia.");
+        return;
+      }
+      if (zone === "field" && a.benched) {
+        if (G.soldierCount(state) >= G.maxUnits()) {
+          setArchiveHint("Esquadrão cheio.");
+          return;
+        }
+        var pos = { x: state.squad.x, y: state.squad.y };
+        G.merge.placeField(state, a, pos.x + 18, pos.y + 12);
+        finishArchiveSwap();
+        setArchiveHint(a.def.name + " entrou em campo.");
+        return;
+      }
+      setArchiveHint("Arrasta duas iguais pra merge. Tipos diferentes, entre campo e reserva, trocam de lugar.");
+      return;
+    }
+    if (a && b && a.kind !== b.kind && archiveOnField(a) !== archiveOnField(b)) {
+      var field = archiveOnField(a) ? a : b;
+      var reserved = field === a ? b : a;
+      var fx = field.x;
+      var fy = field.y;
+      clearArchiveDrag();
+      G.merge.pullUnit(state, reserved);
+      if (!G.merge.placeBench(state, field)) {
+        G.merge.placeField(state, reserved, fx, fy);
+        setArchiveHint("Reserva cheia.");
+        return;
+      }
+      G.merge.placeField(state, reserved, fx, fy);
+      finishArchiveSwap();
+      setArchiveHint(reserved.def.name + " entrou no lugar de " + field.def.name + ".");
+      return;
+    }
     var pending = G.merge.pairPending(state, a, b, { fromBoard: true });
     clearArchiveDrag();
     if (pending) {
@@ -1177,19 +1300,48 @@
   }
 
   function bindArchiveBoard() {
-    var board = document.getElementById("archive-board");
+    var board = archiveRoot();
     if (!board || board.dataset.bound) return;
     board.dataset.bound = "1";
     board.addEventListener("pointerdown", onArchiveBoardDown);
     board.addEventListener("pointermove", onArchiveBoardMove);
     board.addEventListener("pointerup", onArchiveBoardUp);
     board.addEventListener("pointercancel", onArchiveBoardUp);
+    var tabs = document.querySelector(".archive-tabs");
+    if (tabs && !tabs.dataset.bound) {
+      tabs.dataset.bound = "1";
+      tabs.addEventListener("click", function (ev) {
+        var btn = ev.target.closest ? ev.target.closest("[data-archive-tab]") : null;
+        if (!btn) return;
+        G.audio.ui();
+        setArchiveTab(btn.getAttribute("data-archive-tab"));
+      });
+    }
+  }
+
+  var archiveTab = "recruit";
+
+  function setArchiveTab(tab) {
+    archiveTab = tab === "support" ? "support" : "recruit";
+    document.querySelectorAll(".archive-tab").forEach(function (btn) {
+      btn.classList.toggle("on", btn.getAttribute("data-archive-tab") === archiveTab);
+    });
+    var recruit = document.getElementById("archive-pane-recruit");
+    var support = document.getElementById("archive-pane-support");
+    if (recruit) recruit.classList.toggle("on", archiveTab === "recruit");
+    if (support) support.classList.toggle("on", archiveTab === "support");
+    var pane = archiveTab === "support" ? support : recruit;
+    if (pane) {
+      pane.style.animation = "none";
+      void pane.offsetWidth;
+      pane.style.animation = "";
+    }
   }
 
   function renderArchiveList() {
     var intel = G.merge.ensureIntel(state.run);
     var n = intel.arquivo | 0;
-    document.getElementById("archive-count").textContent = n === 1 ? "1 arquivo" : n + " arquivos";
+    document.getElementById("archive-count").textContent = String(n);
     var box = document.getElementById("archive-list");
     box.innerHTML = "";
 
@@ -1222,13 +1374,14 @@
     }
 
     var room = G.soldierCount(state) < G.maxUnits();
-    var canHire = n >= 1 && room;
+    var benchRoom = G.merge.benchRoom(state);
+    var canHire = n >= 1 && (room || benchRoom);
     addRow({
       special: true,
       kind: "recruta",
       name: "Convocar recruta",
-      sub: room ? "Nasce ao lado do comandante" : "Esquadrão cheio",
-      price: !room ? "cheio" : canHire ? "1 arq." : "faltam " + (1 - n),
+      sub: room ? "Nasce ao lado do comandante" : benchRoom ? "Esquadrão cheio — vai pra reserva" : "Esquadrão e reserva cheios",
+      price: !room && !benchRoom ? "cheio" : canHire ? "1 arq." : "faltam " + (1 - n),
       ok: canHire,
       onclick: function () {
         if (!G.tactics.recruitWithArquivo(state)) {
@@ -1241,6 +1394,8 @@
         renderArchiveList();
       }
     });
+
+    renderArchiveSupport();
 
     var roster = G.merge.listRoster(state);
     if (!roster.length) {
@@ -1257,11 +1412,11 @@
       addRow({
         kind: u.kind,
         name: u.def.name,
-        sub: !G.merge.canEvolve(u)
+        sub: (u.benched ? "Reserva · " : "") + (!G.merge.canEvolve(u)
           ? "Nível " + (u.gen | 0) + " · no topo da pirâmide"
           : !can
             ? "Nível " + (u.gen | 0) + " · já tem o máximo dessa evolução"
-            : "Nível " + (u.gen | 0) + " · " + G.unitStatsLine(u.def),
+            : "Nível " + (u.gen | 0) + " · " + G.unitStatsLine(u.def)),
         price: !can ? "—" : afford ? cost + " arq." : "faltam " + (cost - n),
         ok: can && afford,
         onclick: function () {
@@ -1278,18 +1433,99 @@
     });
   }
 
+  function renderArchiveSupport() {
+    var box = document.getElementById("archive-support");
+    if (!box || !G.tactics.supportCatalog) return;
+    box.innerHTML = "";
+    var calls = G.tactics.supportCatalog(state);
+    if (calls[0] && (calls[0].hot || calls[0].streak)) {
+      var note = document.createElement("p");
+      note.className = "archive-board-hint";
+      note.textContent = calls[0].hot ? "Rádio quente: o próximo sai 4 mais barato." : calls[0].streak + "/12 abates até o rádio esquentar.";
+      box.appendChild(note);
+    }
+    calls.forEach(function (opt) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "archive-row archive-call";
+      btn.disabled = !opt.ok;
+      var art = document.createElement("canvas");
+      art.className = "archive-art";
+      art.width = 56;
+      art.height = 56;
+      G.tactics.drawSupportIcon(art, opt.id);
+      var meta = document.createElement("span");
+      meta.className = "archive-meta";
+      var title = document.createElement("b");
+      title.textContent = opt.name;
+      var sub = document.createElement("small");
+      sub.textContent = opt.sub;
+      meta.appendChild(title);
+      meta.appendChild(sub);
+      var price = document.createElement("span");
+      price.className = "archive-cost";
+      price.textContent = opt.price;
+      btn.appendChild(art);
+      btn.appendChild(meta);
+      btn.appendChild(price);
+      if (opt.ok) {
+        btn.onclick = function () {
+          if (opt.aim) {
+            beginSupportAim(opt);
+            return;
+          }
+          if (!G.tactics.queueSupport(state, opt.id)) {
+            renderArchiveSupport();
+            return;
+          }
+          G.audio.ui();
+          renderArchiveList();
+        };
+      }
+      box.appendChild(btn);
+    });
+  }
+
+  function beginSupportAim(opt) {
+    state.supportAim = { id: opt.id, cost: opt.cost, drag: false };
+    document.getElementById("archive-modal").classList.add("aiming");
+    var hint = document.getElementById("archive-aim-hint");
+    hint.textContent = opt.aim === "drag"
+      ? opt.name + ": arraste a mira para marcar o lado. Esc cancela."
+      : opt.name + ": clique na mira. Esc cancela.";
+    hint.classList.remove("hidden");
+    G.audio.ui();
+  }
+
+  function endSupportAim() {
+    state.supportAim = null;
+    var modal = document.getElementById("archive-modal");
+    if (modal) modal.classList.remove("aiming");
+    var hint = document.getElementById("archive-aim-hint");
+    if (hint) hint.classList.add("hidden");
+  }
+
   function openArchive() {
     if (state.mode !== "play" || state.defeat || state.userPaused || state.pendingMerge) return;
     state.archiveMenu = true;
     syncFreeze();
     bindArchiveBoard();
+    setArchiveTab(archiveTab);
     renderArchiveBoard();
     renderArchiveList();
-    document.getElementById("archive-modal").classList.remove("hidden");
+    var modal = document.getElementById("archive-modal");
+    var panel = modal && modal.querySelector(".archive-panel");
+    modal.classList.remove("hidden");
+    if (panel) {
+      panel.style.animation = "none";
+      void panel.offsetWidth;
+      panel.style.animation = "";
+    }
   }
 
   function closeArchive() {
     clearArchiveDrag();
+    endSupportAim();
     state.archiveMenu = false;
     var modal = document.getElementById("archive-modal");
     if (modal) modal.classList.add("hidden");
@@ -1645,6 +1881,21 @@
     state.pointer.sy = p.sy;
     if (state.mode === "play") state.pointer.live = true;
     state.pointer.touch = !!(ev.touches && ev.touches.length);
+    if (state.supportAim && state.archiveMenu) {
+      ev.preventDefault();
+      if (state.supportAim.id === "curtain") {
+        state.supportAim.drag = true;
+        state.supportAim.x0 = p.x;
+        state.supportAim.y0 = p.y;
+        var hint = document.getElementById("archive-aim-hint");
+        if (hint) hint.classList.add("hidden");
+      } else if (G.tactics.confirmSupportAim(state, state.supportAim.id, { x: p.x, y: p.y })) {
+        G.audio.ui();
+        endSupportAim();
+        renderArchiveList();
+      }
+      return;
+    }
     if (state.userPaused) {
       updateInspect();
       return;
@@ -1688,7 +1939,7 @@
     if (state.arklanGullet) {
       var gul = state.arklanGullet;
       if (gul.phase !== "scroll" && gul.phase !== "heart" && gul.phase !== "valve") return;
-      // Gullet uses screen-space craft; keep pointer world coords for steerGulletCraft
+
       ev.preventDefault();
       if (state.pointer.moveSquad) {
         state.pointer.x = p.x;
@@ -1715,6 +1966,25 @@
       return;
     }
     ev.preventDefault();
+    if (state.supportAim && state.supportAim.drag) {
+      var pAim = pointerPos(ev);
+      var dx = pAim.x - state.supportAim.x0;
+      var dy = pAim.y - state.supportAim.y0;
+      state.pointer.down = false;
+      if (Math.hypot(dx, dy) < 28) {
+        state.supportAim.drag = false;
+        var again = document.getElementById("archive-aim-hint");
+        if (again) again.classList.remove("hidden");
+        return;
+      }
+      var ang = Math.atan2(dy, dx);
+      if (G.tactics.confirmSupportAim(state, state.supportAim.id, { x: state.supportAim.x0, y: state.supportAim.y0, ang: ang })) {
+        G.audio.ui();
+        endSupportAim();
+        renderArchiveList();
+      }
+      return;
+    }
     if (state.userPaused) {
       if (state.held) {
         state.held.held = false;
@@ -1743,7 +2013,8 @@
         "Fase " + (state.stageIndex + 1) + " · " + stage.name +
         (state.debugFight && (state.run.invasion | 0) > 0 ? " · Inv " + (state.run.invasion | 0) : "");
     }
-    var waveTxt = "Onda " + (state.waveIndex + 1) + "/" + stage.waves.length;
+    var waveTotal = (state.stageWaves && state.stageWaves.length) || stage.waves.length;
+    var waveTxt = "Onda " + (state.waveIndex + 1) + "/" + waveTotal;
     if (state.debugFight && state.debugOpts) {
       var dmgScale = state.debugOpts.dmgMul | 0;
       if (dmgScale > 1) waveTxt += " · " + dmgScale + "×";
@@ -1808,7 +2079,7 @@
     if (core) boss = core;
     var duo = !!(queen && king);
     if (state.arklanGullet) {
-      // Gullet owns the boss bar — don't keep Arklan's empty carcass HUD up
+
       var gul = state.arklanGullet;
       var gulTarget = null;
       var gulName = "";
@@ -1925,7 +2196,7 @@
     }
     var bar = document.getElementById("active-bar");
     if (!bar) return;
-    // Gullet plane has its own EX/card HUD — hide commander actives
+
     if (state.arklanGullet || state.arklanSpit) {
       bar.classList.add("hidden");
       bar.innerHTML = "";
@@ -2261,7 +2532,7 @@
     }
 
     if (state.arklanGullet && G.arklanP2 && G.arklanP2.drawGullet) {
-      // Screen-space gullet — keep DPR scale so it fills the whole canvas
+
       ctx.save();
       var dprG = canvas.width / Math.max(1, state.W);
       ctx.setTransform(dprG, 0, 0, dprG, 0, 0);
@@ -2979,6 +3250,11 @@
       if (state.mode === "play" && state.pendingMerge) {
         G.audio.ui();
         closeMerge();
+        return;
+      }
+      if (state.mode === "play" && state.supportAim) {
+        G.audio.ui();
+        endSupportAim();
         return;
       }
       if (state.mode === "play" && state.archiveMenu) {
